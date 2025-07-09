@@ -48,7 +48,10 @@
       flake.clan = {
         meta.name = "heliosphere";
 
-        specialArgs = {flakeConfig = config;};
+        specialArgs = {
+          modules = config.flake;
+          # systemSettings = config.systemSettings;
+        };
 
         inventory = {
           machines.oumuamua = {
