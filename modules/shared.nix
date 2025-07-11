@@ -13,6 +13,8 @@
       clan-core.clanModules.user-password
     ];
 
+    system.stateVersion = "25.11";
+
     services.avahi.enable = true;
 
     clan.user-password.user = mainUser;

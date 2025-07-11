@@ -2,7 +2,6 @@
   config.flake.nixosModules.hyprland = {pkgs, ...}: {
     programs.hyprland = {
       enable = true;
-      # Use `inputs` from the outer scope here
       package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
       portalPackage = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
     };

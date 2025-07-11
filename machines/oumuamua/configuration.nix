@@ -5,20 +5,35 @@
   pkgs,
   ...
 }: {
-  imports = [
-    modules.nixosModules.options
-    modules.nixosModules.shared
-    modules.nixosModules.disko
-    modules.nixosModules.interception-tools
-    modules.nixosModules.system-stylix
-    modules.nixosModules.hyprland
-    modules.nixosModules.home-module
+  imports = with modules.nixosModules; [
+    options
+    shared
+    disko
+    interception-tools
+    system-stylix
+    hyprland
+    home-module
   ];
 
   home-manager.users.p = {
-    imports = [
-      modules.homeModules.hyprland
+    imports = with modules.homeModules; [
+      hyprland
+      helix
+      rbw
+      rofi
     ];
+    my.programs = {
+      rbw = {
+        pinentrySource = "tty";
+      };
+      rofi = {
+        withRbw = true;
+      };
+      helix = {
+        enable = true;
+        languages = ["nix" "markdown"];
+      };
+    };
     home.stateVersion = "25.11";
   };
 

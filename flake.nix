@@ -37,11 +37,13 @@
     self,
     flake-parts,
     clan-core,
+    home-manager,
     ...
   } @ inputs:
     flake-parts.lib.mkFlake {inherit inputs;} ({config, ...}: {
       imports = [
         clan-core.flakeModules.default
+        home-manager.flakeModules.home-manager
         (inputs.import-tree ./modules)
       ];
 
