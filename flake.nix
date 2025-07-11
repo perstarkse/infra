@@ -52,7 +52,6 @@
 
         specialArgs = {
           modules = config.flake;
-          # systemSettings = config.systemSettings;
         };
 
         inventory = {

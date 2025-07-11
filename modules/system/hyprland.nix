@@ -1,5 +1,9 @@
 {inputs, ...}: {
-  config.flake.nixosModules.hyprland = {pkgs, ...}: {
+  config.flake.nixosModules.hyprland = {
+    pkgs,
+    config,
+    ...
+  }: {
     programs.hyprland = {
       enable = true;
       package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
@@ -17,8 +21,12 @@
     services.greetd = {
       enable = true;
       settings = {
+        initial_session = {
+          command = "${pkgs.hyprland}/bin/Hyprland";
+          user = config.systemSettings.mainUser.name;
+        };
         default_session = {
-          command = "${pkgs.greetd.tuigreet}/bin/tuigreet --cmd ${pkgs.hyprland}/bin/Hyprland";
+          command = "${pkgs.greetd.tuigreet}/bin/tuigreet --greeting 'Welcome to charon!' --asterisks --remember --remember-user-session --cmd ${pkgs.hyprland}/bin/Hyprland";
           user = "greeter";
         };
       };

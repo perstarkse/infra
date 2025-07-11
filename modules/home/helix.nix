@@ -6,10 +6,6 @@
     inputs,
     ...
   }: let
-    # --- The actual Home Manager module starts here ---
-    cfg = config.my.programs.helix;
-
-    # Central registry mapping a language name to its required config.
     langDefs = {
       nix = {
         packages = [pkgs.nil pkgs.alejandra];
@@ -88,26 +84,20 @@
         language-server.jinjalsp.command = "${pkgs.unstable.jinja-lsp}/bin/jinja-lsp";
       };
     };
-
-    # Filter and aggregate the definitions based on user's choice
-    enabledDefs = lib.attrsets.filterAttrs (name: _: lib.lists.elem name cfg.languages) langDefs;
+    enabledDefs = lib.attrsets.filterAttrs (name: _: lib.lists.elem name config.my.programs.helix.languages) langDefs;
     allPackages = lib.flatten (lib.mapAttrsToList (_: def: def.packages or []) enabledDefs);
     allLanguages = lib.flatten (lib.mapAttrsToList (_: def: def.language or []) enabledDefs);
     allLanguageServers = lib.foldl' lib.recursiveUpdate {} (lib.mapAttrsToList (_: def: def.language-server or {}) enabledDefs);
   in {
-    options.my.programs.helix = {
-      enable = lib.mkEnableOption "modular helix configuration";
-      languages = lib.mkOption {
-        type = with lib.types; listOf (enum (builtins.attrNames langDefs));
-        default = [];
-        example = ["nix" "web" "python"];
-        description = "List of languages/language groups to enable for Helix.";
-      };
+    options.my.programs.helix.languages = lib.mkOption {
+      type = with lib.types; listOf (enum (builtins.attrNames langDefs));
+      default = [];
+      example = ["nix" "web" "python"];
+      description = "List of languages/language groups to enable for Helix.";
     };
 
-    config = lib.mkIf cfg.enable {
+    config = {
       home.packages = allPackages;
-
       programs.helix = {
         enable = true;
         # package = inputs.helix-master.packages."x86_64-linux".default;

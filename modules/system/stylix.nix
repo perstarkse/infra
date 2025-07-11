@@ -7,7 +7,7 @@
       enable = true;
       polarity = "dark";
       base16Scheme = "${pkgs.base16-schemes}/share/themes/catppuccin-frappe.yaml";
-      image = ../wallpaper.jpg;
+      image = ../../wallpaper.jpg;
       fonts = {
         sizes = {
           terminal = 8;
