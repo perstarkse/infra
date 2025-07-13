@@ -26,10 +26,13 @@
 
     environment.systemPackages = with pkgs; [
       pciutils
-      vim
+      helix
       htop
       usbutils
       util-linux
+      wget
+      ranger
+      kitty
     ];
 
     i18n.defaultLocale = "en_US.UTF-8";
@@ -49,10 +52,13 @@
     services.avahi.enable = true;
 
     clan.user-password.user = mainUser;
+    users.mutableUsers = false;
+
+    users.groups.secret-readers = {};
 
     users.users.${mainUser} = {
       isNormalUser = true;
-      extraGroups = ["wheel" "networkmanager" "video" "input" "libvirtd" "kvm" "qemu-libvirtd" "docker"];
+      extraGroups = ["wheel" "networkmanager" "video" "input" "libvirtd" "kvm" "qemu-libvirtd" "docker" "secret-readers"];
       uid = 1000;
       shell = pkgs.fish;
       openssh.authorizedKeys.keys =

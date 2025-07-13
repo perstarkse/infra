@@ -97,14 +97,29 @@
     };
 
     config = {
-      home.packages = allPackages;
+      home.packages = [pkgs.lazygit] ++ allPackages;
       programs.helix = {
         enable = true;
-        # package = inputs.helix-master.packages."x86_64-linux".default;
         defaultEditor = true;
         settings = {
-          keys.normal = {space.c = ":clipboard-yank";};
-          editor.line-number = "relative";
+          keys.normal = {
+            space.c = ":clipboard-yank";
+            space.l = [":new" ":insert-output lazygit" ":buffer-close!" ":redraw"];
+          };
+          keys.select = {
+            space.c = ":clipboard-yank";
+          };
+          editor = {
+            line-number = "relative";
+            lsp.display-messages = true;
+            soft-wrap = {
+              enable = true;
+            };
+            file-picker = {
+              hidden = true;
+              git-ignore = true;
+            };
+          };
         };
         languages = {
           language = allLanguages;
