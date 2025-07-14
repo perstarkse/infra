@@ -28,7 +28,7 @@
           userName = "perstark.se@gmail.com";
           imap.host = "imap.gmail.com";
           smtp.host = "smtp.gmail.com";
-          passwordCommand = "${pkgs.coreutils}/bin/cat ${config.my.secrets."mail-gmail-1-password"}";
+          passwordCommand = "${pkgs.coreutils}/bin/cat ${config.my.secrets."mail-gmail-perstark-password/password"}";
           flavor = "gmail.com";
           thunderbird = lib.mkIf enableThunderbird {
             enable = true;
@@ -39,43 +39,43 @@
             extraAccounts.default = "INBOX";
           };
         };
-        # "sprlkhick" = {
-        #   realName = "Per Stark";
-        #   address = "sprlkhick@gmail.com";
-        #   userName = "sprlkhick@gmail.com";
-        #   imap = {
-        #     host = "imap.gmail.com";
-        #     port = 993;
-        #     tls.enable = true;
-        #   };
-        #   smtp.host = "smtp.gmail.com";
-        #   passwordCommand = "${pkgs.coreutils}/bin/cat ${config.sops.secrets."mail/gmail/sprlkhick".path}";
-        #   flavor = "plain";
-        #   thunderbird = lib.mkIf enableThunderbird {
-        #     enable = true;
-        #     profiles = [];
-        #   };
-        #   aerc = lib.mkIf enableAerc {
-        #     enable = true;
-        #   };
-        # };
-        # "mojotastic-disroot" = {
-        #   realName = "mojotastic";
-        #   address = "mojotastic@disroot.org";
-        #   userName = "mojotastic@disroot.org";
-        #   imap.host = "disroot.org";
-        #   smtp.host = "disroot.org";
-        #   passwordCommand = "${pkgs.coreutils}/bin/cat ${config.sops.secrets."mail/disroot/mojotastic".path}";
-        #   thunderbird = lib.mkIf enableThunderbird {
-        #     enable = true;
-        #     profiles = [];
-        #   };
-        #   aerc = lib.mkIf enableAerc {
-        #     enable = true;
-        #     smtpAuth = "plain";
-        #     extraAccounts.default = "INBOX";
-        #   };
-        # };
+        "sprlkhick" = {
+          realName = "Per Stark";
+          address = "sprlkhick@gmail.com";
+          userName = "sprlkhick@gmail.com";
+          imap = {
+            host = "imap.gmail.com";
+            port = 993;
+            tls.enable = true;
+          };
+          smtp.host = "smtp.gmail.com";
+          passwordCommand = "${pkgs.coreutils}/bin/cat ${config.my.secrets."mail-gmail-sprlkhick-password/password"}";
+          flavor = "plain";
+          thunderbird = lib.mkIf enableThunderbird {
+            enable = true;
+            profiles = [];
+          };
+          aerc = lib.mkIf enableAerc {
+            enable = true;
+          };
+        };
+        "mojotastic-disroot" = {
+          realName = "mojotastic";
+          address = "mojotastic@disroot.org";
+          userName = "mojotastic@disroot.org";
+          imap.host = "disroot.org";
+          smtp.host = "disroot.org";
+          passwordCommand = "${pkgs.coreutils}/bin/cat ${config.my.secrets."mail-disroot-mojotastic-password/password"}";
+          thunderbird = lib.mkIf enableThunderbird {
+            enable = true;
+            profiles = [];
+          };
+          aerc = lib.mkIf enableAerc {
+            enable = true;
+            smtpAuth = "plain";
+            extraAccounts.default = "INBOX";
+          };
+        };
         "per@stark.pub" = {
           primary = true;
           realName = "Per Stark";
@@ -91,7 +91,7 @@
             port = 465;
             tls.enable = true;
           };
-          passwordCommand = "${pkgs.coreutils}/bin/cat ${config.my.secrets."mail-personal-1-password"}";
+          passwordCommand = "${pkgs.coreutils}/bin/cat ${config.my.secrets."mail-stark-per-password/password"}";
           thunderbird = lib.mkIf enableThunderbird {
             enable = true;
             profiles = [];
@@ -101,54 +101,54 @@
             extraAccounts.default = "INBOX";
           };
         };
-        # "work@stark.pub" = {
-        #   realName = "Per Stark";
-        #   address = "work@stark.pub";
-        #   userName = "work@stark.pub";
-        #   imap = {
-        #     host = "mail.stark.pub";
-        #     port = 993;
-        #     tls.enable = true;
-        #   };
-        #   smtp = {
-        #     host = "mail.stark.pub";
-        #     port = 465;
-        #     tls.enable = true;
-        #   };
-        #   passwordCommand = "${pkgs.coreutils}/bin/cat ${config.sops.secrets."mail/stark/work_pass".path}";
-        #   thunderbird = lib.mkIf enableThunderbird {
-        #     enable = true;
-        #     profiles = [];
-        #   };
-        #   aerc = lib.mkIf enableAerc {
-        #     enable = true;
-        #     extraAccounts.default = "INBOX";
-        #   };
-        # };
-        # "services@stark.pub" = {
-        #   realName = "Services - Stark";
-        #   address = "services@stark.pub";
-        #   userName = "services@stark.pub";
-        #   imap = {
-        #     host = "mail.stark.pub";
-        #     port = 993;
-        #     tls.enable = true;
-        #   };
-        #   smtp = {
-        #     host = "mail.stark.pub";
-        #     port = 465;
-        #     tls.enable = true;
-        #   };
-        #   passwordCommand = "${pkgs.coreutils}/bin/cat ${config.sops.secrets."mail/stark/services_pass".path}";
-        #   thunderbird = lib.mkIf enableThunderbird {
-        #     enable = true;
-        #     profiles = [];
-        #   };
-        #   aerc = lib.mkIf enableAerc {
-        #     enable = true;
-        #     extraAccounts.default = "INBOX";
-        #   };
-        # };
+        "work@stark.pub" = {
+          realName = "Per Stark";
+          address = "work@stark.pub";
+          userName = "work@stark.pub";
+          imap = {
+            host = "mail.stark.pub";
+            port = 993;
+            tls.enable = true;
+          };
+          smtp = {
+            host = "mail.stark.pub";
+            port = 465;
+            tls.enable = true;
+          };
+          passwordCommand = "${pkgs.coreutils}/bin/cat ${config.my.secrets."mail-stark-work-password/password"}";
+          thunderbird = lib.mkIf enableThunderbird {
+            enable = true;
+            profiles = [];
+          };
+          aerc = lib.mkIf enableAerc {
+            enable = true;
+            extraAccounts.default = "INBOX";
+          };
+        };
+        "services@stark.pub" = {
+          realName = "Services - Stark";
+          address = "services@stark.pub";
+          userName = "services@stark.pub";
+          imap = {
+            host = "mail.stark.pub";
+            port = 993;
+            tls.enable = true;
+          };
+          smtp = {
+            host = "mail.stark.pub";
+            port = 465;
+            tls.enable = true;
+          };
+          passwordCommand = "${pkgs.coreutils}/bin/cat ${config.my.secrets."mail-stark-services-password/password"}";
+          thunderbird = lib.mkIf enableThunderbird {
+            enable = true;
+            profiles = [];
+          };
+          aerc = lib.mkIf enableAerc {
+            enable = true;
+            extraAccounts.default = "INBOX";
+          };
+        };
       };
 
       programs.thunderbird = lib.mkIf enableThunderbird {

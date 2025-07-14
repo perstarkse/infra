@@ -6,7 +6,7 @@
     pkgs,
     ...
   }: let
-    mainUser = config.systemSettings.mainUser.name;
+    mainUser = config.my.mainUser.name;
   in {
     imports = [
       clan-core.clanModules.sshd
@@ -64,7 +64,7 @@
       openssh.authorizedKeys.keys =
         # Combine root's keys with the user's extra keys
         config.users.users.root.openssh.authorizedKeys.keys
-        ++ config.systemSettings.mainUser.extraSshKeys;
+        ++ config.my.mainUser.extraSshKeys;
     };
   };
 }

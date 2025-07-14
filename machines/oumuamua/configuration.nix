@@ -1,11 +1,10 @@
 {
   modules,
-  lib,
   config,
-  pkgs,
   ...
 }: {
   imports = with modules.nixosModules; [
+    ./secrets.nix
     home-module
     sound
     options
@@ -14,10 +13,11 @@
     interception-tools
     system-stylix
     hyprland
-    ./secrets.nix
+    ledger
+    # restic
   ];
 
-  home-manager.users.${config.systemSettings.mainUser.name} = {
+  home-manager.users.${config.my.mainUser.name} = {
     imports = with modules.homeModules; [
       options
       hyprland
@@ -38,7 +38,7 @@
       mail
     ];
     my = {
-      secrets = config.systemSettings.sharedSecretPaths;
+      secrets = config.my.sharedSecretPaths;
 
       programs = {
         mail = {
@@ -59,9 +59,20 @@
     home.stateVersion = "25.11";
   };
 
-  systemSettings.mainUser.name = "p";
+  my.mainUser.name = "p";
 
-  systemSettings.userSecrets = ["mail-gmail-1-password" "mail-personal-1-password"];
+  my.userSecrets = [
+    "mail-gmail-perstark-password/password"
+    "mail-gmail-sprlkhick-password/password"
+    "mail-disroot-mojotastic-password/password"
+    "mail-stark-per-password/password"
+    "mail-stark-work-password/password"
+    "mail-stark-services-password/password"
+    "api-key-openai/api_key"
+    "api-key-openrouter/api_key"
+    "api-key-aws-access/aws_access_key_id"
+    "api-key-aws-secret/aws_secret_access_key"
+  ];
 
   time.timeZone = "Europe/Stockholm";
 
