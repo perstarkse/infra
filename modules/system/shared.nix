@@ -9,9 +9,9 @@
     mainUser = config.my.mainUser.name;
   in {
     imports = [
-      clan-core.clanModules.sshd
-      clan-core.clanModules.root-password
-      clan-core.clanModules.user-password
+      # clan-core.clanModules.sshd
+      # clan-core.clanModules.root-password
+      # clan-core.clanModules.user-password
     ];
 
     system.stateVersion = "25.11";
@@ -51,8 +51,18 @@
 
     services.avahi.enable = true;
 
-    clan.user-password.user = mainUser;
+    # clan.user-password.user = mainUser;
     users.mutableUsers = false;
+
+    programs.ssh = {
+      startAgent = true;
+      knownHosts = {
+        github = {
+          hostNames = ["github.com"];
+          publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
+        };
+      };
+    };
 
     users.groups.secret-readers = {};
 

@@ -1,42 +1,50 @@
 {
   modules,
+  private-infra,
   config,
+  pkgs,
   ...
 }: {
-  imports = with modules.nixosModules; [
-    ./secrets.nix
-    home-module
-    sound
-    options
-    shared
-    disko
-    interception-tools
-    system-stylix
-    hyprland
-    ledger
-    # restic
-  ];
+  imports = with modules.nixosModules;
+    [
+      ./secrets.nix
+      home-module
+      sound
+      options
+      shared
+      interception-tools
+      system-stylix
+      hyprland
+      ledger
+      user-ssh-keys
+      # private-infra
+      # restic
+    ]
+    ++ [private-infra.nixosModules.hello-service];
 
   home-manager.users.${config.my.mainUser.name} = {
-    imports = with modules.homeModules; [
-      options
-      hyprland
-      helix
-      rbw
-      rofi
-      git
-      direnv
-      fish
-      dunst
-      ncspot
-      zellij
-      starship
-      qutebrowser
-      looking-glass-client
-      bitwarden-client
-      blinkstick-scripts
-      mail
-    ];
+    imports = with modules.homeModules;
+      [
+        options
+        hyprland
+        helix
+        rbw
+        rofi
+        git
+        direnv
+        fish
+        dunst
+        ncspot
+        zellij
+        starship
+        qutebrowser
+        looking-glass-client
+        bitwarden-client
+        blinkstick-scripts
+        mail
+        ssh
+      ]
+      ++ [private-infra.homeModules.user-secrets];
     my = {
       secrets = config.my.sharedSecretPaths;
 
@@ -76,13 +84,9 @@
 
   time.timeZone = "Europe/Stockholm";
 
-  disko.devices.disk.main.device = "/dev/disk/by-id/ata-QEMU_HARDDISK_QM00001";
-
-  users.users.root.openssh.authorizedKeys.keys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn p@charon"];
-
   clan.core.networking.zerotier.controller.enable = true;
 
   environment.systemPackages = [
-    # pkgs.wget
+    # pkgs.epy
   ];
 }
