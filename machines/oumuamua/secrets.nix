@@ -66,6 +66,17 @@
       name = "restic-password";
       type = "root";
     }
+    {
+      name = "user-ssh-key";
+      type = "root";
+      multiline = true;
+      fileName = "id_ed25519";
+    }
+    {
+      name = "user-ssh-key-pub";
+      type = "root";
+      fileName = "id_ed25519.pub";
+    }
   ];
 
   generatorsList = lib.map mkSecretGenerator secrets;

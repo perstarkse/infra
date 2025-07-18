@@ -31,6 +31,11 @@
       url = "github:hyprwm/hyprland-plugins";
       inputs.hyprland.follows = "hyprland";
     };
+
+    private-infra = {
+      url = "git+ssh://git@github.com/perstarkse/private-infra.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -38,6 +43,7 @@
     flake-parts,
     clan-core,
     home-manager,
+    private-infra,
     ...
   } @ inputs:
     flake-parts.lib.mkFlake {inherit inputs;} ({config, ...}: {
@@ -47,17 +53,59 @@
         (inputs.import-tree ./modules)
       ];
 
+      # flake.nixosModules."private-infra" = private-infra.nixosModules.private-infra;
+
       flake.clan = {
         meta.name = "heliosphere";
 
         specialArgs = {
           modules = config.flake;
+          # sops-nix = inputs.sops-nix;
+          inherit private-infra;
         };
 
         inventory = {
           machines.oumuamua = {
             deploy.targetHost = "root@192.168.122.67";
             tags = ["server"];
+          };
+
+          instances = {
+            sshd-basic = {
+              module = {
+                name = "sshd";
+                input = "clan-core";
+              };
+              roles.server.tags.all = {};
+              roles.client.tags.all = {};
+            };
+            user-p = {
+              module = {
+                name = "users";
+                input = "clan-core";
+              };
+              roles.default.tags.all = {};
+              roles.default.settings = {
+                user = "p";
+                prompt = true;
+              };
+            };
+            admin = {
+              roles.default.tags.all = {};
+              roles.default.settings = {
+                allowedKeys = {
+                  "p" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn p@charon";
+                };
+              };
+            };
+            emergency-access = {
+              module = {
+                name = "emergency-access";
+                input = "clan-core";
+              };
+
+              roles.default.tags.nixos = {};
+            };
           };
         };
       };
