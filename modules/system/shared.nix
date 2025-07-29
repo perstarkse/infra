@@ -8,12 +8,6 @@
   }: let
     mainUser = config.my.mainUser.name;
   in {
-    imports = [
-      # clan-core.clanModules.sshd
-      # clan-core.clanModules.root-password
-      # clan-core.clanModules.user-password
-    ];
-
     system.stateVersion = "25.11";
 
     nix.gc = {
@@ -22,7 +16,10 @@
       options = "--delete-older-than 30d";
     };
 
-    programs.fish.enable = true;
+    programs = {
+      fish.enable = true;
+      nix-ld.enable = true;
+    };
 
     environment.systemPackages = with pkgs; [
       pciutils
@@ -51,7 +48,6 @@
 
     services.avahi.enable = true;
 
-    # clan.user-password.user = mainUser;
     users.mutableUsers = false;
 
     programs.ssh = {
@@ -62,6 +58,11 @@
           publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
         };
       };
+    };
+
+    networking = {
+      networkmanager.enable = true;
+      enableIPv6 = true;
     };
 
     users.groups.secret-readers = {};

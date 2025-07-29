@@ -53,14 +53,11 @@
         (inputs.import-tree ./modules)
       ];
 
-      # flake.nixosModules."private-infra" = private-infra.nixosModules.private-infra;
-
       flake.clan = {
         meta.name = "heliosphere";
 
         specialArgs = {
           modules = config.flake;
-          # sops-nix = inputs.sops-nix;
           inherit private-infra;
         };
 
@@ -68,6 +65,10 @@
           machines.oumuamua = {
             deploy.targetHost = "root@192.168.122.67";
             tags = ["server"];
+          };
+          machines.charon = {
+            deploy.targetHost = "root@10.0.0.15";
+            tags = ["client"];
           };
 
           instances = {
@@ -94,7 +95,7 @@
               roles.default.tags.all = {};
               roles.default.settings = {
                 allowedKeys = {
-                  "p" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn p@charon";
+                  "p" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn";
                 };
               };
             };

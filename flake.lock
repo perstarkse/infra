@@ -347,6 +347,27 @@
         "type": "github"
       }
     },
+    "home-manager_2": {
+      "inputs": {
+        "nixpkgs": [
+          "private-infra",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1752814804,
+        "narHash": "sha256-irfg7lnfEpJY+3Cffkluzp2MTVw1Uq9QGxFp6qadcXI=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "d0300c8808e41da81d6edfc202f3d3833c157daf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
     "hyprcursor": {
       "inputs": {
         "hyprlang": [
@@ -828,6 +849,7 @@
     "private-infra": {
       "inputs": {
         "flake-parts": "flake-parts_2",
+        "home-manager": "home-manager_2",
         "import-tree": "import-tree_2",
         "nixpkgs": [
           "nixpkgs"
@@ -835,11 +857,11 @@
         "sops-nix": "sops-nix_2"
       },
       "locked": {
-        "lastModified": 1752874152,
-        "narHash": "sha256-CQnKve12iMHuLjig/hJ6w8vXFjss5V6c2GWLH1rX5iU=",
+        "lastModified": 1753767212,
+        "narHash": "sha256-u0ISNtzeyft53VCBKY61y6MDytFNkxIgvIyL7l6dPK8=",
         "ref": "refs/heads/main",
-        "rev": "0f004c84132cab8918e60c1c2cf3f1ba19674a04",
-        "revCount": 34,
+        "rev": "05bf7e080c02002b2afef3876e00256827a144ec",
+        "revCount": 53,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },

@@ -6,6 +6,8 @@
       serviceConfig = {
         Type = "oneshot";
       };
+      after = [ "sops-install-secrets.target" ];
+      requires = [ "sops-install-secrets.target" ];
       script = ''
         mkdir -p /home/${config.my.mainUser.name}/.ssh
         cp ${config.my.secrets."user-ssh-key/id_ed25519"} /home/${config.my.mainUser.name}/.ssh/id_ed25519

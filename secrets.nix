@@ -3,7 +3,7 @@
   config,
   ...
 }: let
-  mkSecretGenerator = import ../../vars/helpers.nix {inherit lib config;};
+  mkSecretGenerator = import ./vars/helpers.nix {inherit lib config;};
 
   secrets = [
     {
@@ -53,29 +53,34 @@
     }
     {
       name = "restic-env-file";
-      type = "root";
+      type = "shared";
       fileName = "env";
       multiline = true;
     }
     {
       name = "restic-repo-file";
-      type = "root";
+      type = "shared";
       fileName = "vault-name";
     }
     {
       name = "restic-password";
-      type = "root";
+      type = "shared";
     }
     {
       name = "user-ssh-key";
-      type = "root";
+      type = "shared";
       multiline = true;
       fileName = "id_ed25519";
     }
     {
       name = "user-ssh-key-pub";
-      type = "root";
+      type = "shared";
       fileName = "id_ed25519.pub";
+    }
+    {
+      name = "user-age-key";
+      type = "shared";
+      fileName = "keys.txt";
     }
   ];
 

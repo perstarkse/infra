@@ -5,23 +5,13 @@
     pkgs,
     ...
   }: {
-    options.my.hardware.nvidia.enable = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Enable NVIDIA proprietary drivers and settings.";
-    };
-
-    config = lib.mkIf config.my.hardware.nvidia.enable {
+    config = {
       hardware.graphics = {
         enable = true;
         enable32Bit = true;
       };
 
-      boot.initrd.kernelModules = ["nvidia"];
-
-      # This line will now work because 'config.boot' is available
-      # during a proper NixOS module evaluation.
-      boot.extraModulePackages = [config.boot.kernelPackages.nvidiaPackages.stable];
+      boot.initrd.availableKernelModules = ["nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm"];
 
       services.xserver.videoDrivers = ["nvidia"];
 
@@ -40,6 +30,7 @@
         __GLX_VENDOR_LIBRARY_NAME = "nvidia";
         LIBVA_DRIVER_NAME = "nvidia";
         __NV_DISABLE_EXPLICIT_SYNC = "1";
+        NVD_BACKEND = "direct";
       };
 
       environment.etc."nvidia/nvidia-application-profiles-rc.d/50-limit-free-buffer-pool.json".text = ''

@@ -7,7 +7,9 @@
 }: {
   imports = with modules.nixosModules;
     [
-      ./../../secrets.nix
+      ../../secrets.nix
+      ./hardware-configuration.nix
+      ./boot.nix
       home-module
       sound
       options
@@ -18,7 +20,9 @@
       ledger
       user-ssh-keys
       user-age-key
-      # vfio
+      vfio
+      fonts
+      nvidia
       # restic
     ]
     ++ (with private-infra.nixosModules; [hello-service]);
@@ -72,15 +76,18 @@
     home.stateVersion = "25.11";
   };
 
+  nixpkgs.config.allowUnfree = true;
+
   my.mainUser.name = "p";
 
+  my.vfio = {
+    enable = true;
+    gpuIds = "10de:1b81,10de:10f0";
+    hugepages = 20;
+    kvmfrStaticSizeMb = 128;
+  };
+
   my.userSecrets = [
-    "mail-gmail-perstark-password/password"
-    "mail-gmail-sprlkhick-password/password"
-    "mail-disroot-mojotastic-password/password"
-    "mail-stark-per-password/password"
-    "mail-stark-work-password/password"
-    "mail-stark-services-password/password"
     "api-key-openai/api_key"
     "api-key-openrouter/api_key"
     "api-key-aws-access/aws_access_key_id"
@@ -91,7 +98,11 @@
 
   clan.core.networking.zerotier.controller.enable = true;
 
-  environment.systemPackages = [
+  environment.systemPackages = with pkgs; [
+    virt-manager
     # pkgs.epy
   ];
+
+  hardware.bluetooth.enable = true;
+  services.blueman.enable = true;
 }
