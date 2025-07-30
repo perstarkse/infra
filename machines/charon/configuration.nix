@@ -23,7 +23,9 @@
       vfio
       fonts
       nvidia
-      # restic
+      restic
+      docker
+      steam
     ]
     ++ (with private-infra.nixosModules; [hello-service]);
 
@@ -48,6 +50,7 @@
         mail-clients-setup
         ssh
         xdg-mimeapps
+        firefox
       ]
       ++ (with private-infra.homeModules; [
         mail-clients
@@ -68,7 +71,7 @@
           withRbw = true;
         };
         helix = {
-          languages = ["nix" "markdown"];
+          languages = ["nix" "markdown" "rust" "jinja" ];
         };
       };
     };
@@ -100,6 +103,8 @@
 
   environment.systemPackages = with pkgs; [
     virt-manager
+    code-cursor-fhs
+    devenv
     # pkgs.epy
   ];
 

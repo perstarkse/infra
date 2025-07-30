@@ -7,31 +7,6 @@
 
   secrets = [
     {
-      name = "mail-gmail-perstark-password";
-      type = "shared";
-    }
-    {
-      name = "mail-gmail-sprlkhick-password";
-      type = "shared";
-    }
-    {
-      name = "mail-stark-per-password";
-      type = "shared";
-    }
-    {
-      name = "mail-stark-work-password";
-      type = "shared";
-    }
-    {
-      name = "mail-stark-services-password";
-      type = "shared";
-    }
-    {
-      name = "mail-disroot-mojotastic-password";
-      type = "shared";
-    }
-
-    {
       name = "api-key-openai";
       type = "shared";
       fileName = "api_key";

@@ -13,6 +13,7 @@
           {
             name = "nix";
             language-servers = ["nil"];
+            auto-format = true;
             formatter.command = "alejandra";
           }
         ];
@@ -74,14 +75,14 @@
         language-server.marksman.command = "${pkgs.marksman}/bin/marksman";
       };
       jinja = {
-        packages = [pkgs.unstable.jinja-lsp];
+        packages = [pkgs.jinja-lsp];
         language = [
           {
             name = "jinja";
             language-servers = ["jinjalsp"];
           }
         ];
-        language-server.jinjalsp.command = "${pkgs.unstable.jinja-lsp}/bin/jinja-lsp";
+        language-server.jinjalsp.command = "${pkgs.jinja-lsp}/bin/jinja-lsp";
       };
     };
     enabledDefs = lib.attrsets.filterAttrs (name: _: lib.lists.elem name config.my.programs.helix.languages) langDefs;

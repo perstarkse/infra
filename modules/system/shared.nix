@@ -69,7 +69,7 @@
 
     users.users.${mainUser} = {
       isNormalUser = true;
-      extraGroups = ["wheel" "networkmanager" "video" "input" "libvirtd" "kvm" "qemu-libvirtd" "docker" "secret-readers"];
+      extraGroups = ["wheel" "networkmanager" "video" "input" "libvirtd" "kvm" "qemu-libvirtd" "secret-readers"];
       uid = 1000;
       shell = pkgs.fish;
       openssh.authorizedKeys.keys =

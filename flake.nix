@@ -64,6 +64,7 @@
         inventory = {
           machines.oumuamua = {
             deploy.targetHost = "root@192.168.122.67";
+            deploy.buildHost = "root@10.0.0.15";
             tags = ["server"];
           };
           machines.charon = {
