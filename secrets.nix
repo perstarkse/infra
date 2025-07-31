@@ -57,6 +57,12 @@
       type = "shared";
       fileName = "keys.txt";
     }
+    {
+      name = "ddclient";
+      type = "shared";
+      fileName = "ddclient.conf";
+      multiline = true;
+    }
   ];
 
   generatorsList = lib.map mkSecretGenerator secrets;

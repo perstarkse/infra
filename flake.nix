@@ -67,6 +67,10 @@
             deploy.buildHost = "root@10.0.0.15";
             tags = ["server"];
           };
+          machines.io = {
+            deploy.targetHost = "root@10.0.0.1";
+            tags = ["server"];
+          };
           machines.charon = {
             deploy.targetHost = "root@10.0.0.15";
             tags = ["client"];

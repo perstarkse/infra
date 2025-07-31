@@ -71,7 +71,7 @@
           withRbw = true;
         };
         helix = {
-          languages = ["nix" "markdown" "rust" "jinja" ];
+          languages = ["nix" "markdown" "rust" "jinja"];
         };
       };
     };
@@ -105,7 +105,7 @@
     virt-manager
     code-cursor-fhs
     devenv
-    # pkgs.epy
+    localsend
   ];
 
   hardware.bluetooth.enable = true;
