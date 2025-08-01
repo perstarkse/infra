@@ -69,14 +69,20 @@
               ''"io.${cfg.localZone} IN AAAA ${ulaPrefix}::1"''
 
               # Machines
-              ${lib.concatStringsSep "\n" (map (machine: 
-                ''"${machine.name}.${cfg.localZone} IN A ${lanSubnet}.${machine.ip}"''
-              ) routerCfg.machines)}
+              lib.concatStringsSep
+              "\n"
+              (map (
+                  machine: ''"${machine.name}.${cfg.localZone} IN A ${lanSubnet}.${machine.ip}"''
+                )
+                routerCfg.machines)
 
               # Services
-              ${lib.concatStringsSep "\n" (map (service: 
-                ''"${service.name} IN A ${service.target}"''
-              ) routerCfg.services)}
+              lib.concatStringsSep
+              "\n"
+              (map (
+                  service: ''"${service.name} IN A ${service.target}"''
+                )
+                routerCfg.services)
             ];
           };
           forward-zone = [
@@ -90,4 +96,4 @@
       };
     };
   };
-} 
+}
