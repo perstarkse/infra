@@ -15,6 +15,7 @@
       interception-tools
       system-stylix
       hyprland
+      greetd
       ledger
       user-ssh-keys
       user-age-key
@@ -94,4 +95,11 @@
   environment.systemPackages = [
     # pkgs.epy
   ];
+
+  # Greetd configuration
+  my.greetd = {
+    enable = true;
+    sessionType = "hyprland";
+    greeting = "Welcome to oumuamua!";
+  };
 }

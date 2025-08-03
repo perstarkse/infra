@@ -63,6 +63,10 @@
       fileName = "ddclient.conf";
       multiline = true;
     }
+    {
+      name = "k3s-token";
+      type = "shared";
+    }
   ];
 
   generatorsList = lib.map mkSecretGenerator secrets;

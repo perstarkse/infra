@@ -5,15 +5,16 @@
     ];
     stylix = {
       enable = true;
+      autoEnable = true;
       polarity = "dark";
       base16Scheme = "${pkgs.base16-schemes}/share/themes/catppuccin-frappe.yaml";
       image = ../../wallpaper.jpg;
       fonts = {
         sizes = {
           terminal = 8;
-          applications = 10;
-          popups = 10;
-          desktop = 10;
+          applications = 9;
+          popups = 9;
+          desktop = 9;
         };
         monospace = {
           package = pkgs.nerd-fonts.fira-code;

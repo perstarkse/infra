@@ -37,6 +37,11 @@
       inputs.hyprland.follows = "hyprland";
     };
 
+    hy3 = {
+      url = "github:outfoxxed/hy3?ref=hl0.50.0";
+      inputs.hyprland.follows = "hyprland";
+    };
+
     private-infra = {
       url = "git+ssh://git@github.com/perstarkse/private-infra.git";
       inputs.nixpkgs.follows = "nixpkgs";

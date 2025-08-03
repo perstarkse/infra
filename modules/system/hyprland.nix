@@ -22,20 +22,6 @@
       };
 
       services.displayManager.defaultSession = "hyprland";
-
-      services.greetd = {
-        enable = true;
-        settings = {
-          initial_session = {
-            command = "${pkgs.hyprland}/bin/Hyprland";
-            user = config.my.mainUser.name;
-          };
-          default_session = {
-            command = "${pkgs.greetd.tuigreet}/bin/tuigreet --greeting 'Welcome to charon!' --asterisks --remember --remember-user-session --cmd ${pkgs.hyprland}/bin/Hyprland";
-            user = "greeter";
-          };
-        };
-      };
     };
   };
 }

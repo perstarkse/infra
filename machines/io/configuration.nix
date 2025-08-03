@@ -12,17 +12,25 @@
       interception-tools
       system-stylix
       shared
+      options
       router
       dns
       dhcp
       monitoring
       home-assistant
       nginx
+      k3s
 
     ];
 
   my.mainUser = {
     name = "p";
+  };
+
+  my.k3s = {
+    enable = true;
+    initServer = true;
+    tlsSan = "10.0.0.1";
   };
 
   my.router = {

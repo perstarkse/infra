@@ -135,7 +135,7 @@
         hostName = cfg.hostname;
         useNetworkd = true;
         useDHCP = false;
-        networkmanager.enable = false;
+        networkmanager.enable = lib.mkForce false;
         firewall.enable = false;
 
         nftables = {

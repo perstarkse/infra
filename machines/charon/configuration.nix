@@ -16,7 +16,9 @@
       shared
       interception-tools
       system-stylix
-      hyprland
+      # hyprland
+      sway
+      greetd
       ledger
       user-ssh-keys
       user-age-key
@@ -26,6 +28,7 @@
       restic
       docker
       steam
+      k3s
     ]
     ++ (with private-infra.nixosModules; [hello-service]);
 
@@ -33,7 +36,9 @@
     imports = with modules.homeModules;
       [
         options
-        hyprland
+        # hyprland
+        waybar
+        # hy3-layout
         helix
         rofi
         git
@@ -51,6 +56,7 @@
         ssh
         xdg-mimeapps
         firefox
+        sway
       ]
       ++ (with private-infra.homeModules; [
         mail-clients
@@ -65,7 +71,7 @@
           clients = ["aerc" "thunderbird"];
         };
         rbw = {
-          pinentrySource = "tty";
+          pinentrySource = "gui";
         };
         rofi = {
           withRbw = true;
@@ -73,6 +79,10 @@
         helix = {
           languages = ["nix" "markdown" "rust" "jinja"];
         };
+      };
+
+      waybar = {
+        windowManager = "sway";
       };
     };
 
@@ -88,6 +98,13 @@
     gpuIds = "10de:1b81,10de:10f0";
     hugepages = 20;
     kvmfrStaticSizeMb = 128;
+  };
+
+  my.k3s = {
+    enable = false;
+    initServer = false;
+    serverAddrs = ["https://10.0.0.1:6443"];
+    tlsSan = "10.0.0.1";
   };
 
   my.userSecrets = [
@@ -110,4 +127,12 @@
 
   hardware.bluetooth.enable = true;
   services.blueman.enable = true;
+
+  security.polkit.enable = true;
+
+  my.greetd = {
+    enable = true;
+    sessionType = "sway";
+    greeting = "Welcome to charon!";
+  };
 }
