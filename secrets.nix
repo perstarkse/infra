@@ -67,6 +67,24 @@
       name = "k3s-token";
       type = "shared";
     }
+    {
+      name = "vaultwarden";
+      type = "shared";
+      fileName = "env";
+      multiline = true;
+    }
+    {
+      name = "minne";
+      type = "shared";
+      fileName = "env";
+      multiline = true;
+    }
+    {
+      name = "surrealdb";
+      type = "shared";
+      fileName = "credentials";
+      multiline = true;
+    }
   ];
 
   generatorsList = lib.map mkSecretGenerator secrets;

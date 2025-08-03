@@ -46,6 +46,11 @@
       url = "git+ssh://git@github.com/perstarkse/private-infra.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    minne = {
+      url = "github:perstarkse/minne";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -79,6 +84,10 @@
           };
           machines.io = {
             deploy.targetHost = "root@10.0.0.1";
+            tags = ["server"];
+          };
+          machines.makemake = {
+            deploy.targetHost = "root@10.0.0.10";
             tags = ["server"];
           };
           machines.charon = {
