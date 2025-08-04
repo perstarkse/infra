@@ -1,4 +1,4 @@
-{inputs, ...}: {
+{
   config.flake.nixosModules.greetd = {
     pkgs,
     config,
@@ -10,7 +10,7 @@
     options = {
       my.greetd = {
         enable = lib.mkEnableOption "Enable greetd display manager";
-        
+
         sessionType = lib.mkOption {
           type = lib.types.enum ["hyprland" "sway"];
           default = "hyprland";
@@ -30,23 +30,32 @@
         enable = true;
         settings = {
           initial_session = {
-            command = if cfg.sessionType == "hyprland"
+            # command = "${pkgs.greetd.tuigreet}/bin/tuigreet --greeting '${cfg.greeting}' --asterisks --remember --remember-user-session --cmd ${
+            #   if cfg.sessionType == "hyprland"
+            #     then "${config.programs.hyprland.package}/bin/Hyprland"
+            #     else "${pkgs.sway}/bin/sway"
+            command = "${
+              if cfg.sessionType == "hyprland"
               then "${config.programs.hyprland.package}/bin/Hyprland"
-              else "${pkgs.sway}/bin/sway";
+              else "${pkgs.sway}/bin/sway --unsupported-gpu"
+            }";
             user = config.my.mainUser.name;
           };
           default_session = {
             command = "${pkgs.greetd.tuigreet}/bin/tuigreet --greeting '${cfg.greeting}' --asterisks --remember --remember-user-session --cmd ${
               if cfg.sessionType == "hyprland"
-                then "${config.programs.hyprland.package}/bin/Hyprland"
-                else "${pkgs.sway}/bin/sway"
+              then "${config.programs.hyprland.package}/bin/Hyprland"
+              else "${pkgs.sway}/bin/sway"
             }";
-            user = "greeter";
+            user = config.my.mainUser.name;
           };
         };
       };
 
-      services.displayManager.defaultSession = if cfg.sessionType == "hyprland" then "hyprland" else "sway";
+      services.displayManager.defaultSession =
+        if cfg.sessionType == "hyprland"
+        then "hyprland"
+        else "sway";
     };
   };
-} 
+}

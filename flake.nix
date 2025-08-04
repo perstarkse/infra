@@ -51,6 +51,11 @@
       url = "github:perstarkse/minne";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    NixVirt = {
+      url = "https://flakehub.com/f/AshleyYakeley/NixVirt/*.tar.gz";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -78,8 +83,8 @@
 
         inventory = {
           machines.oumuamua = {
-            deploy.targetHost = "root@192.168.122.67";
-            deploy.buildHost = "root@10.0.0.15";
+            deploy.targetHost = "root@192.168.101.48";
+            deploy.buildHost = "root@10.0.0.105";
             tags = ["server"];
           };
           machines.io = {
@@ -91,7 +96,7 @@
             tags = ["server"];
           };
           machines.charon = {
-            deploy.targetHost = "root@10.0.0.15";
+            deploy.targetHost = "root@10.0.0.105";
             tags = ["client"];
           };
 

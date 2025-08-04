@@ -14,13 +14,9 @@
       shared
       interception-tools
       system-stylix
-      hyprland
-      greetd
       ledger
       user-ssh-keys
       user-age-key
-      # vfio
-      # restic
     ]
     ++ (with private-infra.nixosModules; [hello-service]);
 
@@ -28,23 +24,14 @@
     imports = with modules.homeModules;
       [
         options
-        hyprland
         helix
-        rofi
         git
         direnv
         fish
-        dunst
-        ncspot
         zellij
         starship
-        qutebrowser
-        looking-glass-client
-        bitwarden-client
-        blinkstick-scripts
         mail-clients-setup
         ssh
-        xdg-mimeapps
       ]
       ++ (with private-infra.homeModules; [
         mail-clients
@@ -56,13 +43,10 @@
 
       programs = {
         mail = {
-          clients = ["aerc" "thunderbird"];
+          clients = ["aerc"];
         };
         rbw = {
           pinentrySource = "tty";
-        };
-        rofi = {
-          withRbw = true;
         };
         helix = {
           languages = ["nix" "markdown"];
@@ -76,12 +60,6 @@
   my.mainUser.name = "p";
 
   my.userSecrets = [
-    "mail-gmail-perstark-password/password"
-    "mail-gmail-sprlkhick-password/password"
-    "mail-disroot-mojotastic-password/password"
-    "mail-stark-per-password/password"
-    "mail-stark-work-password/password"
-    "mail-stark-services-password/password"
     "api-key-openai/api_key"
     "api-key-openrouter/api_key"
     "api-key-aws-access/aws_access_key_id"
@@ -95,11 +73,4 @@
   environment.systemPackages = [
     # pkgs.epy
   ];
-
-  # Greetd configuration
-  my.greetd = {
-    enable = true;
-    sessionType = "hyprland";
-    greeting = "Welcome to oumuamua!";
-  };
 }

@@ -2,6 +2,7 @@
   config.flake.nixosModules.sway = {
     pkgs,
     config,
+    lib,
     ...
   }: {
     config = {
@@ -16,7 +17,6 @@
         XDG_SESSION_TYPE = "wayland";
       };
 
-      # Ensure sway is available as a session
       services.displayManager.sessionPackages = [pkgs.sway];
     };
   };

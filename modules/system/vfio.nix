@@ -4,7 +4,9 @@
     config,
     pkgs,
     ...
-  }: {
+  }: let
+    cfg = config.my.vfio;
+  in {
     options.my.vfio = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -49,23 +51,19 @@
         '';
       };
 
+      services.udev.extraRules = ''
+        SUBSYSTEM=="kvmfr", OWNER="root", GROUP="kvm", MODE="0777"
+      '';
+
+      programs.virt-manager.enable = true;
+
       virtualisation.libvirtd = {
-        enable = true;
         qemu = {
-          ovmf.enable = true;
-          runAsRoot = false;
-          package = pkgs.qemu_kvm;
           verbatimConfig = ''
             cgroup_controllers = [ "cpu", "memory", "blkio", "cpuset", "cpuacct" ]
           '';
         };
-        onBoot = "ignore";
-        onShutdown = "shutdown";
       };
-
-      services.udev.extraRules = ''
-        SUBSYSTEM=="kvmfr", OWNER="${config.my.mainUser.name}", GROUP="qemu-libvirtd", MODE="0660"
-      '';
     };
   };
 }
