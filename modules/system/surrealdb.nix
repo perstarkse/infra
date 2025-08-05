@@ -22,12 +22,6 @@
         description = "Port for SurrealDB to listen on";
       };
 
-      credentialsFile = lib.mkOption {
-        type = lib.types.nullOr lib.types.path;
-        default = null;
-        description = "Path to file containing SurrealDB credentials (username and password)";
-      };
-
       database = lib.mkOption {
         type = lib.types.str;
         default = "minne_db";
@@ -77,21 +71,45 @@
 
     config = lib.mkIf cfg.enable {
       # SurrealDB service configuration
-      services.surrealdb = {
-        enable = true;
-        package = pkgs.surrealdb;
-        host = cfg.host;
-        port = cfg.port;
-        extraFlags = [
-          "--log" "info"
-          "file:${cfg.dataDir}/surrealdb.db"
-        ] ++ cfg.extraFlags;
+      systemd.services.surrealdb = {
+        description = "SurrealDB - Database Server";
+        wantedBy = ["multi-user.target"];
+        after = ["network.target"];
         
-        # Load credentials from file if provided
-        environmentFile = lib.mkIf (cfg.credentialsFile != null) [
-          cfg.credentialsFile
-        ];
+        serviceConfig = {
+          Type = "simple";
+          User = "surrealdb";
+          Group = "surrealdb";
+          WorkingDirectory = cfg.dataDir;
+          ExecStart = "${pkgs.surrealdb}/bin/surreal";
+          Restart = "always";
+          RestartSec = "10";
+
+          # Basic environment variables
+          Environment = [
+            "SURREALDB_HOST=${cfg.host}"
+            "SURREALDB_PORT=${toString cfg.port}"
+            "SURREALDB_DATABASE=${cfg.database}"
+            "SURREALDB_NAMESPACE=${cfg.namespace}"
+          ];
+
+          # Load environment file for credentials
+          EnvironmentFile = [
+            config.my.secrets."surrealdb/credentials"
+          ];
+        };
       };
+
+      # Create surrealdb user and group
+      users.users.surrealdb = {
+        isSystemUser = true;
+        group = "surrealdb";
+        home = cfg.dataDir;
+        createHome = true;
+        extraGroups = ["secret-readers"];
+      };
+
+      users.groups.surrealdb = {};
 
       # Firewall configuration
       networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;

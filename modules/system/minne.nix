@@ -1,4 +1,4 @@
-{
+{inputs, ...}: {
   config.flake.nixosModules.minne = {
     config,
     lib,
@@ -84,7 +84,7 @@
           User = "minne";
           Group = "minne";
           WorkingDirectory = cfg.dataDir;
-          ExecStart = "${pkgs.minne}/bin/main";
+          ExecStart = "${inputs.minne.packages.${pkgs.system}.default}/bin/main";
           Restart = "always";
           RestartSec = "10";
 
@@ -95,12 +95,12 @@
             "RUST_LOG=minne=${cfg.logLevel},tower_http=${cfg.logLevel}"
             "DATA_DIR=${cfg.dataDir}"
           ];
-        };
 
-        # Load environment file for all secrets
-        environmentFile = [
-          config.my.secrets."minne/env"
-        ];
+          # Load environment file for all secrets
+          EnvironmentFile = [
+            config.my.secrets."minne/env"
+          ];
+        };
       };
 
       # Create minne user and group

@@ -84,7 +84,7 @@
         inventory = {
           machines.oumuamua = {
             deploy.targetHost = "root@192.168.101.48";
-            deploy.buildHost = "root@10.0.0.105";
+            deploy.buildHost = "root@10.0.0.15";
             tags = ["server"];
           };
           machines.io = {
@@ -96,7 +96,7 @@
             tags = ["server"];
           };
           machines.charon = {
-            deploy.targetHost = "root@10.0.0.105";
+            deploy.targetHost = "root@10.0.0.15";
             tags = ["client"];
           };
 

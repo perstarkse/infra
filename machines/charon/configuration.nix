@@ -32,6 +32,8 @@
     ]
     ++ (with private-infra.nixosModules; [hello-service]);
 
+
+
   home-manager.users.${config.my.mainUser.name} = {
     imports = with modules.homeModules;
       [
@@ -162,4 +164,7 @@
     sessionType = "sway";
     greeting = "Welcome to charon!";
   };
+
+  # Fix SATA power management issues during suspend
+  boot.kernelParams = [ "libata.force=noncq" ];
 }

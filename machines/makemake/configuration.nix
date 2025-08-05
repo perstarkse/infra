@@ -47,7 +47,6 @@
     enable = true;
     host = "127.0.0.1";
     port = 8220;
-    credentialsFile = config.my.secrets."surrealdb/credentials";
     dataDir = "/var/lib/surrealdb";
   };
 

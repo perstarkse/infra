@@ -9,45 +9,35 @@
     [
       ./../../secrets.nix
       home-module
-      sound
       options
       shared
       interception-tools
       system-stylix
-      ledger
       user-ssh-keys
       user-age-key
+      surrealdb
+      minne
     ]
     ++ (with private-infra.nixosModules; [hello-service]);
 
   home-manager.users.${config.my.mainUser.name} = {
-    imports = with modules.homeModules;
-      [
-        options
-        helix
-        git
-        direnv
-        fish
-        zellij
-        starship
-        mail-clients-setup
-        ssh
-      ]
-      ++ (with private-infra.homeModules; [
-        mail-clients
-        sops-infra
-        rbw
-      ]);
+    imports = with modules.homeModules; [
+      options
+      helix
+      git
+      direnv
+      fish
+      zellij
+      starship
+      ssh
+    ];
+    # ++ (with private-infra.homeModules; [
+    #   sops-infra
+    # ]);
     my = {
       secrets = config.my.sharedSecretPaths;
 
       programs = {
-        mail = {
-          clients = ["aerc"];
-        };
-        rbw = {
-          pinentrySource = "tty";
-        };
         helix = {
           languages = ["nix" "markdown"];
         };
@@ -69,6 +59,31 @@
   time.timeZone = "Europe/Stockholm";
 
   clan.core.networking.zerotier.controller.enable = true;
+
+  # SurrealDB configuration
+  my.surrealdb = {
+    enable = true;
+    host = "127.0.0.1";
+    port = 8220;
+    dataDir = "/var/lib/surrealdb";
+  };
+
+  # Minne configuration
+  my.minne = {
+    enable = true;
+    port = 3000;
+    address = "0.0.0.0";
+    dataDir = "/var/lib/minne";
+    
+    surrealdb = {
+      host = "127.0.0.1";
+      port = 8220;
+    };
+
+    logLevel = "info";
+  };
+
+  nixpkgs.config.allowUnfree = true;
 
   environment.systemPackages = [
     # pkgs.epy
