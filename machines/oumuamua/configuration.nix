@@ -3,58 +3,69 @@
   private-infra,
   config,
   pkgs,
+  vars-helper,
   ...
 }: {
   imports = with modules.nixosModules;
     [
-      ./../../secrets.nix
       home-module
       options
       shared
       interception-tools
       system-stylix
-      user-ssh-keys
-      user-age-key
+      # user-ssh-keys
+      # user-age-key
       surrealdb
       minne
-    ]
-    ++ (with private-infra.nixosModules; [hello-service]);
+    ] ++ (with vars-helper.nixosModules; [default]);
+    # ++ (with private-infra.nixosModules; [hello-service]);
 
-  home-manager.users.${config.my.mainUser.name} = {
-    imports = with modules.homeModules; [
-      options
-      helix
-      git
-      direnv
-      fish
-      zellij
-      starship
-      ssh
-    ];
-    # ++ (with private-infra.homeModules; [
-    #   sops-infra
-    # ]);
-    my = {
-      secrets = config.my.sharedSecretPaths;
+  # home-manager.users.${config.my.mainUser.name} = {
+  #   imports = with modules.homeModules; [
+  #     options
+  #     helix
+  #     git
+  #     direnv
+  #     fish
+  #     zellij
+  #     starship
+  #     ssh
+  #   ]
+  #   ++ (with private-infra.homeModules; [
+  #     sops-infra
+  #   ]);
+  #   my = {
+  #     secrets = config.my.sharedSecretPaths;
 
-      programs = {
-        helix = {
-          languages = ["nix" "markdown"];
-        };
-      };
-    };
+  #     programs = {
+  #       helix = {
+  #         languages = ["nix" "markdown"];
+  #       };
+  #     };
+  #   };
 
-    home.stateVersion = "25.11";
-  };
+  #   home.stateVersion = "25.11";
+  # };
 
   my.mainUser.name = "p";
 
-  my.userSecrets = [
-    "api-key-openai/api_key"
-    "api-key-openrouter/api_key"
-    "api-key-aws-access/aws_access_key_id"
-    "api-key-aws-secret/aws_secret_access_key"
-  ];
+  # Auto-discover secrets generators for this machine
+  my.secrets.discover = {
+    enable = true;
+    dir = ../../vars/generators;
+    # Import all generators in this dir; filter by tags elsewhere if needed
+    includeTags = [ "oumuamua" ];
+  };
+
+  # Expose SurrealDB credentials to the surrealdb user
+  my.secrets.exposeUserSecret = {
+    enable = true;
+    secretName = "surrealdb-credentials";
+    file = "credentials";
+    user = "surrealdb";
+    dest = "/var/lib/surrealdb/credentials.env";
+    mode = "0400";
+  };
 
   time.timeZone = "Europe/Stockholm";
 
@@ -74,7 +85,7 @@
     port = 3000;
     address = "0.0.0.0";
     dataDir = "/var/lib/minne";
-    
+
     surrealdb = {
       host = "127.0.0.1";
       port = 8220;

@@ -97,8 +97,8 @@
           ];
 
           # Load environment file for all secrets
-          EnvironmentFile = [
-            config.my.secrets."minne/env"
+          EnvironmentFile =  [
+            (config.my.secrets.getPath "minne-env" "env")
           ];
         };
       };
@@ -109,7 +109,6 @@
         group = "minne";
         home = cfg.dataDir;
         createHome = true;
-        extraGroups = ["secret-readers"];
       };
 
       users.groups.minne = {};

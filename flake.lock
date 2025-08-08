@@ -1105,7 +1105,8 @@
         "minne": "minne",
         "nixpkgs": "nixpkgs_2",
         "private-infra": "private-infra",
-        "stylix": "stylix"
+        "stylix": "stylix",
+        "vars-helper": "vars-helper"
       }
     },
     "simple-nixos-mailserver": {
@@ -1366,6 +1367,29 @@
       "original": {
         "owner": "numtide",
         "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "vars-helper": {
+      "inputs": {
+        "flake-parts": [
+          "flake-parts"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1754650273,
+        "narHash": "sha256-2SsAl/TWBEYO6kxZoVITiJRJdLcQD0LsFs9dCpOyyFk=",
+        "owner": "perstarkse",
+        "repo": "clan-vars-helper",
+        "rev": "86686216a67302a21c89a6c5d9d36f6fb1be5abe",
+        "type": "github"
+      },
+      "original": {
+        "owner": "perstarkse",
+        "repo": "clan-vars-helper",
         "type": "github"
       }
     },

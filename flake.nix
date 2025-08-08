@@ -56,6 +56,13 @@
       url = "https://flakehub.com/f/AshleyYakeley/NixVirt/*.tar.gz";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Secrets helper (vars-native for Clan)
+    vars-helper = {
+      url = "github:perstarkse/clan-vars-helper";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-parts.follows = "flake-parts";
+    };
   };
 
   outputs = {
@@ -64,6 +71,7 @@
     clan-core,
     home-manager,
     private-infra,
+    vars-helper,
     ...
   } @ inputs:
     flake-parts.lib.mkFlake {inherit inputs;} ({config, ...}: {
@@ -79,12 +87,13 @@
         specialArgs = {
           modules = config.flake;
           inherit private-infra;
+          inherit vars-helper;
         };
 
         inventory = {
           machines.oumuamua = {
             deploy.targetHost = "root@192.168.101.48";
-            deploy.buildHost = "root@10.0.0.15";
+            # deploy.buildHost = "root@10.0.0.15";
             tags = ["server"];
           };
           machines.io = {

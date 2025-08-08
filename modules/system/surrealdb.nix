@@ -81,21 +81,13 @@
           User = "surrealdb";
           Group = "surrealdb";
           WorkingDirectory = cfg.dataDir;
-          ExecStart = "${pkgs.surrealdb}/bin/surreal";
+          ExecStart = ''${pkgs.surrealdb}/bin/surreal start --bind ${cfg.host}:${toString cfg.port} ${lib.concatStringsSep " " cfg.extraFlags} rocksdb:${cfg.dataDir}/data.db'';
           Restart = "always";
           RestartSec = "10";
 
-          # Basic environment variables
-          Environment = [
-            "SURREALDB_HOST=${cfg.host}"
-            "SURREALDB_PORT=${toString cfg.port}"
-            "SURREALDB_DATABASE=${cfg.database}"
-            "SURREALDB_NAMESPACE=${cfg.namespace}"
-          ];
-
           # Load environment file for credentials
           EnvironmentFile = [
-            config.my.secrets."surrealdb/credentials"
+            "/var/lib/surrealdb/credentials.env"
           ];
         };
       };
@@ -106,7 +98,6 @@
         group = "surrealdb";
         home = cfg.dataDir;
         createHome = true;
-        extraGroups = ["secret-readers"];
       };
 
       users.groups.surrealdb = {};
@@ -118,6 +109,8 @@
       # Ensure data directory exists
       systemd.tmpfiles.rules = [
         "d ${cfg.dataDir} 0755 surrealdb surrealdb -"
+        # Ensure the credentials file has sane permissions if it exists
+        "z ${cfg.dataDir}/credentials.env 0640 surrealdb surrealdb -"
       ];
     };
   };
