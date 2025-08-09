@@ -5,9 +5,9 @@
         daily = {
           initialize = true;
 
-          environmentFile = config.my.secrets."restic-repo-file/vault-name";
-          repositoryFile = config.my.secrets."restic-env-file/env";
-          passwordFile = config.my.secrets."restic-password/password";
+          environmentFile = config.my.secrets.getPath "restic-env-file" "env";
+          repositoryFile = config.my.secrets.getPath "restic-repo-file" "vault-name";
+          passwordFile = config.my.secrets.getPath "restic-password" "password";
 
           paths = [
             "${config.users.users.p.home}/documents"

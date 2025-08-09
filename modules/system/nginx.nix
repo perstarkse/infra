@@ -24,11 +24,6 @@
           default = true;
           description = "Enable ddclient for dynamic DNS";
         };
-        configPath = lib.mkOption {
-          type = lib.types.str;
-          default = "ddclient.conf";
-          description = "SOPS secret path for ddclient configuration";
-        };
       };
 
       virtualHosts = lib.mkOption {
@@ -72,7 +67,7 @@
       services.ddclient = lib.mkIf cfg.ddclient.enable {
         enable = true;
         package = pkgs.unstable.ddclient;
-        configFile = config.sops.secrets.${cfg.ddclient.configPath}.path;
+        configFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
       };
 
       services.nginx = {

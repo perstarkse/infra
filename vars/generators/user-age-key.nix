@@ -1,23 +1,23 @@
 {
-  "minne-env" = {
+  "user-age-key" = {
     files = {
-      env = {
+      key = {
         mode = "0400";
         neededFor = "users";
       };
     };
     prompts = {
-      env = {
-        description = "Content of the Minne environment file";
+      key = {
+        description = "Content of the user age key file";
         persist = true;
         type = "hidden";
       };
     };
     script = ''
-      cp "$prompts/env" "$out/env"
+      cp "$prompts/key" "$out/key"
     '';
     meta = {
-      tags = [ "oumuamua" "service" "minne" ];
+      tags = [ "user" "user-age" ];
     };
   };
 } 

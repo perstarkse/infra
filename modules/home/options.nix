@@ -1,9 +1,9 @@
 {
-  config.flake.homeModules.options = {lib, ...}: {
+  config.flake.homeModules.options = {lib, osConfig, ...}: {
     options.my.secrets = lib.mkOption {
-      type = lib.types.attrsOf lib.types.path;
-      default = {};
-      description = "A map of secret names to their runtime paths.";
+      type = lib.types.anything;
+      default = (osConfig.my.secrets or {});
+      description = "Secrets from the system configuration, exposed to Home Manager. This is intentionally untyped to allow helper functions like getPath.";
     };
   };
 }

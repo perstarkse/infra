@@ -17,35 +17,38 @@
       # user-age-key
       surrealdb
       minne
-    ] ++ (with vars-helper.nixosModules; [default]);
-    # ++ (with private-infra.nixosModules; [hello-service]);
+    ] ++ (with vars-helper.nixosModules; [default])
+    ++ (with private-infra.nixosModules; [hello-service]);
 
-  # home-manager.users.${config.my.mainUser.name} = {
-  #   imports = with modules.homeModules; [
-  #     options
-  #     helix
-  #     git
-  #     direnv
-  #     fish
-  #     zellij
-  #     starship
-  #     ssh
-  #   ]
-  #   ++ (with private-infra.homeModules; [
-  #     sops-infra
-  #   ]);
-  #   my = {
-  #     secrets = config.my.sharedSecretPaths;
+  home-manager.users.${config.my.mainUser.name} = {
+    imports = with modules.homeModules; [
+      options
+      helix
+      git
+      direnv
+      fish
+      zellij
+      starship
+      ssh
+      mail-clients-setup
+    ]
+    ++ (with private-infra.homeModules; [
+      sops-infra
+      mail-clients
+    ]);
+    my = {
+      programs = {
+        mail = {
+          clients = ["aerc"];
+        };
+        helix = {
+          languages = ["nix" "markdown"];
+        };
+      };
+    };
 
-  #     programs = {
-  #       helix = {
-  #         languages = ["nix" "markdown"];
-  #       };
-  #     };
-  #   };
-
-  #   home.stateVersion = "25.11";
-  # };
+    home.stateVersion = "25.11";
+  };
 
   my.mainUser.name = "p";
 
@@ -53,19 +56,45 @@
   my.secrets.discover = {
     enable = true;
     dir = ../../vars/generators;
-    # Import all generators in this dir; filter by tags elsewhere if needed
-    includeTags = [ "oumuamua" ];
+    includeTags = [ "oumuamua" "user" "openrouter" "fish" ];
   };
 
-  # Expose SurrealDB credentials to the surrealdb user
-  my.secrets.exposeUserSecret = {
+  my.secrets.exposeUserSecrets = [{
     enable = true;
-    secretName = "surrealdb-credentials";
-    file = "credentials";
-    user = "surrealdb";
-    dest = "/var/lib/surrealdb/credentials.env";
-    mode = "0400";
-  };
+    secretName = "user-ssh-key";
+    file = "key";
+    user = config.my.mainUser.name;
+    group = "users";
+    dest = "/home/${config.my.mainUser.name}/.ssh/id_ed25519";
+  }
+  {
+    enable = true;
+    secretName = "user-age-key";
+    file = "key";
+    user = config.my.mainUser.name;
+    group = "users";
+    dest = "/home/${config.my.mainUser.name}/.config/sops/age/keys.txt";
+  }
+];
+
+  my.secrets.allowReadAccess = [
+    {
+      readers = [ config.my.mainUser.name ];
+      path = config.my.secrets.getPath "api-key-openai" "api_key";
+    }
+    {
+      readers = [ config.my.mainUser.name ];
+      path = config.my.secrets.getPath "api-key-openrouter" "api_key";
+    }
+    {
+      readers = [ config.my.mainUser.name ];
+      path = config.my.secrets.getPath "api-key-aws-access" "aws_access_key_id";
+    }
+    {
+      readers = [ config.my.mainUser.name ];
+      path = config.my.secrets.getPath "api-key-aws-secret" "aws_secret_access_key";
+    }
+  ];
 
   time.timeZone = "Europe/Stockholm";
 

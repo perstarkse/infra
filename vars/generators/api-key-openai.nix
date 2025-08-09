@@ -1,23 +1,23 @@
 {
-  "minne-env" = {
+  "api-key-openai" = {
     files = {
-      env = {
+      api_key = {
         mode = "0400";
         neededFor = "users";
       };
     };
     prompts = {
-      env = {
-        description = "Content of the Minne environment file";
+      api_key = {
+        description = "OpenAI API key";
         persist = true;
         type = "hidden";
       };
     };
     script = ''
-      cp "$prompts/env" "$out/env"
+      cp "$prompts/api_key" "$out/api_key"
     '';
     meta = {
-      tags = [ "oumuamua" "service" "minne" ];
+      tags = [ "openai" "api-key" "dev" "fish" ];
     };
   };
 } 

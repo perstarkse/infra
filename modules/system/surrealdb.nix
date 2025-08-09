@@ -87,7 +87,7 @@
 
           # Load environment file for credentials
           EnvironmentFile = [
-            "/var/lib/surrealdb/credentials.env"
+            (config.my.secrets.getPath "surrealdb-credentials" "credentials")
           ];
         };
       };
@@ -109,8 +109,6 @@
       # Ensure data directory exists
       systemd.tmpfiles.rules = [
         "d ${cfg.dataDir} 0755 surrealdb surrealdb -"
-        # Ensure the credentials file has sane permissions if it exists
-        "z ${cfg.dataDir}/credentials.env 0640 surrealdb surrealdb -"
       ];
     };
   };
