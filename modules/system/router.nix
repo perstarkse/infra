@@ -12,6 +12,22 @@
     dhcpStart = "${lanSubnet}.${cfg.dhcpStart}";
     dhcpEnd = "${lanSubnet}.${cfg.dhcpEnd}";
     ulaPrefix = cfg.ulaPrefix;
+    # New normalized variables with backward compatibility
+    wanIf = if cfg ? wan && cfg.wan.interface != null then cfg.wan.interface else cfg.wanInterface;
+    bridgeName = if cfg ? lan && cfg.lan.bridgeName != null then cfg.lan.bridgeName else "br-lan";
+    lanIfaces = if cfg ? lan && cfg.lan.interfaces != null && cfg.lan.interfaces != [] then cfg.lan.interfaces else cfg.lanInterfaces;
+    wanAllowTcp = (if cfg ? wan && cfg.wan.allowTcpPorts != null then cfg.wan.allowTcpPorts else [80 443]);
+    wanAllowUdp = (if cfg ? wan && cfg.wan.allowUdpPorts != null then cfg.wan.allowUdpPorts else []);
+    wanAllowDhcpClient = (if cfg ? wan && cfg.wan.allowDhcpClient != null then cfg.wan.allowDhcpClient else true);
+    wanAllowIcmp = (if cfg ? wan && cfg.wan.allowIcmp != null then cfg.wan.allowIcmp else true);
+    allowTcpRule = lib.optionalString (wanAllowTcp != [])
+      ("iifname \"" + wanIf + "\" tcp dport { " + (lib.concatStringsSep ", " (map toString wanAllowTcp)) + " } accept");
+    allowUdpRule = lib.optionalString (wanAllowUdp != [])
+      ("iifname \"" + wanIf + "\" udp dport { " + (lib.concatStringsSep ", " (map toString wanAllowUdp)) + " } accept");
+    allowDhcpRule = lib.optionalString wanAllowDhcpClient
+      ("iifname \"" + wanIf + "\" udp sport 67 udp dport 68 accept");
+    allowIcmpRule = lib.optionalString wanAllowIcmp
+      ("iifname \"" + wanIf + "\" ip protocol icmp accept");
   in {
     options.my.router = {
       enable = lib.mkEnableOption "Enable router functionality";
@@ -55,6 +71,56 @@
         type = lib.types.listOf lib.types.str;
         default = ["enp2s0" "enp3s0" "enp4s0"];
         description = "LAN interfaces to bridge";
+      };
+
+      # New structured options
+      wan = {
+        interface = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = "WAN interface name (overrides wanInterface if set)";
+        };
+        allowTcpPorts = lib.mkOption {
+          type = lib.types.listOf lib.types.int;
+          default = [80 443];
+          description = "List of TCP ports allowed on WAN input";
+        };
+        allowUdpPorts = lib.mkOption {
+          type = lib.types.listOf lib.types.int;
+          default = [];
+          description = "List of UDP ports allowed on WAN input";
+        };
+        allowDhcpClient = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Allow DHCP client traffic on WAN (udp 67->68)";
+        };
+        allowIcmp = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Allow ICMP on WAN input";
+        };
+      };
+
+      lan = {
+        bridgeName = lib.mkOption {
+          type = lib.types.str;
+          default = "br-lan";
+          description = "Name of the LAN bridge device";
+        };
+        interfaces = lib.mkOption {
+          type = lib.types.nullOr (lib.types.listOf lib.types.str);
+          default = null;
+          description = "LAN interfaces to enslave to the bridge (overrides lanInterfaces if set)";
+        };
+      };
+
+      ipv6 = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Enable IPv6 routing and RA on LAN";
+        };
       };
 
       machines = lib.mkOption {
@@ -134,6 +200,14 @@
           type = lib.types.attrsOf lib.types.anything;
           description = "Attrset of machines keyed by name";
         };
+        bridgeName = lib.mkOption {
+          type = lib.types.str;
+          description = "Computed bridge device name";
+        };
+        wanInterface = lib.mkOption {
+          type = lib.types.str;
+          description = "Computed WAN interface name";
+        };
       };
     };
 
@@ -145,6 +219,8 @@
         dhcpStartAddress = dhcpStart;
         dhcpEndAddress = dhcpEnd;
         machinesByName = lib.listToAttrs (map (m: lib.nameValuePair m.name m) cfg.machines);
+        bridgeName = bridgeName;
+        wanInterface = wanIf;
       };
 
       boot.kernel.sysctl = {
@@ -152,8 +228,8 @@
         # Use loose/disabled rp_filter to avoid dropping legitimate bridged/NAT traffic
         "net.ipv4.conf.all.rp_filter" = 0;
         "net.ipv4.conf.default.rp_filter" = 0;
-        "net.ipv4.conf.${cfg.wanInterface}.rp_filter" = 2;
-        "net.ipv4.conf.br-lan.rp_filter" = 0;
+        "net.ipv4.conf.${wanIf}.rp_filter" = 2;
+        "net.ipv4.conf.${bridgeName}.rp_filter" = 0;
 
         "net.ipv6.conf.all.forwarding" = true;
         "net.ipv6.conf.all.accept_ra" = 0;
@@ -182,21 +258,21 @@
                 chain input {
                   type filter hook input priority 0; policy drop;
                   iifname "lo" accept
-                  iifname "br-lan" accept
-                  iifname "${cfg.wanInterface}" ct state established,related accept
-                  iifname "${cfg.wanInterface}" ip protocol icmp accept
-                  # Allow DHCP replies to our WAN DHCP client
-                  iifname "${cfg.wanInterface}" udp sport 67 udp dport 68 accept
-                  iifname "${cfg.wanInterface}" tcp dport { 80, 443 } accept
+                  iifname "${bridgeName}" accept
+                  iifname "${wanIf}" ct state established,related accept
+                  ${allowIcmpRule}
+                  ${allowDhcpRule}
+                  ${allowTcpRule}
+                  ${allowUdpRule}
                 }
                 chain forward {
                   type filter hook forward priority 0; policy drop;
-                  iifname "br-lan" oifname "${cfg.wanInterface}" accept
-                  iifname "br-lan" oifname "br-lan" accept
-                  iifname "${cfg.wanInterface}" oifname "br-lan" ct state established,related accept
+                  iifname "${bridgeName}" oifname "${wanIf}" accept
+                  iifname "${bridgeName}" oifname "${bridgeName}" accept
+                  iifname "${wanIf}" oifname "${bridgeName}" ct state established,related accept
                   ${lib.concatStringsSep "\n" (lib.mapAttrsToList (machineName: machine: 
                     lib.concatStringsSep "\n" (map (pf: 
-                      "iifname \"${cfg.wanInterface}\" oifname \"br-lan\" ip daddr ${lanSubnet}.${machine.ip} ${pf.protocol} dport ${toString pf.port} accept"
+                      "iifname \"${wanIf}\" oifname \"${bridgeName}\" ip daddr ${lanSubnet}.${machine.ip} ${pf.protocol} dport ${toString pf.port} accept"
                     ) machine.portForwards)
                   ) (lib.listToAttrs (map (m: lib.nameValuePair m.name m) cfg.machines)))}
                 }
@@ -209,13 +285,13 @@
                   type nat hook prerouting priority -100;
                   ${lib.concatStringsSep "\n" (lib.mapAttrsToList (machineName: machine: 
                     lib.concatStringsSep "\n" (map (pf: 
-                      "iifname \"${cfg.wanInterface}\" ${pf.protocol} dport ${toString pf.port} dnat to ${lanSubnet}.${machine.ip}"
+                      "iifname \"${wanIf}\" ${pf.protocol} dport ${toString pf.port} dnat to ${lanSubnet}.${machine.ip}"
                     ) machine.portForwards)
                   ) (lib.listToAttrs (map (m: lib.nameValuePair m.name m) cfg.machines)))}
                 }
                 chain postrouting {
                   type nat hook postrouting priority 100;
-                  oifname "${cfg.wanInterface}" masquerade
+                  oifname "${wanIf}" masquerade
                 }
               '';
             };
@@ -225,19 +301,19 @@
                 chain input {
                   type filter hook input priority 0; policy drop;
                   iifname "lo" accept
-                  iifname "br-lan" accept
-                  iifname "${cfg.wanInterface}" ct state established,related accept
-                  iifname "${cfg.wanInterface}" icmpv6 type {
+                  iifname "${bridgeName}" accept
+                  iifname "${wanIf}" ct state established,related accept
+                  iifname "${wanIf}" icmpv6 type {
                     destination-unreachable, packet-too-big, time-exceeded,
                     parameter-problem, nd-router-advert, nd-neighbor-solicit,
                     nd-neighbor-advert
                   } accept
-                  iifname "${cfg.wanInterface}" udp dport dhcpv6-client udp sport dhcpv6-server accept
+                  iifname "${wanIf}" udp dport dhcpv6-client udp sport dhcpv6-server accept
                 }
                 chain forward {
                   type filter hook forward priority 0; policy drop;
-                  iifname "br-lan" oifname "${cfg.wanInterface}" accept
-                  iifname "${cfg.wanInterface}" oifname "br-lan" ct state established,related accept
+                  iifname "${bridgeName}" oifname "${wanIf}" accept
+                  iifname "${wanIf}" oifname "${bridgeName}" ct state established,related accept
                 }
               '';
             };
@@ -249,17 +325,17 @@
         enable = true;
 
         # Define the bridge device itself
-        netdevs."20-br-lan" = {
+        netdevs."20-${bridgeName}" = {
           netdevConfig = {
             Kind = "bridge";
-            Name = "br-lan";
+            Name = bridgeName;
           };
         };
 
         networks = {
           # WAN interface configuration
           "20-wan" = {
-            matchConfig.Name = cfg.wanInterface;
+            matchConfig.Name = wanIf;
             networkConfig = {
               DHCP = "yes";
               IPv4Forwarding = true;
@@ -271,8 +347,8 @@
           };
 
           # LAN bridge configuration
-          "10-br-lan" = {
-            matchConfig.Name = "br-lan";
+          "10-${bridgeName}" = {
+            matchConfig.Name = bridgeName;
             address = [
               "${routerIp}/24"
               "${ulaPrefix}::1/64"
@@ -297,11 +373,11 @@
           lib.nameValuePair "30-${iface}-lan" {
             matchConfig.Name = iface;
             networkConfig = {
-              Bridge = "br-lan";
+              Bridge = bridgeName;
               ConfigureWithoutCarrier = true;
             };
           }
-        ) cfg.lanInterfaces);
+        ) lanIfaces);
       };
     };
   };

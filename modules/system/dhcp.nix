@@ -12,6 +12,7 @@
     routerIp = calculated.routerIp;
     dhcpStart = calculated.dhcpStartAddress;
     dhcpEnd = calculated.dhcpEndAddress;
+    bridgeName = calculated.bridgeName or "br-lan";
   in {
     options.my.dhcp = {
       enable = lib.mkEnableOption "Enable DHCP server (Kea)";
@@ -59,7 +60,7 @@
         dhcp4 = {
           enable = true;
           settings = {
-            interfaces-config.interfaces = ["br-lan"]; # Kea serves DHCP on the bridge
+            interfaces-config.interfaces = [bridgeName]; # Kea serves DHCP on the bridge
             lease-database = {
               name = cfg.leaseDatabase;
               type = "memfile";
