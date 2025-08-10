@@ -8,6 +8,7 @@
     cfg = config.my.nginx;
     routerCfg = config.my.router;
     lanSubnet = routerCfg.lanSubnet;
+    calculated = config.my.router.calculated;
   in {
     options.my.nginx = {
       enable = lib.mkEnableOption "Enable nginx reverse proxy";
@@ -80,16 +81,15 @@
 
         virtualHosts = lib.listToAttrs (map (vhost: 
           let
-            # Resolve target to IP:port
-            targetIp = if lib.hasPrefix "10.0.0." vhost.target then
-              vhost.target
+            # Resolve target to IP:port using precomputed machinesByName when possible
+            tgt = vhost.target;
+            m = calculated.machinesByName.${vhost.target} or null;
+            targetIp = if lib.hasPrefix "10.0.0." tgt then
+              tgt
+            else if m != null then
+              "${lanSubnet}.${m.ip}"
             else
-              # Look up machine by name
-              let machine = lib.findFirst (m: m.name == vhost.target) null routerCfg.machines;
-              in if machine != null then
-                "${lanSubnet}.${machine.ip}"
-              else
-                vhost.target;
+              tgt;
             targetUrl = "http://${targetIp}:${toString vhost.port}";
           in
           lib.nameValuePair vhost.domain {

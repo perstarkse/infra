@@ -7,11 +7,11 @@
   }: let
     cfg = config.my.dhcp;
     routerCfg = config.my.router;
-    lanSubnet = routerCfg.lanSubnet;
-    lanCidr = "${lanSubnet}.0/24";
-    routerIp = "${lanSubnet}.1";
-    dhcpStart = "${lanSubnet}.${routerCfg.dhcpStart}";
-    dhcpEnd = "${lanSubnet}.${routerCfg.dhcpEnd}";
+    calculated = config.my.router.calculated;
+    lanCidr = calculated.lanCidr;
+    routerIp = calculated.routerIp;
+    dhcpStart = calculated.dhcpStartAddress;
+    dhcpEnd = calculated.dhcpEndAddress;
   in {
     options.my.dhcp = {
       enable = lib.mkEnableOption "Enable DHCP server (Kea)";
@@ -80,7 +80,7 @@
                 ];
                 reservations = map (machine: {
                   hw-address = machine.mac;
-                  ip-address = "${lanSubnet}.${machine.ip}";
+                  ip-address = "${routerCfg.lanSubnet}.${machine.ip}";
                   hostname = machine.name;
                 }) routerCfg.machines;
                 option-data = [

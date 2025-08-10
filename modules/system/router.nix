@@ -111,14 +111,49 @@
         default = [];
         description = "List of services for DNS resolution";
       };
+
+      # Computed/shared values for other modules to consume
+      calculated = {
+        lanCidr = lib.mkOption {
+          type = lib.types.str;
+          description = "Computed LAN CIDR (e.g., 10.0.0.0/24)";
+        };
+        routerIp = lib.mkOption {
+          type = lib.types.str;
+          description = "Computed router IPv4 address (e.g., 10.0.0.1)";
+        };
+        dhcpStartAddress = lib.mkOption {
+          type = lib.types.str;
+          description = "Computed DHCP range start IPv4 address";
+        };
+        dhcpEndAddress = lib.mkOption {
+          type = lib.types.str;
+          description = "Computed DHCP range end IPv4 address";
+        };
+        machinesByName = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          description = "Attrset of machines keyed by name";
+        };
+      };
     };
 
     config = lib.mkIf cfg.enable {
+      # Expose computed values
+      my.router.calculated = {
+        lanCidr = lanCidr;
+        routerIp = routerIp;
+        dhcpStartAddress = dhcpStart;
+        dhcpEndAddress = dhcpEnd;
+        machinesByName = lib.listToAttrs (map (m: lib.nameValuePair m.name m) cfg.machines);
+      };
+
       boot.kernel.sysctl = {
         "net.ipv4.conf.all.forwarding" = true;
-        "net.ipv4.conf.default.rp_filter" = 1;
-        "net.ipv4.conf.${cfg.wanInterface}.rp_filter" = 1;
-        "net.ipv4.conf.br-lan.rp_filter" = 1;
+        # Use loose/disabled rp_filter to avoid dropping legitimate bridged/NAT traffic
+        "net.ipv4.conf.all.rp_filter" = 0;
+        "net.ipv4.conf.default.rp_filter" = 0;
+        "net.ipv4.conf.${cfg.wanInterface}.rp_filter" = 2;
+        "net.ipv4.conf.br-lan.rp_filter" = 0;
 
         "net.ipv6.conf.all.forwarding" = true;
         "net.ipv6.conf.all.accept_ra" = 0;
@@ -150,6 +185,8 @@
                   iifname "br-lan" accept
                   iifname "${cfg.wanInterface}" ct state established,related accept
                   iifname "${cfg.wanInterface}" ip protocol icmp accept
+                  # Allow DHCP replies to our WAN DHCP client
+                  iifname "${cfg.wanInterface}" udp sport 67 udp dport 68 accept
                   iifname "${cfg.wanInterface}" tcp dport { 80, 443 } accept
                 }
                 chain forward {

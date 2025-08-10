@@ -7,10 +7,11 @@
   }: let
     cfg = config.my.dns;
     routerCfg = config.my.router;
+    calculated = config.my.router.calculated;
     lanSubnet = routerCfg.lanSubnet;
-    routerIp = "${lanSubnet}.1";
+    routerIp = calculated.routerIp;
     ulaPrefix = routerCfg.ulaPrefix;
-    lanCidr = "${lanSubnet}.0/24";
+    lanCidr = calculated.lanCidr;
   in {
     options.my.dns = {
       enable = lib.mkEnableOption "Enable DNS server (Unbound)";

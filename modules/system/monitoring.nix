@@ -7,7 +7,7 @@
   }: let
     cfg = config.my.monitoring;
     routerCfg = config.my.router;
-    routerIp = "${routerCfg.lanSubnet}.1";
+    routerIp = config.my.router.calculated.routerIp;
   in {
     options.my.monitoring = {
       enable = lib.mkEnableOption "Enable network monitoring";
