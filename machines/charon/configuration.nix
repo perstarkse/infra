@@ -3,11 +3,11 @@
   private-infra,
   config,
   pkgs,
+  vars-helper,
   ...
 }: {
   imports = with modules.nixosModules;
     [
-      ../../secrets.nix
       ./hardware-configuration.nix
       ./boot.nix
       home-module
@@ -19,20 +19,17 @@
       sway
       greetd
       ledger
-      user-ssh-keys
-      user-age-key
       libvirt
       vfio
       fonts
       nvidia
-      restic
+      # restic
       docker
       steam
       k3s
     ]
+    ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [hello-service]);
-
-
 
   home-manager.users.${config.my.mainUser.name} = {
     imports = with modules.homeModules;
@@ -64,8 +61,6 @@
         rbw
       ]);
     my = {
-      secrets = config.my.sharedSecretPaths;
-
       programs = {
         mail = {
           clients = ["aerc" "thunderbird"];
@@ -88,6 +83,50 @@
 
     home.stateVersion = "25.11";
   };
+
+  my.secrets.discover = {
+    enable = true;
+    dir = ../../vars/generators;
+    includeTags = ["aws" "openai" "openrouter" "user"];
+  };
+
+  my.secrets.exposeUserSecrets = [
+    {
+      enable = true;
+      secretName = "user-ssh-key";
+      file = "key";
+      user = config.my.mainUser.name;
+      group = "users";
+      dest = "/home/${config.my.mainUser.name}/.ssh/id_ed25519";
+    }
+    {
+      enable = true;
+      secretName = "user-age-key";
+      file = "key";
+      user = config.my.mainUser.name;
+      group = "users";
+      dest = "/home/${config.my.mainUser.name}/.config/sops/age/keys.txt";
+    }
+  ];
+
+  my.secrets.allowReadAccess = [
+    {
+      readers = [config.my.mainUser.name];
+      path = config.my.secrets.getPath "api-key-openai" "api_key";
+    }
+    {
+      readers = [config.my.mainUser.name];
+      path = config.my.secrets.getPath "api-key-openrouter" "api_key";
+    }
+    {
+      readers = [config.my.mainUser.name];
+      path = config.my.secrets.getPath "api-key-aws-access" "aws_access_key_id";
+    }
+    {
+      readers = [config.my.mainUser.name];
+      path = config.my.secrets.getPath "api-key-aws-secret" "aws_secret_access_key";
+    }
+  ];
 
   nixpkgs.config.allowUnfree = true;
 
@@ -137,13 +176,6 @@
     tlsSan = "10.0.0.1";
   };
 
-  my.userSecrets = [
-    "api-key-openai/api_key"
-    "api-key-openrouter/api_key"
-    "api-key-aws-access/aws_access_key_id"
-    "api-key-aws-secret/aws_secret_access_key"
-  ];
-
   time.timeZone = "Europe/Stockholm";
 
   clan.core.networking.zerotier.controller.enable = true;
@@ -162,9 +194,9 @@
   my.greetd = {
     enable = true;
     sessionType = "sway";
-    greeting = "Welcome to charon!";
+    greeting = "Enter the heliosphere via charon!";
   };
 
-  # Fix SATA power management issues during suspend
-  boot.kernelParams = [ "libata.force=noncq" ];
+  # Fix SATA power management issues during suspend, did not work
+  # boot.kernelParams = [ "libata.force=noncq" ];
 }

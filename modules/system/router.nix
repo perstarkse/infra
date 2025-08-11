@@ -266,6 +266,18 @@
           }
         ) cfg.lanInterfaces);
       };
+
+      # Make sure nftables comes up after network is initialized
+      systemd.services.nftables = {
+        after = ["systemd-networkd.service" "network-online.target"];
+        wants = ["network-online.target"];
+      };
+
+      # Ensure br-lan is brought up early
+      systemd.services.systemd-networkd = {
+        wantedBy = lib.mkForce ["multi-user.target"]; # keep default
+        after = ["network-pre.target"];
+      };
     };
   };
 } 

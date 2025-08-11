@@ -1,5 +1,6 @@
 {
   "api-key-aws-secret" = {
+    share = true;
     files = {
       aws_secret_access_key = {
         mode = "0400";

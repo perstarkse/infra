@@ -1,5 +1,6 @@
 {
   "surrealdb-credentials" = {
+    share = true;
     files = {
       credentials = {
         mode = "0400";

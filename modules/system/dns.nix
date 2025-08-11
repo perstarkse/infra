@@ -63,27 +63,13 @@
             num-threads = 1;
             so-reuseport = true;
             local-zone = ''"${cfg.localZone}" static'';
-            local-data = [
-              # Router
-              ''"io.${cfg.localZone} IN A ${routerIp}"''
-              ''"io.${cfg.localZone} IN AAAA ${ulaPrefix}::1"''
-
-              # Machines
-              lib.concatStringsSep
-              "\n"
-              (map (
-                  machine: ''"${machine.name}.${cfg.localZone} IN A ${lanSubnet}.${machine.ip}"''
-                )
-                routerCfg.machines)
-
-              # Services
-              lib.concatStringsSep
-              "\n"
-              (map (
-                  service: ''"${service.name} IN A ${service.target}"''
-                )
-                routerCfg.services)
-            ];
+            local-data =
+              [
+                ''"io.${cfg.localZone} IN A ${routerIp}"''
+                ''"io.${cfg.localZone} IN AAAA ${ulaPrefix}::1"''
+              ]
+              ++ (map (machine: ''"${machine.name}.${cfg.localZone} IN A ${lanSubnet}.${machine.ip}"'') routerCfg.machines)
+              ++ (map (service: ''"${service.name} IN A ${service.target}"'') routerCfg.services);
           };
           forward-zone = [
             {

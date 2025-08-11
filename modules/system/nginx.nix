@@ -66,7 +66,7 @@
 
       services.ddclient = lib.mkIf cfg.ddclient.enable {
         enable = true;
-        package = pkgs.unstable.ddclient;
+        package = pkgs.ddclient;
         configFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
       };
 

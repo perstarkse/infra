@@ -1,5 +1,6 @@
 {
   "user-ssh-key" = {
+    share = true;
     files = {
       key = {
         mode = "0400";
@@ -17,7 +18,7 @@
       cp "$prompts/key" "$out/key"
     '';
     meta = {
-    tags = [ "user" "user-ssh" ];
+        tags = [ "user" "user-ssh" ];
     };
   };
 } 

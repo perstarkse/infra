@@ -1,5 +1,6 @@
 {
   "user-age-key" = {
+    share = true;
     files = {
       key = {
         mode = "0400";

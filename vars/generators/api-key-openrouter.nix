@@ -1,5 +1,6 @@
 {
   "api-key-openrouter" = {
+    share = true;
     files = {
       api_key = {
         mode = "0400";

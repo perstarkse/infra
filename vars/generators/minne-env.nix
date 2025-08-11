@@ -1,5 +1,6 @@
 {
   "minne-env" = {
+    share = true;
     files = {
       env = {
         mode = "0400";

@@ -1078,11 +1078,11 @@
         "sops-nix": "sops-nix_2"
       },
       "locked": {
-        "lastModified": 1754738969,
-        "narHash": "sha256-mWFwkHI8mtj0alkA0R8eRe9qXNQ4B/cU1+yNmwv3x1A=",
+        "lastModified": 1754772774,
+        "narHash": "sha256-kqlLRUD5dhjCGx3d3virSULjj0GHZY6h0Ot63CHV3AQ=",
         "ref": "refs/heads/main",
-        "rev": "8e399155fb103a5bc7acce708cebd956ff0a0999",
-        "revCount": 10,
+        "rev": "e22e7cd152fd2100184bfea259c6268ad41c75e7",
+        "revCount": 13,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },

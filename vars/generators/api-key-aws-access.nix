@@ -1,5 +1,6 @@
 {
   "api-key-aws-access" = {
+    share = true;
     files = {
       aws_access_key_id = {
         mode = "0400";

@@ -10,8 +10,8 @@
     lanSubnet = routerCfg.lanSubnet;
     lanCidr = "${lanSubnet}.0/24";
     routerIp = "${lanSubnet}.1";
-    dhcpStart = "${lanSubnet}.${routerCfg.dhcpStart}";
-    dhcpEnd = "${lanSubnet}.${routerCfg.dhcpEnd}";
+    dhcpStart = "${lanSubnet}.${toString routerCfg.dhcpStart}";
+    dhcpEnd = "${lanSubnet}.${toString routerCfg.dhcpEnd}";
   in {
     options.my.dhcp = {
       enable = lib.mkEnableOption "Enable DHCP server (Kea)";
@@ -59,7 +59,10 @@
         dhcp4 = {
           enable = true;
           settings = {
-            interfaces-config.interfaces = ["br-lan"]; # Kea serves DHCP on the bridge
+            interfaces-config = {
+              interfaces = ["br-lan"]; # Kea serves DHCP on the bridge
+              re-detect = true; # re-detect interfaces on link changes
+            };
             lease-database = {
               name = cfg.leaseDatabase;
               type = "memfile";
@@ -100,6 +103,16 @@
               }
             ];
           };
+        };
+      };
+
+      # Ensure DHCP starts after the network (bridge) is up and restarts on failure
+      systemd.services.kea-dhcp4-server = {
+        wants = ["network-online.target"]; 
+        after = ["systemd-networkd.service" "network-online.target"];
+        serviceConfig = {
+          Restart = "on-failure";
+          RestartSec = "5s";
         };
       };
     };

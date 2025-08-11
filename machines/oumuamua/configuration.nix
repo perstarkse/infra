@@ -13,29 +13,29 @@
       shared
       interception-tools
       system-stylix
-      # user-ssh-keys
-      # user-age-key
       surrealdb
       minne
-    ] ++ (with vars-helper.nixosModules; [default])
+    ]
+    ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [hello-service]);
 
   home-manager.users.${config.my.mainUser.name} = {
-    imports = with modules.homeModules; [
-      options
-      helix
-      git
-      direnv
-      fish
-      zellij
-      starship
-      ssh
-      mail-clients-setup
-    ]
-    ++ (with private-infra.homeModules; [
-      sops-infra
-      mail-clients
-    ]);
+    imports = with modules.homeModules;
+      [
+        options
+        helix
+        git
+        direnv
+        fish
+        zellij
+        starship
+        ssh
+        mail-clients-setup
+      ]
+      ++ (with private-infra.homeModules; [
+        sops-infra
+        mail-clients
+      ]);
     my = {
       programs = {
         mail = {
@@ -56,42 +56,43 @@
   my.secrets.discover = {
     enable = true;
     dir = ../../vars/generators;
-    includeTags = [ "oumuamua" "user" "openrouter" "fish" ];
+    includeTags = ["oumuamua" "user" "openrouter" "fish"];
   };
 
-  my.secrets.exposeUserSecrets = [{
-    enable = true;
-    secretName = "user-ssh-key";
-    file = "key";
-    user = config.my.mainUser.name;
-    group = "users";
-    dest = "/home/${config.my.mainUser.name}/.ssh/id_ed25519";
-  }
-  {
-    enable = true;
-    secretName = "user-age-key";
-    file = "key";
-    user = config.my.mainUser.name;
-    group = "users";
-    dest = "/home/${config.my.mainUser.name}/.config/sops/age/keys.txt";
-  }
-];
+  my.secrets.exposeUserSecrets = [
+    {
+      enable = true;
+      secretName = "user-ssh-key";
+      file = "key";
+      user = config.my.mainUser.name;
+      group = "users";
+      dest = "/home/${config.my.mainUser.name}/.ssh/id_ed25519";
+    }
+    {
+      enable = true;
+      secretName = "user-age-key";
+      file = "key";
+      user = config.my.mainUser.name;
+      group = "users";
+      dest = "/home/${config.my.mainUser.name}/.config/sops/age/keys.txt";
+    }
+  ];
 
   my.secrets.allowReadAccess = [
     {
-      readers = [ config.my.mainUser.name ];
+      readers = [config.my.mainUser.name];
       path = config.my.secrets.getPath "api-key-openai" "api_key";
     }
     {
-      readers = [ config.my.mainUser.name ];
+      readers = [config.my.mainUser.name];
       path = config.my.secrets.getPath "api-key-openrouter" "api_key";
     }
     {
-      readers = [ config.my.mainUser.name ];
+      readers = [config.my.mainUser.name];
       path = config.my.secrets.getPath "api-key-aws-access" "aws_access_key_id";
     }
     {
-      readers = [ config.my.mainUser.name ];
+      readers = [config.my.mainUser.name];
       path = config.my.secrets.getPath "api-key-aws-secret" "aws_secret_access_key";
     }
   ];

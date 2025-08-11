@@ -1,5 +1,6 @@
 {
   "ddclient" = {
+    share = true;
     files = {
       "ddclient.conf" = {
         mode = "0400";

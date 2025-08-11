@@ -2,11 +2,11 @@
   modules,
   config,
   pkgs,
+  vars-helper,
   ...
 }: {
   imports = with modules.nixosModules;
     [
-    ../../secrets.nix
       ./hardware-configuration.nix
       ./boot.nix
       interception-tools
@@ -20,15 +20,21 @@
       home-assistant
       nginx
       k3s
-
-    ];
+    ]
+    ++ (with vars-helper.nixosModules; [default]);
 
   my.mainUser = {
     name = "p";
   };
 
-  my.k3s = {
+  my.secrets.discover = {
     enable = true;
+    dir = ../../vars/generators;
+    includeTags = ["ddclient"];
+  };
+
+  my.k3s = {
+    enable = false;
     initServer = true;
     tlsSan = "10.0.0.1";
   };
@@ -129,7 +135,7 @@
   };
 
   my.monitoring = {
-    enable = true;
+    enable = false;
 
     grafana = {
       enable = true;
@@ -172,7 +178,7 @@
   my.nginx = {
     enable = true;
     acmeEmail = "services@stark.pub";
-    
+    ddclient.enable = true;
     virtualHosts = [
       {
         domain = "vault.stark.pub";
@@ -233,4 +239,4 @@
       }
     ];
   };
-} 
+}
