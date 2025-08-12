@@ -98,7 +98,7 @@
           };
           machines.io = {
             deploy.targetHost = "root@10.0.0.1";
-            deploy.buildHost = "root@10.0.0.15";
+            deploy.buildHost = "root@localhost";
             tags = ["server"];
           };
           machines.makemake = {
@@ -106,7 +106,7 @@
             tags = ["server"];
           };
           machines.charon = {
-            deploy.targetHost = "root@10.0.0.15";
+            deploy.targetHost = "root@localhost";
             tags = ["client"];
           };
 

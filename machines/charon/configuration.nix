@@ -199,4 +199,9 @@
 
   # Fix SATA power management issues during suspend, did not work
   # boot.kernelParams = [ "libata.force=noncq" ];
+
+  powerManagement.resumeCommands = ''
+    /run/current-system/sw/bin/networkctl reconfigure enp4s0 || true
+    /run/current-system/sw/bin/networkctl renew enp4s0 || true
+  '';
 }

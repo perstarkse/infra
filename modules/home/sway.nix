@@ -30,6 +30,9 @@
         modifier = mod;
         terminal = terminal;
 
+        workspaceAutoBackAndForth = true;
+        defaultWorkspace = "workspace number 1";      
+
         gaps = {
           inner = 0;
           outer = 0;
