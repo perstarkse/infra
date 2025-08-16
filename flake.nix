@@ -57,11 +57,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Secrets helper (vars-native for Clan)
     vars-helper = {
       url = "github:perstarkse/clan-vars-helper";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.flake-parts.follows = "flake-parts";
+    };
+
+    sway-focus-flash = {
+      url = "github:perstarkse/sway-focus-flash";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 

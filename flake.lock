@@ -1106,6 +1106,7 @@
         "nixpkgs": "nixpkgs_2",
         "private-infra": "private-infra",
         "stylix": "stylix",
+        "sway-focus-flash": "sway-focus-flash",
         "vars-helper": "vars-helper"
       }
     },
@@ -1205,6 +1206,26 @@
       "original": {
         "owner": "danth",
         "repo": "stylix",
+        "type": "github"
+      }
+    },
+    "sway-focus-flash": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1755252096,
+        "narHash": "sha256-DsWRnO+TOog9jyDTc16dhZYo6Tux/DjFdLq4LJn4rrI=",
+        "owner": "perstarkse",
+        "repo": "sway-focus-flash",
+        "rev": "1e6b187022b5879f659a74a0d0287ce20d2caf92",
+        "type": "github"
+      },
+      "original": {
+        "owner": "perstarkse",
+        "repo": "sway-focus-flash",
         "type": "github"
       }
     },
