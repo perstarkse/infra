@@ -196,9 +196,36 @@
                   description = "Enable WebSocket support";
                 };
                 extraConfig = mkOption {
-                  type = types.str;
+                  type = types.lines;
                   default = "";
                   description = "Extra nginx configuration";
+                };
+                lanOnly = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = "Restrict access to LAN subnets using nginx ACLs";
+                };
+                acmeDns01 = mkOption {
+                  type = types.nullOr (types.submodule ({ ... }: {
+                    options = {
+                      dnsProvider = mkOption {
+                        type = types.str;
+                        description = "lego DNS provider name (e.g., cloudflare)";
+                      };
+                      environmentFile = mkOption {
+                        type = types.nullOr types.path;
+                        default = null;
+                        description = "Path to an EnvironmentFile exporting provider variables (e.g., CLOUDFLARE_DNS_API_TOKEN=...)";
+                      };
+                      group = mkOption {
+                        type = types.str;
+                        default = "nginx";
+                        description = "Group that should own read access to issued certificates";
+                      };
+                    };
+                  }));
+                  default = null;
+                  description = "Per-vhost DNS-01 ACME settings";
                 };
               };
             });

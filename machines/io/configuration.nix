@@ -26,7 +26,7 @@
   my.secrets.discover = {
     enable = true;
     dir = ../../vars/generators;
-    includeTags = ["ddclient"];
+    includeTags = ["ddclient" "cloudflare"];
   };
 
   my.k3s = {
@@ -105,7 +105,7 @@
       acmeEmail = "services@stark.pub";
       ddclient.enable = true;
       virtualHosts = [
-        { domain = "vault.stark.pub";   target = "makemake"; port = 8322; websockets = true; }
+        { domain = "vault.stark.pub";   target = "makemake"; port = 8322; websockets = true; lanOnly = true; acmeDns01 = { dnsProvider = "cloudflare"; environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token"; }; }
         { domain = "chat.stark.pub";    target = "makemake"; port = 7909; websockets = true; }
         { domain = "request.stark.pub"; target = "makemake"; port = 5055; websockets = true; }
         {

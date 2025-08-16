@@ -8,6 +8,8 @@
     lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
     machines = cfg.machines;
     enabled = cfg.enable && nginxCfg.enable;
+    lanCidr = helpers.lanCidr or "${lanSubnet}.0/24";
+    ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
    in
   {
     config = lib.mkIf enabled {
@@ -41,6 +43,12 @@
               else
                 vhost.target;
             targetUrl = "http://${targetIp}:${toString vhost.port}";
+            lanAcl = lib.optionalString (vhost.lanOnly or false) ''
+              allow ${lanCidr};
+              allow ${ulaPrefix}::/64;
+              deny all;
+            '';
+            mergedExtra = lib.concatStringsSep "\n" (lib.filter (s: s != "") [ (vhost.extraConfig or "") lanAcl ]);
           in
           lib.nameValuePair vhost.domain {
             serverName = vhost.domain;
@@ -51,14 +59,28 @@
             enableACME = true;
             forceSSL = true;
             locations."/" = {
-              recommendedProxySettings = vhost.websockets;
+              recommendedProxySettings = true;
               proxyWebsockets = vhost.websockets;
               proxyPass = targetUrl;
-              extraConfig = vhost.extraConfig;
+              extraConfig = mergedExtra;
             };
           }
         ) nginxCfg.virtualHosts);
       };
+
+      security.acme.certs = lib.mkMerge (map (vhost:
+        let acme = vhost.acmeDns01 or null; in
+        lib.optionalAttrs (acme != null) {
+          "${vhost.domain}" = lib.mkMerge [
+            {
+              dnsProvider = acme.dnsProvider;
+              group = acme.group;
+              webroot = null;
+            }
+            (lib.optionalAttrs (acme.environmentFile != null) { environmentFile = acme.environmentFile; })
+          ];
+        }
+      ) nginxCfg.virtualHosts);
     };
   };
 } 
