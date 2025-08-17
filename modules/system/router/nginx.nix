@@ -1,0 +1,163 @@
+{ lib, config, pkgs, ... }:
+{
+  config.flake.nixosModules.router-nginx = { lib, config, pkgs, ... }:
+  let
+    cfg = config.my.router;
+    nginxCfg = cfg.nginx;
+    helpers = config.routerHelpers or {};
+    lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
+    machines = cfg.machines;
+    enabled = cfg.enable && nginxCfg.enable;
+    lanCidr = helpers.lanCidr or "${lanSubnet}.0/24";
+    ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
+    wgSubnet = (cfg.wireguard or {}).subnet or "10.6.0";
+    wgCidr = "${wgSubnet}.0/24";
+    cfNeeded = lib.any (v: (v.cloudflareOnly or false)) nginxCfg.virtualHosts;
+    cfDir = "/var/lib/cloudflare-ips";
+    cfAllow = "${cfDir}/allow.conf";
+    cfRealip = "${cfDir}/realip.conf";
+   in
+  {
+    config = lib.mkIf enabled {
+      security.acme = {
+        acceptTerms = true;
+        defaults.email = nginxCfg.acmeEmail;
+      };
+
+      services.ddclient = lib.mkIf nginxCfg.ddclient.enable {
+        enable = true;
+        package = pkgs.ddclient;
+        configFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
+      };
+
+      services.nginx = {
+        enable = true;
+
+        recommendedGzipSettings = true;
+        recommendedOptimisation = true;
+        recommendedProxySettings = true;
+        recommendedTlsSettings = true;
+
+        appendHttpConfig = lib.mkIf cfNeeded ''
+          include ${cfRealip};
+        '';
+
+        virtualHosts = lib.listToAttrs (map (vhost:
+          let
+            targetIp = if lib.hasPrefix "${lanSubnet}." vhost.target then
+              vhost.target
+            else
+              let machine = lib.findFirst (m: m.name == vhost.target) null machines;
+              in if machine != null then
+                "${lanSubnet}.${machine.ip}"
+              else
+                vhost.target;
+            targetUrl = "http://${targetIp}:${toString vhost.port}";
+            lanAllow = ''
+              allow ${lanCidr};
+              allow ${ulaPrefix}::/64;
+              allow ${wgCidr};
+            '';
+            acl = if (vhost.cloudflareOnly or false) then ''
+              include ${cfAllow};
+              ${lanAllow}
+              deny all;
+            '' else if (vhost.lanOnly or false) then ''
+              ${lanAllow}
+              deny all;
+            '' else "";
+            mergedExtra = lib.concatStringsSep "\n" (lib.filter (s: s != "") [ (vhost.extraConfig or "") acl ]);
+          in
+          lib.nameValuePair vhost.domain {
+            serverName = vhost.domain;
+            listen = [
+              { addr = "0.0.0.0"; port = 80; }
+              { addr = "0.0.0.0"; port = 443; ssl = true; }
+            ];
+            enableACME = true;
+            forceSSL = true;
+            locations."/" = {
+              recommendedProxySettings = true;
+              proxyWebsockets = vhost.websockets;
+              proxyPass = targetUrl;
+              extraConfig = mergedExtra;
+            };
+          }
+        ) nginxCfg.virtualHosts);
+      };
+
+      security.acme.certs = lib.mkMerge (map (vhost:
+        let acme = vhost.acmeDns01 or null; in
+        lib.optionalAttrs (acme != null) {
+          "${vhost.domain}" = lib.mkMerge [
+            {
+              dnsProvider = acme.dnsProvider;
+              group = acme.group;
+              webroot = null;
+            }
+            (lib.optionalAttrs (acme.environmentFile != null) { environmentFile = acme.environmentFile; })
+          ];
+        }
+      ) nginxCfg.virtualHosts);
+
+      systemd.tmpfiles.rules = lib.mkIf cfNeeded [
+        "d ${cfDir} 0755 root root - -"
+        "f ${cfAllow} 0644 root root - -"
+        "f ${cfRealip} 0644 root root - -"
+      ];
+
+      systemd.services.cloudflare-ips-update = lib.mkIf cfNeeded {
+        description = "Update Cloudflare IP snippets for nginx";
+        wants = [ "network-online.target" ];
+        after = [ "network-online.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.writeShellScript "cloudflare-ips-update" ''
+            set -euo pipefail
+            dir="${cfDir}"
+            mkdir -p "$dir"
+            tmp="$(mktemp -d)"
+            trap 'rm -rf "$tmp"' EXIT
+
+            ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v4 > "$tmp/ips-v4"
+            ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v6 > "$tmp/ips-v6"
+
+            {
+              while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v4"
+              while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v6"
+            } > "$tmp/allow.conf"
+
+            {
+              while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v4"
+              while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v6"
+              printf 'real_ip_header CF-Connecting-IP;\n'
+              printf 'real_ip_recursive on;\n'
+            } > "$tmp/realip.conf"
+
+            changed=0
+            for f in allow.conf realip.conf; do
+              if ! cmp -s "$tmp/$f" "$dir/$f"; then
+                install -m 0644 -D "$tmp/$f" "$dir/$f"
+                changed=1
+              fi
+            done
+
+            if [ "$changed" -eq 1 ]; then
+              ${pkgs.nginx}/bin/nginx -t && ${pkgs.systemd}/bin/systemctl reload nginx || true
+            fi
+          ''}";
+        };
+        wantedBy = [ "multi-user.target" ];
+      };
+
+      systemd.timers.cloudflare-ips-update = lib.mkIf cfNeeded {
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "5m";
+          OnUnitActiveSec = "12h";
+          RandomizedDelaySec = "10m";
+        };
+      };
+    };
+  };
+} 

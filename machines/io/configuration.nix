@@ -26,8 +26,10 @@
   my.secrets.discover = {
     enable = true;
     dir = ../../vars/generators;
-    includeTags = ["ddclient" "cloudflare"];
+    includeTags = ["ddclient" "cloudflare" "wireguard" "router"];
   };
+
+  my.secrets.generateManifest = false;
 
   my.k3s = {
     enable = false;
@@ -45,6 +47,18 @@
     };
     wan.interface = "enp1s0";
     ipv6.ulaPrefix = "fd00:711a:edcd:7e75";
+
+    wireguard = {
+      enable = true;
+      peers = [
+        {
+          name = "phone";
+          ip = 2;
+          publicKey = "NWwGu+pFOMhV6r6mlE7efbe1qSEU8cPHKljl+j1Wxxo=";
+          persistentKeepalive = 25;
+        }
+      ];
+    };
 
     machines = [
       {
@@ -64,18 +78,11 @@
           { port = 32400; protocol = "tcp"; }
         ];
       }
-      {
-        name = "encke";
-        ip = "156";
-        mac = "52:54:00:a7:db:fe";
-        portForwards = [];
-      }
     ];
 
     services = [
       { name = "mail.stark.pub";    target = "10.0.0.10"; }
       { name = "chat.stark.pub";    target = "10.0.0.1"; }
-      { name = "encke.stark.pub";   target = "10.0.0.1"; }
       { name = "minne.stark.pub";   target = "10.0.0.1"; }
       { name = "request.stark.pub"; target = "10.0.0.1"; }
       { name = "vault.stark.pub";   target = "10.0.0.1"; }
@@ -106,26 +113,14 @@
       ddclient.enable = true;
       virtualHosts = [
         { domain = "vault.stark.pub";   target = "makemake"; port = 8322; websockets = true; lanOnly = true; acmeDns01 = { dnsProvider = "cloudflare"; environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token"; }; }
-        { domain = "chat.stark.pub";    target = "makemake"; port = 7909; websockets = true; }
-        { domain = "request.stark.pub"; target = "makemake"; port = 5055; websockets = true; }
-        {
-          domain = "encke.stark.pub";
-          target = "encke";
-          port = 3000;
-          websockets = false;
-          extraConfig = ''
-            proxy_set_header Connection "close";
-            proxy_http_version 1.1;
-            chunked_transfer_encoding off;
-            proxy_buffering off;
-            proxy_cache off;
-          '';
-        }
+        { domain = "chat.stark.pub";    target = "makemake"; port = 7909; websockets = true; cloudflareOnly = true; }
+        { domain = "request.stark.pub"; target = "makemake"; port = 5055; websockets = true; cloudflareOnly = true; }
         {
           domain = "minne.stark.pub";
           target = "makemake";
           port = 3000;
           websockets = false;
+          cloudflareOnly = true;
           extraConfig = ''
             proxy_set_header Connection "close";
             proxy_http_version 1.1;
@@ -139,6 +134,7 @@
           target = "makemake";
           port = 3001;
           websockets = false;
+          cloudflareOnly = true;
           extraConfig = ''
             proxy_set_header Connection "close";
             proxy_http_version 1.1;

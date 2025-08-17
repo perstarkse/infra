@@ -11,6 +11,8 @@
     lanCidr = helpers.lanCidr or "${lanSubnet}.0/24";
     machines = cfg.machines;
     services = cfg.services;
+    wgSubnet = (cfg.wireguard or {}).subnet or "10.6.0";
+    wgCidr = "${wgSubnet}.0/24";
     enabled = cfg.enable && dnsCfg.enable;
    in
   {
@@ -31,6 +33,7 @@
               "::1 allow"
               "${lanCidr} allow"
               "${ulaPrefix}::/64 allow"
+              "${wgCidr} allow"
               "0.0.0.0/0 refuse"
               "::0/0 refuse"
             ];

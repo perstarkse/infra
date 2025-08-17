@@ -205,6 +205,11 @@
                   default = false;
                   description = "Restrict access to LAN subnets using nginx ACLs";
                 };
+                cloudflareOnly = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = "Restrict access to Cloudflare edge IPs only (uses updatable snippet).";
+                };
                 acmeDns01 = mkOption {
                   type = types.nullOr (types.submodule ({ ... }: {
                     options = {
@@ -309,6 +314,65 @@
               ];
               description = "Prometheus scrape configs";
             };
+          };
+        };
+
+        wireguard = {
+          enable = mkEnableOption "Enable WireGuard VPN server";
+          interfaceName = mkOption {
+            type = types.str;
+            default = "wg0";
+            description = "WireGuard interface name";
+          };
+          listenPort = mkOption {
+            type = types.int;
+            default = 51820;
+            description = "WireGuard UDP listen port";
+          };
+          subnet = mkOption {
+            type = types.str;
+            default = "10.6.0";
+            description = "WireGuard IPv4 subnet base (e.g., 10.6.0)";
+          };
+          cidrPrefix = mkOption {
+            type = types.int;
+            default = 24;
+            description = "CIDR prefix length for the WireGuard subnet";
+          };
+          privateKeyFile = mkOption {
+            type = types.nullOr types.path;
+            default = null;
+            description = "Path to server WireGuard private key file";
+          };
+          routeToLan = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Add route/forwarding between VPN and LAN";
+          };
+          peers = mkOption {
+            type = types.listOf (types.submodule ({ ... }: {
+              options = {
+                name = mkOption {
+                  type = types.str;
+                  description = "Peer label (e.g., phone name)";
+                };
+                ip = mkOption {
+                  type = types.int;
+                  description = "Peer IP last octet within the WireGuard subnet";
+                };
+                publicKey = mkOption {
+                  type = types.str;
+                  description = "Peer public key";
+                };
+                persistentKeepalive = mkOption {
+                  type = types.nullOr types.int;
+                  default = 25;
+                  description = "Peer PersistentKeepalive seconds (null to disable)";
+                };
+              };
+            }));
+            default = [];
+            description = "List of WireGuard peers";
           };
         };
       };

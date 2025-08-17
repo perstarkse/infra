@@ -21,6 +21,10 @@
         "iifname \"${wan}\" ${pf.protocol} dport ${toString pf.port} dnat to ${lanSubnet}.${machine.ip}"
       ) machine.portForwards)
     ) machinesByName);
+
+    wgEnabled = cfg.wireguard.enable or false;
+    wgInterface = cfg.wireguard.interfaceName or "wg0";
+    wgPort = toString (cfg.wireguard.listenPort or 51820);
   in
   {
     config = lib.mkIf cfg.enable {
@@ -34,9 +38,11 @@
                 type filter hook input priority 0; policy drop;
                 iifname "lo" accept
                 iifname "br-lan" accept
+                ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" accept"}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" ip protocol icmp accept
                 iifname "${wan}" tcp dport { 80, 443 } accept
+                ${lib.optionalString wgEnabled "iifname \"${wan}\" udp dport ${wgPort} accept"}
               }
               chain forward {
                 type filter hook forward priority 0; policy drop;
@@ -44,6 +50,9 @@
                 iifname "br-lan" oifname "br-lan" accept
                 iifname "${wan}" oifname "br-lan" ct state established,related accept
                 ${forwardRules}
+                ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" oifname \"br-lan\" accept"}
+                ${lib.optionalString wgEnabled "iifname \"br-lan\" oifname \"${wgInterface}\" accept"}
+                ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" oifname \"${wan}\" accept"}
               }
             '';
           };
@@ -67,6 +76,7 @@
                 type filter hook input priority 0; policy drop;
                 iifname "lo" accept
                 iifname "br-lan" accept
+                ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" accept"}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" icmpv6 type {
                   destination-unreachable, packet-too-big, time-exceeded,
@@ -74,6 +84,7 @@
                   nd-neighbor-advert
                 } accept
                 iifname "${wan}" udp dport dhcpv6-client udp sport dhcpv6-server accept
+                ${lib.optionalString wgEnabled "iifname \"${wan}\" udp dport ${wgPort} accept"}
               }
               chain forward {
                 type filter hook forward priority 0; policy drop;

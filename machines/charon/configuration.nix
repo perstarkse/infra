@@ -197,6 +197,9 @@
     greeting = "Enter the heliosphere via charon!";
   };
 
+  # Allow localsend receive port
+  networking.firewall.allowedTCPPorts = [ 53317 ];
+
   # Fix SATA power management issues during suspend, did not work
   # boot.kernelParams = [ "libata.force=noncq" ];
 

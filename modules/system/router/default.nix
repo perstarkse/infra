@@ -14,6 +14,7 @@
       router-dns
       router-nginx
       router-monitoring
+      router-wireguard
     ];
   };
 } 
