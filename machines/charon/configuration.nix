@@ -54,6 +54,7 @@
         xdg-mimeapps
         firefox
         sway
+        secret-wrappers
       ]
       ++ (with private-infra.homeModules; [
         mail-clients
@@ -80,6 +81,16 @@
         windowManager = "sway";
       };
     };
+
+    my.secrets.wrappedHomeBinaries = [
+      {
+        name = "mods";
+        command = "${pkgs.mods}/bin/mods";
+        envVar = "OPENROUTER_API_KEY";
+        secretPath = config.my.secrets.getPath "api-key-openrouter" "api_key";
+        # useSystemdRun = true; # enable for stronger isolation if desired
+      }
+    ];
 
     home.stateVersion = "25.11";
   };
@@ -204,7 +215,7 @@
   # boot.kernelParams = [ "libata.force=noncq" ];
 
   powerManagement.resumeCommands = ''
-    /run/current-system/sw/bin/networkctl reconfigure enp4s0 || true
     /run/current-system/sw/bin/networkctl renew enp4s0 || true
+    /run/current-system/sw/bin/networkctl reconfigure enp4s0 || true
   '';
 }
