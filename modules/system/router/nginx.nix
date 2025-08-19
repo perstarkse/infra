@@ -16,6 +16,7 @@
     cfDir = "/var/lib/cloudflare-ips";
     cfAllow = "${cfDir}/allow.conf";
     cfRealip = "${cfDir}/realip.conf";
+    cfGeo = "${cfDir}/edge-geo.conf";
    in
   {
     config = lib.mkIf enabled {
@@ -39,7 +40,30 @@
         recommendedTlsSettings = true;
 
         appendHttpConfig = lib.mkIf cfNeeded ''
+          # Trust Cloudflare edges for real client IP
           include ${cfRealip};
+
+          # Cloudflare edge membership based on socket peer ($realip_remote_addr)
+          geo $realip_remote_addr $cf_edge {
+            default 0;
+            include ${cfGeo};
+          }
+
+          # LAN + ULA64 + WireGuard membership based on (possibly realip) $remote_addr
+          geo $lan_wg {
+            default 0;
+            ${lanCidr} 1;
+            ${ulaPrefix}::/64 1;
+            ${wgCidr} 1;
+          }
+
+          # Combined access: allow if from LAN/WG, or via CF edge
+          map "$lan_wg$cf_edge" $cf_access_ok {
+            default 0;
+            10 1;
+            11 1;
+            01 1;
+          }
         '';
 
         virtualHosts = lib.listToAttrs (map (vhost:
@@ -59,9 +83,9 @@
               allow ${wgCidr};
             '';
             acl = if (vhost.cloudflareOnly or false) then ''
-              include ${cfAllow};
-              ${lanAllow}
-              deny all;
+              # When Cloudflare-only, allow if LAN/WG or if request comes via CF edge.
+              # Use $cf_access_ok from http context; otherwise return 403.
+              if ($cf_access_ok = 0) { return 403; }
             '' else if (vhost.lanOnly or false) then ''
               ${lanAllow}
               deny all;
@@ -104,6 +128,7 @@
         "d ${cfDir} 0755 root root - -"
         "f ${cfAllow} 0644 root root - -"
         "f ${cfRealip} 0644 root root - -"
+        "f ${cfGeo} 0644 root root - -"
       ];
 
       systemd.services.cloudflare-ips-update = lib.mkIf cfNeeded {
@@ -115,18 +140,20 @@
           ExecStart = "${pkgs.writeShellScript "cloudflare-ips-update" ''
             set -euo pipefail
             dir="${cfDir}"
-            mkdir -p "$dir"
-            tmp="$(mktemp -d)"
-            trap 'rm -rf "$tmp"' EXIT
+            ${pkgs.coreutils}/bin/mkdir -p "$dir"
+            tmp="$(${pkgs.coreutils}/bin/mktemp -d)"
+            trap '${pkgs.coreutils}/bin/rm -rf "$tmp"' EXIT
 
             ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v4 > "$tmp/ips-v4"
             ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v6 > "$tmp/ips-v6"
 
+            # Access module style allow list (kept for reference)
             {
               while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v4"
               while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v6"
             } > "$tmp/allow.conf"
 
+            # Real IP trust
             {
               while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v4"
               while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v6"
@@ -134,10 +161,16 @@
               printf 'real_ip_recursive on;\n'
             } > "$tmp/realip.conf"
 
+            # Geo include for CF edges
+            {
+              while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v4"
+              while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v6"
+            } > "$tmp/edge-geo.conf"
+
             changed=0
-            for f in allow.conf realip.conf; do
-              if ! cmp -s "$tmp/$f" "$dir/$f"; then
-                install -m 0644 -D "$tmp/$f" "$dir/$f"
+            for f in allow.conf realip.conf edge-geo.conf; do
+              if ! ${pkgs.diffutils}/bin/cmp -s "$tmp/$f" "$dir/$f"; then
+                ${pkgs.coreutils}/bin/install -m 0644 -D "$tmp/$f" "$dir/$f"
                 changed=1
               fi
             done
