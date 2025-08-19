@@ -23,6 +23,8 @@
     name = "p";
   };
 
+  time.timeZone = "Europe/Stockholm";
+
   my.secrets.discover = {
     enable = true;
     dir = ../../vars/generators;

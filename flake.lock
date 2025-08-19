@@ -1487,11 +1487,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1755381351,
-        "narHash": "sha256-bwwGgFx17UZp+aQ07uOfFqbywNWZD1MvrIcm0Zzzvl0=",
+        "lastModified": 1755593774,
+        "narHash": "sha256-McO/vV5L9vP8GEpAWbZc5QZ37Yf1S/ACnxw58k4z5x4=",
         "owner": "perstarkse",
         "repo": "clan-vars-helper",
-        "rev": "3bc4957b62cf9f58915cab5d1df17c6b33b5b836",
+        "rev": "b1be2836e94545129cb32c0927dfa187262f48a0",
         "type": "github"
       },
       "original": {

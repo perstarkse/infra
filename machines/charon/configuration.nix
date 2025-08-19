@@ -54,8 +54,8 @@
         xdg-mimeapps
         firefox
         sway
-        secret-wrappers
       ]
+      ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
         mail-clients
         sops-infra
@@ -86,9 +86,9 @@
       {
         name = "mods";
         command = "${pkgs.mods}/bin/mods";
-        envVar = "OPENROUTER_API_KEY";
-        secretPath = config.my.secrets.getPath "api-key-openrouter" "api_key";
-        # useSystemdRun = true; # enable for stronger isolation if desired
+        envVar = "OPENAI_API_KEY";
+        secretPath = config.my.secrets.getPath "api-key-openai" "api_key";
+        useSystemdRun = true; 
       }
     ];
 
@@ -107,7 +107,6 @@
       secretName = "user-ssh-key";
       file = "key";
       user = config.my.mainUser.name;
-      group = "users";
       dest = "/home/${config.my.mainUser.name}/.ssh/id_ed25519";
     }
     {
@@ -115,7 +114,6 @@
       secretName = "user-age-key";
       file = "key";
       user = config.my.mainUser.name;
-      group = "users";
       dest = "/home/${config.my.mainUser.name}/.config/sops/age/keys.txt";
     }
   ];

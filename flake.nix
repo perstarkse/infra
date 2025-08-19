@@ -109,6 +109,7 @@
           };
           machines.makemake = {
             deploy.targetHost = "root@10.0.0.10";
+            deploy.buildHost = "root@localhost";
             tags = ["server"];
           };
           machines.charon = {
