@@ -8,6 +8,12 @@
     cfg = config.my.openwebui;
   in {
     options.my.openwebui = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Enable OpenWebUI";
+      };
+
       port = lib.mkOption {
         type = lib.types.port;
         default = 7909;
@@ -61,7 +67,7 @@
       };
     };
 
-    config = {
+    config = lib.mkIf cfg.enable {
       # Enable OCI containers (Podman)
       virtualisation.oci-containers.backend = "podman";
 
@@ -83,7 +89,7 @@
         ports = ["${toString cfg.port}:8080"];
         volumes = ["${cfg.dataDir}:/app/backend/data"];
         autoStart = true;
-        autoUpdate = cfg.autoUpdate;
+        # autoUpdate = cfg.autoUpdate;
       };
 
       # Auto-update service for container

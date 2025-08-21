@@ -85,6 +85,8 @@
     my.secrets.wrappedHomeBinaries = [
       {
         name = "mods";
+        title = "Mods";
+        setTerminalTitle = true;
         command = "${pkgs.mods}/bin/mods";
         envVar = "OPENAI_API_KEY";
         secretPath = config.my.secrets.getPath "api-key-openai" "api_key";

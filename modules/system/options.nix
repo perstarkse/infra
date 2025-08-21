@@ -17,6 +17,11 @@
             description = "Additional SSH public keys for the main user.";
           };
         };
+        listenNetworkAddress = lib.mkOption {
+          type = lib.types.str;
+          default = "0.0.0.0";
+          description = "The network address to listen on.";
+        };
 
         # secrets = lib.mkOption {
         #   type = lib.types.attrsOf lib.types.path;

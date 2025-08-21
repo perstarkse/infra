@@ -8,6 +8,12 @@
     cfg = config.my.vaultwarden;
   in {
     options.my.vaultwarden = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Enable Vaultwarden";
+      };
+      
       port = lib.mkOption {
         type = lib.types.port;
         default = 8322;
@@ -52,43 +58,66 @@
     config = {
       # Vaultwarden service configuration
       services.vaultwarden = {
-        enable = true;
-        package = pkgs.unstable.vaultwarden;
+        enable = cfg.enable;
         backupDir = cfg.backupDir;
         config = {
           ROCKET_PORT = cfg.port;
           ROCKET_ADDRESS = cfg.address;
         };
-        environmentFile = config.my.secrets."vaultwarden/env";
+        environmentFile = config.my.secrets.getPath "vaultwarden" "env";
       };
 
       # Firewall configuration
       networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;
       networking.firewall.allowedUDPPorts = cfg.firewallPorts.udp;
 
-      # Restic backup configuration for Vaultwarden data
-      services.restic.backups.vaultwarden = {
-        initialize = true;
-
-        environmentFile = config.my.secrets."restic-env-file/env";
-        repositoryFile = config.my.secrets."restic-repo-file/vault-name";
-        passwordFile = config.my.secrets."restic-password/password";
-
-        paths = [
-          cfg.backupDir
-        ];
-
-        pruneOpts = [
-          "--keep-daily 7"
-          "--keep-weekly 5"
-          "--keep-monthly 12"
-        ];
-      };
-
-      # Ensure backup directory exists
-      systemd.tmpfiles.rules = [
-        "d ${cfg.backupDir} 0755 vaultwarden vaultwarden -"
+      # Generate a secret for the Vaultwarden environment file
+      my.secrets.declarations = [
+        (config.my.secrets.mkMachineSecret {
+          name = "vaultwarden";
+          files = {
+            "env" = {
+              mode = "0400";
+              additionalReaders = [ "vaultwarden" ];
+            };
+          };
+          prompts."admin-token".input = {
+            description = "Vaultwarden admin token";
+            type = "hidden";
+            persist = true;
+          };
+          script = ''
+            set -euo pipefail
+            umask 077
+            mkdir -p "$out"
+            echo "ADMIN_TOKEN=$(cat "$prompts/admin-token")" > "$out/env"
+          '';
+        })
       ];
+
+      # Restic backup configuration for Vaultwarden data
+    #   services.restic.backups.vaultwarden = {
+    #     initialize = true;
+
+    #     environmentFile = config.my.secrets."restic-env-file/env";
+    #     repositoryFile = config.my.secrets."restic-repo-file/vault-name";
+    #     passwordFile = config.my.secrets."restic-password/password";
+
+    #     paths = [
+    #       cfg.backupDir
+    #     ];
+
+    #     pruneOpts = [
+    #       "--keep-daily 7"
+    #       "--keep-weekly 5"
+    #       "--keep-monthly 12"
+    #     ];
+    #   };
+
+    #   # Ensure backup directory exists
+    #   systemd.tmpfiles.rules = [
+    #     "d ${cfg.backupDir} 0755 vaultwarden vaultwarden -"
+    #   ];
     };
   };
 } 
