@@ -92,7 +92,7 @@
           Environment = [
             "SURREALDB_ADDRESS=ws://${cfg.surrealdb.host}:${toString cfg.surrealdb.port}"
             "HTTP_PORT=${toString cfg.port}"
-            "RUST_LOG=minne=${cfg.logLevel},tower_http=${cfg.logLevel}"
+            "RUST_LOG=${cfg.logLevel}"
             "DATA_DIR=${cfg.dataDir}"
           ];
 

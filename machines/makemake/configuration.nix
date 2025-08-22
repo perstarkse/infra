@@ -23,7 +23,7 @@
       minecraft
     ]
     ++ (with vars-helper.nixosModules; [default])
-    ++ (with private-infra.nixosModules; [hello-service media mailserver]);
+    ++ (with private-infra.nixosModules; [media mailserver]);
 
   my.mainUser = {
     name = "p";
@@ -62,7 +62,7 @@
   my.vaultwarden = {
     enable = true;
     port = 8322;
-    address = "0.0.0.0";
+    address = "10.0.0.10";
   };
 
   my.openwebui = {
@@ -84,7 +84,7 @@
   my.minne = {
     enable = true;
     port = 3000;
-    address = "0.0.0.0";
+    address = "10.0.0.10";
     dataDir = "/var/lib/minne";
 
     surrealdb = {
@@ -92,7 +92,7 @@
       port = 8220;
     };
 
-    logLevel = "info";
+    logLevel = "debug";
   };
 
   nixpkgs.config.allowUnfree = true;
@@ -102,26 +102,6 @@
     eula = true;
     openFirewall = true;
     servers = {
-      # berget = {
-      #   enable = false;
-      #   package = pkgs.fabricServers."fabric-1_21_1";
-      #   openFirewall = true;
-      #   mods = [
-      #     { name = "FabricAPI"; url = "https://cdn.modrinth.com/data/P7dR8mSH/versions/qKPgBeHl/fabric-api-0.104.0%2B1.21.1.jar"; sha512 = "B3P0XTZLUGtOWwJKqPHUmJAPzwoCDSAlFU4WPlCg7u4bgpa/KcId9c7UISbtRmNeXtCU3yV5bsVS63Y5lDjn5w=="; }
-      #     { name = "Lithium"; url = "https://cdn.modrinth.com/data/gvQqBUqZ/versions/5szYtenV/lithium-fabric-mc1.21.1-0.13.0.jar"; sha512 = "1L2anMN9qtiCiqT6nKIOT4nRDjDPba9FRu9M9KaEuiHqCGWpwjzvnR9DSOm6SsqarKPbn5lTT8YQ+nilygvxUQ=="; }
-      #     { name = "Collective"; url = "https://cdn.modrinth.com/data/e0M1UDsY/versions/13do3Fe4/collective-1.21.1-7.84.jar"; sha512 = "K81i8rdKELYD5oeG22aarqo0mOrHZv0giFHiT1gHov2VE1oP7CtjCPZJMSdaQSMQFmQnOQ1/ylE6aBHmpMXpaQ=="; }
-      #     { name = "VillageSpawnPoint"; url = "https://cdn.modrinth.com/data/KplTt9Ku/versions/Vl3DreYU/villagespawnpoint-1.21.1-4.4.jar"; sha512 = "iPOh4iTxfTSToZPZbnH+kyWg33INWDAciCc8uJ/MAKWMyNiftdTX5tefkNka1YWcxwTIQ4YD+4tomTRclpwCtg=="; }
-      #   ];
-      #   serverProperties = {
-      #     difficulty = 0;
-      #     gamemode = 0;
-      #     max-players = 2;
-      #     motd = "välkommen till långberget";
-      #     view-distance = 20;
-      #     tick-distance = 3;
-      #     enable-rcon = false;
-      #   };
-      # };
       berget-2 = {
         enable = true;
         package = pkgs.fabricServers."fabric-1_21_1";
