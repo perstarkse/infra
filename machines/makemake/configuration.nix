@@ -21,6 +21,7 @@
       surrealdb
       minne
       minecraft
+      backups
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [media mailserver]);
@@ -34,7 +35,7 @@
   my.secrets.discover = {
     enable = true;
     dir = ../../vars/generators;
-    includeTags = ["makemake" "minne" "surrealdb"];
+    includeTags = ["makemake" "minne" "surrealdb"  "b2"];
   };
 
   my.secrets.generateManifest = false;
@@ -49,6 +50,40 @@
       path = config.my.secrets.getPath "surrealdb-credentials" "credentials";
     }
   ];
+
+  # Backups configuration
+  my.backups = {
+    minne = {
+      enable = true;
+      path = config.my.minne.dataDir;
+      frequency = "daily";
+      backend = {
+        type = "b2";
+        bucket = null; 
+        lifecycleKeepPriorVersionsDays = 30;
+      };
+    };
+    vaultwarden = {
+      enable = true;
+      path = config.my.vaultwarden.backupDir;
+      frequency = "daily";
+      backend = {
+        type = "b2";
+        bucket = null; 
+        lifecycleKeepPriorVersionsDays = 30;
+      };
+    };
+    surrealdb = {
+      enable = true;
+      path = config.my.surrealdb.dataDir;
+      frequency = "daily";
+      backend = {
+        type = "b2";
+        bucket = null; 
+        lifecycleKeepPriorVersionsDays = 30;
+      };
+    };
+  };
 
   time.timeZone = "Europe/Stockholm";
 
