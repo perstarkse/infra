@@ -23,7 +23,6 @@
       vfio
       fonts
       nvidia
-      # restic
       docker
       steam
       k3s
