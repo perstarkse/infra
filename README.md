@@ -41,6 +41,8 @@ Secrets are declared and generated via Clan. The custom vars-helper adds:
 - **ACLs** to grant read access to specific systemd units/services
 - **Ergonomics** around reading secrets paths from the declarative config
 
+See: `https://github.com/perstarkse/clan-vars-helper`.
+
 Example usage in `machines/makemake/configuration.nix`:
 
 ```nix

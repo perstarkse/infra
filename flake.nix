@@ -99,16 +99,16 @@
         inventory = {
           machines.oumuamua = {
             deploy.targetHost = "root@192.168.101.48";
-            # deploy.buildHost = "root@10.0.0.15";
+            deploy.buildHost = "root@localhost";
             tags = ["server"];
           };
           machines.io = {
-            deploy.targetHost = "root@10.0.0.1";
+            deploy.targetHost = "root@io.lan";
             deploy.buildHost = "root@localhost";
             tags = ["server"];
           };
           machines.makemake = {
-            deploy.targetHost = "root@10.0.0.10";
+            deploy.targetHost = "root@makemake.lan";
             deploy.buildHost = "root@localhost";
             tags = ["server"];
           };
@@ -118,6 +118,13 @@
           };
 
           instances = {
+            clan-cache = {
+              module = {
+                name = "trusted-nix-caches";
+                input = "clan-core";
+              };
+              roles.default.tags.all = {};
+            };
             sshd-basic = {
               module = {
                 name = "sshd";
