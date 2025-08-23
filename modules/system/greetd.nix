@@ -30,10 +30,6 @@
         enable = true;
         settings = {
           initial_session = {
-            # command = "${pkgs.greetd.tuigreet}/bin/tuigreet --greeting '${cfg.greeting}' --asterisks --remember --remember-user-session --cmd ${
-            #   if cfg.sessionType == "hyprland"
-            #     then "${config.programs.hyprland.package}/bin/Hyprland"
-            #     else "${pkgs.sway}/bin/sway"
             command = "${
               if cfg.sessionType == "hyprland"
               then "${config.programs.hyprland.package}/bin/Hyprland"
@@ -42,7 +38,7 @@
             user = config.my.mainUser.name;
           };
           default_session = {
-            command = "${pkgs.greetd.tuigreet}/bin/tuigreet --greeting '${cfg.greeting}' --asterisks --remember --remember-user-session --cmd ${
+            command = "${pkgs.tuigreet}/bin/tuigreet --greeting '${cfg.greeting}' --asterisks --remember --remember-user-session --cmd ${
               if cfg.sessionType == "hyprland"
               then "${config.programs.hyprland.package}/bin/Hyprland"
               else "${pkgs.sway}/bin/sway"

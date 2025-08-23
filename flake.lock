@@ -1166,11 +1166,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1755808912,
-        "narHash": "sha256-AY5R84hvZc5PqyPKA2ADEFohDvpTTSZxhZroI6Rlr6Q=",
+        "lastModified": 1755940921,
+        "narHash": "sha256-5F/2GlzFpnptsqn+O/GmQNFvghpTHS5IQf3g6vkVFjo=",
         "ref": "refs/heads/main",
-        "rev": "b603d7ef833e69c26e3d3772f19e23760719c45e",
-        "revCount": 29,
+        "rev": "57c54eb246348a8d2b048292ef921e0a9f1f0287",
+        "revCount": 30,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },
@@ -1505,11 +1505,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1755596115,
-        "narHash": "sha256-lslegC9JUdt5MeBUqv/v5BlDVuJyVDzUnDqDHhLGflo=",
+        "lastModified": 1755942663,
+        "narHash": "sha256-6KPtcgQg8/Wfzxnxq+64Lf2693oX9whVfp0YU1bZHWo=",
         "owner": "perstarkse",
         "repo": "clan-vars-helper",
-        "rev": "235732d5d2de7f7034df5337155424e8d7c3528a",
+        "rev": "15a28d628bd383d324da1e6ab0f9990466254142",
         "type": "github"
       },
       "original": {

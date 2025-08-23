@@ -26,6 +26,7 @@
       docker
       steam
       k3s
+      backups
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [hello-service]);
@@ -39,6 +40,7 @@
         rofi
         git
         direnv
+        zoxide
         fish
         dunst
         ncspot
@@ -99,7 +101,7 @@
   my.secrets.discover = {
     enable = true;
     dir = ../../vars/generators;
-    includeTags = ["aws" "openai" "openrouter" "user"];
+    includeTags = ["aws" "openai" "openrouter" "user" "b2"];
   };
 
   my.secrets.exposeUserSecrets = [
@@ -137,6 +139,21 @@
       path = config.my.secrets.getPath "api-key-aws-secret" "aws_secret_access_key";
     }
   ];
+
+   my.secrets.generateManifest = false;
+
+  my.backups = {
+    documents = {
+      enable = true;
+      path = "/home/${config.my.mainUser.name}/documents";
+      frequency = "daily";
+      backend = {
+        type = "b2";
+        bucket = null; 
+        lifecycleKeepPriorVersionsDays = 5;
+      };
+    };
+  };
 
   nixpkgs.config.allowUnfree = true;
 
