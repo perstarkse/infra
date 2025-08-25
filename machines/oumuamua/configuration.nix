@@ -2,7 +2,6 @@
   modules,
   private-infra,
   config,
-  pkgs,
   vars-helper,
   ...
 }: {
@@ -23,6 +22,7 @@
     imports = with modules.homeModules;
       [
         options
+        sops
         helix
         git
         direnv
@@ -33,7 +33,6 @@
         mail-clients-setup
       ]
       ++ (with private-infra.homeModules; [
-        sops-infra
         mail-clients
       ]);
     my = {

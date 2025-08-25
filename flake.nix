@@ -14,6 +14,9 @@
       inputs.flake-parts.follows = "flake-parts";
     };
 
+    sops-nix.url = "github:Mic92/sops-nix";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs";
+
     import-tree.url = "github:vic/import-tree";
 
     home-manager = {
@@ -116,6 +119,11 @@
             deploy.targetHost = "root@localhost";
             tags = ["client"];
           };
+          machines.ariel = {
+            deploy.targetHost = "root@10.0.0.110";
+            deploy.buildHost = "root@localhost";
+            tags = ["client"];
+          };
 
           instances = {
             clan-cache = {
@@ -163,6 +171,7 @@
           };
         };
       };
+      # sops HM module is now wrapped in `modules/home/sops.nix` as `modules.homeModules.sops`.
       systems = ["x86_64-linux" "aarch64-linux"];
 
       perSystem = {

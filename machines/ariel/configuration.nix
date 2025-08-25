@@ -8,8 +8,6 @@
 }: {
   imports = with modules.nixosModules;
     [
-      ./hardware-configuration.nix
-      ./boot.nix
       home-module
       sound
       options
@@ -18,15 +16,7 @@
       system-stylix
       sway
       greetd
-      ledger
-      libvirt
-      vfio
       fonts
-      nvidia
-      docker
-      steam
-      k3s
-      backups
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [hello-service]);
@@ -48,9 +38,7 @@
         zellij
         starship
         qutebrowser
-        looking-glass-client
         bitwarden-client
-        blinkstick-scripts
         mail-clients-setup
         ssh
         xdg-mimeapps
@@ -60,13 +48,12 @@
       ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
         mail-clients
-        # sops-infra
         rbw
       ]);
     my = {
       programs = {
         mail = {
-          clients = ["aerc" "thunderbird"];
+          clients = ["aerc"];
         };
         rbw = {
           pinentrySource = "gui";
@@ -75,7 +62,7 @@
           withRbw = true;
         };
         helix = {
-          languages = ["nix" "markdown" "rust" "jinja"];
+          languages = ["nix" "markdown"];
         };
       };
 
@@ -143,75 +130,31 @@
 
   my.secrets.generateManifest = false;
 
-  my.backups = {
-    documents = {
-      enable = true;
-      path = "/home/${config.my.mainUser.name}/documents";
-      frequency = "daily";
-      backend = {
-        type = "b2";
-        bucket = null;
-        lifecycleKeepPriorVersionsDays = 5;
-      };
-    };
-  };
+  # my.backups = {
+  #   documents = {
+  #     enable = true;
+  #     path = "/home/${config.my.mainUser.name}/documents";
+  #     frequency = "daily";
+  #     backend = {
+  #       type = "b2";
+  #       bucket = null;
+  #       lifecycleKeepPriorVersionsDays = 5;
+  #     };
+  #   };
+  # };
 
   nixpkgs.config.allowUnfree = true;
 
   my.mainUser.name = "p";
-
-  my.libvirtd = {
-    enable = true;
-    spiceUSBRedirection = true;
-
-    networks = [
-      {
-        name = "vm-nat";
-        uuid = "80c19792-39ed-5c58-01b2-56ccfbac0b6b";
-        mode = "nat";
-        subnet = "192.168.101.0/24";
-        gateway = "192.168.101.1";
-        dhcpStart = "192.168.101.10";
-        dhcpEnd = "192.168.101.254";
-        firewallPorts = {
-          tcp = [22 80 443];
-          udp = [53];
-        };
-      }
-      {
-        name = "vm-isolated";
-        uuid = "90d2a8a3-4afe-6d69-12c3-67dd0cbd1c7c";
-        mode = "isolated";
-        firewallPorts = {
-          tcp = [];
-          udp = [];
-        };
-      }
-    ];
-  };
-
-  my.vfio = {
-    enable = true;
-    gpuIds = "10de:1b81,10de:10f0";
-    hugepages = 20;
-    kvmfrStaticSizeMb = 128;
-  };
-
-  my.k3s = {
-    enable = false;
-    initServer = false;
-    serverAddrs = ["https://10.0.0.1:6443"];
-    tlsSan = "10.0.0.1";
-  };
 
   time.timeZone = "Europe/Stockholm";
 
   clan.core.networking.zerotier.controller.enable = true;
 
   environment.systemPackages = with pkgs; [
-    code-cursor-fhs
     devenv
     localsend
+    iwd
   ];
 
   hardware.bluetooth.enable = true;
@@ -222,7 +165,7 @@
   my.greetd = {
     enable = true;
     sessionType = "sway";
-    greeting = "Enter the heliosphere via charon!";
+    greeting = "Enter the heliosphere via ariel!";
   };
 
   # Allow localsend receive port
