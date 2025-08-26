@@ -8,8 +8,8 @@
 }: {
   imports = with modules.nixosModules;
     [
-      ./hardware-configuration.nix
-      ./boot.nix
+      #./hardware-configuration.nix
+      #./boot.nix
       home-module
       sound
       options
