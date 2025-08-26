@@ -171,6 +171,10 @@
   # Allow localsend receive port
   networking.firewall.allowedTCPPorts = [53317];
 
+  networking.wireless.enable = true;
+  networking.wireless.networks = {
+  };
+
   # Fix SATA power management issues during suspend, did not work
   # boot.kernelParams = [ "libata.force=noncq" ];
 }
