@@ -8,8 +8,6 @@
 }: {
   imports = with modules.nixosModules;
     [
-      #./hardware-configuration.nix
-      #./boot.nix
       home-module
       sound
       options
@@ -60,7 +58,6 @@
       ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
         mail-clients
-        # sops-infra
         rbw
       ]);
     my = {
