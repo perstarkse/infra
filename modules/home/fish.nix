@@ -112,6 +112,20 @@
             printf '\n```\n'
           end
         '';
+        gui =
+          if osConfig.my.gui.session == "sway"
+          then ''
+            function gui
+              swaymsg exec command $argv &
+            end
+            complete -c gui -w command
+          ''
+          else ''
+            function gui
+              hyprctl dispatch exec command $argv >/dev/null 2>&1 &
+            end
+            complete -c gui -w command
+          '';
       };
     };
   };

@@ -5,17 +5,11 @@
     lib,
     ...
   }: let
-    cfg = config.my.greetd;
+    cfg = config.my.gui;
   in {
     options = {
       my.greetd = {
         enable = lib.mkEnableOption "Enable greetd display manager";
-
-        sessionType = lib.mkOption {
-          type = lib.types.enum ["hyprland" "sway"];
-          default = "hyprland";
-          description = "The Wayland session type to use with greetd";
-        };
 
         greeting = lib.mkOption {
           type = lib.types.str;
@@ -25,21 +19,21 @@
       };
     };
 
-    config = lib.mkIf cfg.enable {
+    config = lib.mkIf (cfg.enable && config.my.greetd.enable) {
       services.greetd = {
         enable = true;
         settings = {
           initial_session = {
             command = "${
-              if cfg.sessionType == "hyprland"
+              if cfg.session == "hyprland"
               then "${config.programs.hyprland.package}/bin/Hyprland"
               else "${pkgs.sway}/bin/sway --unsupported-gpu"
             }";
             user = config.my.mainUser.name;
           };
           default_session = {
-            command = "${pkgs.tuigreet}/bin/tuigreet --greeting '${cfg.greeting}' --asterisks --remember --remember-user-session --cmd ${
-              if cfg.sessionType == "hyprland"
+            command = "${pkgs.tuigreet}/bin/tuigreet --greeting '${config.my.greetd.greeting}' --asterisks --remember --remember-user-session --cmd ${
+              if cfg.session == "hyprland"
               then "${config.programs.hyprland.package}/bin/Hyprland"
               else "${pkgs.sway}/bin/sway"
             }";
@@ -49,7 +43,7 @@
       };
 
       services.displayManager.defaultSession =
-        if cfg.sessionType == "hyprland"
+        if cfg.session == "hyprland"
         then "hyprland"
         else "sway";
     };

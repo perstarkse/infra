@@ -218,8 +218,12 @@
 
   my.greetd = {
     enable = true;
-    sessionType = "sway";
     greeting = "Enter the heliosphere via charon!";
+  };
+
+  my.gui = {
+    enable = true;
+    session = "sway";
   };
 
   # Allow localsend receive port

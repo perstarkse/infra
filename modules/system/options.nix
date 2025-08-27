@@ -22,6 +22,14 @@
           default = "0.0.0.0";
           description = "The network address to listen on.";
         };
+        gui = {
+          enable = lib.mkEnableOption "Enable GUI session management";
+          session = lib.mkOption {
+            type = lib.types.enum ["hyprland" "sway"];
+            default = "sway";
+            description = "The Wayland session type to use";
+          };
+        };
       };
     };
   };
