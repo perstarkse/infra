@@ -4,6 +4,7 @@ in {
   config.flake.homeModules.qutebrowser = {
     pkgs,
     lib,
+    osConfig,
     ...
   }: {
     programs.qutebrowser = {
@@ -16,9 +17,14 @@ in {
           ",c" = "spawn sh -c '${pkgs.w3m}/bin/w3m -dump \"{url}\" | ${pkgs.wl-clipboard}/bin/wl-copy'";
         };
       };
+      searchEngines = {
+        DEFAULT = "https://duckduckgo.com/?q={}";
+        nw = "https://nixos.wiki/index.php?search={}&go=Go";
+        mn = "https://mynixos.com/search?q={}";
+        };
       settings =
         {
-          editor.command = ["kitty" "hx" "{file}"];
+          editor.command = [osConfig.my.gui._terminalCommand "hx" "{file}"];
           content.javascript.clipboard = "access-paste";
           content.pdfjs = !enableTor;
           content.javascript.enabled = !enableTor;

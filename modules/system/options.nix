@@ -2,6 +2,7 @@
   config.flake.nixosModules.options = {
     lib,
     config,
+    pkgs,
     ...
   }: {
     options = {
@@ -29,8 +30,25 @@
             default = "sway";
             description = "The Wayland session type to use";
           };
+          terminal = lib.mkOption {
+            type = lib.types.enum ["kitty"];
+            default = "kitty";
+            description = "The terminal emulator to use in GUI sessions";
+          };
+          _terminalCommand = lib.mkOption {
+            type = lib.types.str;
+            default = "kitty";
+            description = "The terminal emulator command";
+          };
         };
       };
+    };
+
+    config = {
+      my.gui._terminalCommand =
+        if config.my.gui.terminal == "kitty"
+        then "${pkgs.kitty}/bin/kitty"
+        else "${pkgs.kitty}/bin/kitty";
     };
   };
 }

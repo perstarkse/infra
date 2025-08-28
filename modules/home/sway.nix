@@ -4,10 +4,10 @@
     pkgs,
     config,
     lib,
+    osConfig,
     ...
   }: {
     home.packages = with pkgs; [
-      kitty
       wofi
       grim
       slurp
@@ -17,16 +17,13 @@
 
     stylix.targets.sway.enable = true;
 
-    programs.kitty.enable = true;
-    stylix.targets.kitty.enable = true;
-
     wayland.windowManager.sway = {
       enable = true;
       extraOptions = ["--unsupported-gpu"];
 
       config = let
         mod = "Mod4";
-        terminal = "${pkgs.kitty}/bin/kitty";
+        terminal = osConfig.my.gui._terminalCommand;
       in {
         modifier = mod;
         terminal = terminal;

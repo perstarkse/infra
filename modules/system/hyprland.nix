@@ -2,9 +2,12 @@
   config.flake.nixosModules.hyprland = {
     pkgs,
     config,
+    lib,
     ...
-  }: {
-    config = {
+  }: let
+    cfg = config.my.gui;
+  in {
+    config = lib.mkIf (cfg.enable && cfg.session == "hyprland") {
       programs.hyprland = {
         enable = true;
         package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
@@ -13,7 +16,6 @@
 
       environment.systemPackages = [
         pkgs.wl-clipboard
-        pkgs.kitty
       ];
 
       environment.sessionVariables = {

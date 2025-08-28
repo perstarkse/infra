@@ -4,12 +4,13 @@
     config,
     lib,
     ...
-  }: {
-    config = {
+  }: let
+    cfg = config.my.gui;
+  in {
+    config = lib.mkIf (cfg.enable && cfg.session == "sway") {
       environment.systemPackages = [
         pkgs.sway
         pkgs.wl-clipboard
-        pkgs.kitty
       ];
 
       environment.sessionVariables = {

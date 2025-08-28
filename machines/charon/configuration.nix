@@ -15,6 +15,7 @@
       interception-tools
       system-stylix
       sway
+      terminal
       greetd
       ledger
       libvirt
@@ -41,6 +42,7 @@
         direnv
         zoxide
         fish
+        kitty
         dunst
         ncspot
         zellij
@@ -238,6 +240,7 @@
   my.gui = {
     enable = true;
     session = "sway";
+    terminal = "kitty";
   };
 
   # Allow localsend receive port

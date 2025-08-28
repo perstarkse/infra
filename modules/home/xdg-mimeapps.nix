@@ -1,5 +1,5 @@
 {
-  config.flake.homeModules.xdg-mimeapps = {pkgs, ...}: {
+  config.flake.homeModules.xdg-mimeapps = {pkgs, osConfig, ...}: {
     xdg.mimeApps = {
       enable = true;
       defaultApplications = {
@@ -25,17 +25,17 @@
       mimeType = ["text/plain" "text/markdown"];
     };
 
-    # Define the .desktop file for Ranger (launched in Kitty)
+    # Define the .desktop file for Ranger (launched in Terminal)
     xdg.desktopEntries.ranger = {
       name = "Ranger File Manager";
-      # Launch kitty, and tell it to execute ranger
-      exec = "${pkgs.kitty}/bin/kitty -e ${pkgs.ranger}/bin/ranger %U";
-      # Kitty provides the terminal, so this entry itself doesn't need one
+      # Launch terminal, and tell it to execute ranger
+      exec = "${osConfig.my.gui._terminalCommand} -e ${pkgs.ranger}/bin/ranger %U";
+      # Terminal provides the terminal, so this entry itself doesn't need one
       terminal = false;
       mimeType = ["inode/directory"];
     };
 
-    # Your custom MuPDF entry is good, let's keep it
+
     xdg.desktopEntries.mupdf = {
       name = "MuPDF";
       exec = "${pkgs.mupdf}/bin/mupdf %f";

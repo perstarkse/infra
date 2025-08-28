@@ -2,6 +2,7 @@
   config.flake.homeModules.hyprland = {
     pkgs,
     lib,
+    osConfig,
     ...
   }: let
     mainMod = "SUPER";
@@ -10,11 +11,7 @@
     stylix.targets.hyprland.enable = true;
     stylix.targets.hyprpaper.enable = true;
 
-    programs.kitty.enable = true;
-
     home.packages = with pkgs; [
-      # Ensure necessary packages are available
-      kitty
       wofi
       grim
       slurp
@@ -33,12 +30,6 @@
         # --- Debug ---
         debug = {
           disable_logs = false;
-        };
-
-        # --- Window swallowing ---
-        misc = {
-          enable_swallow = true;
-          swallow_regex = "^(kitty)^";
         };
 
         # --- Variables ---
@@ -117,7 +108,7 @@
         bind =
           [
             # --- Applications ---
-            "${mainMod}, RETURN, exec, ${pkgs.kitty}/bin/kitty"
+            "${mainMod}, RETURN, exec, ${osConfig.my.gui._terminalCommand}"
             "${mainMod}, D, exec, ${pkgs.wofi}/bin/wofi --show drun"
             "${mainMod}, A, exec, rofi-rbw"
             "${mainMod}, E, exec, ${pkgs.rofi-emoji-wayland}/bin/rofi-emoji-wayland"
