@@ -116,13 +116,25 @@
           if osConfig.my.gui.session == "sway"
           then ''
             function gui
-              swaymsg exec command $argv &
+              set cmd (string join " " $argv)
+              if test -n "$cmd"
+                swaymsg exec "$cmd"
+              else
+                echo "Usage: gui <command>"
+                return 1
+              end
             end
             complete -c gui -w command
           ''
           else ''
             function gui
-              hyprctl dispatch exec command $argv >/dev/null 2>&1 &
+              set cmd (string join " " $argv)
+              if test -n "$cmd"
+                hyprctl dispatch exec "$cmd"
+              else
+                echo "Usage: gui <command>"
+                return 1
+              end
             end
             complete -c gui -w command
           '';

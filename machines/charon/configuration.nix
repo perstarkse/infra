@@ -54,6 +54,7 @@
         mail-clients-setup
         ssh
         xdg-mimeapps
+        xdg-userdirs
         firefox
         sway
       ]
@@ -214,6 +215,9 @@
     bluetuith
   ];
 
+  # Allow localsend receive port
+  networking.firewall.allowedTCPPorts = [53317];
+
   hardware.bluetooth = {
     enable = true;
     powerOnBoot = true;
@@ -242,13 +246,4 @@
     session = "sway";
     terminal = "kitty";
   };
-
-  # Allow localsend receive port
-  networking.firewall.allowedTCPPorts = [53317];
-
-  boot.kernelParams = [
-    "ahci.mobile_lpm_policy=0"
-  ];
-  # Fix SATA power management issues during suspend, did not work
-  # boot.kernelParams = [ "libata.force=noncq" ];
 }

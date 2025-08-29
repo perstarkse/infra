@@ -35,7 +35,7 @@
   my.secrets.discover = {
     enable = true;
     dir = ../../vars/generators;
-    includeTags = ["makemake" "minne" "surrealdb"  "b2"];
+    includeTags = ["makemake" "minne" "surrealdb" "b2"];
   };
 
   my.secrets.generateManifest = false;
@@ -59,7 +59,7 @@
       frequency = "daily";
       backend = {
         type = "b2";
-        bucket = null; 
+        bucket = null;
         lifecycleKeepPriorVersionsDays = 30;
       };
     };
@@ -69,7 +69,7 @@
       frequency = "daily";
       backend = {
         type = "b2";
-        bucket = null; 
+        bucket = null;
         lifecycleKeepPriorVersionsDays = 30;
       };
     };
@@ -79,7 +79,7 @@
       frequency = "daily";
       backend = {
         type = "b2";
-        bucket = null; 
+        bucket = null;
         lifecycleKeepPriorVersionsDays = 30;
       };
     };

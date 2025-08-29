@@ -32,6 +32,7 @@
 
     config = lib.mkIf config.my.vfio.enable {
       boot = {
+        initrd.availableKernelModules = ["nvme" "xhci_pci" "ahci" "usbhid" "usb_storage" "sd_mod"];
         initrd.kernelModules = ["vfio-pci"];
         kernelModules = ["kvm-amd" "kvmfr"];
         kernelParams = [
