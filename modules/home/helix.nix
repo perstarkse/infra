@@ -68,11 +68,18 @@
         language = [
           {
             name = "markdown";
-            language-servers = ["marksman"];
+            language-servers = ["marksman" "codebook"];
             formatter.command = "${pkgs.mdformat}/bin/mdformat";
           }
         ];
         language-server.marksman.command = "${pkgs.marksman}/bin/marksman";
+      };
+      spellchecking = {
+        packages = [pkgs.codebook];
+        language-server.codebook = {
+          command = "${pkgs.codebook}/bin/codebook-lsp";
+          args = ["serve"];
+        };
       };
       jinja = {
         packages = [pkgs.jinja-lsp];
