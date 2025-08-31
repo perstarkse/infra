@@ -4,9 +4,7 @@
     config,
     pkgs,
     ...
-  }: let
-    cfg = config.my.vfio;
-  in {
+  }: {
     options.my.vfio = {
       enable = lib.mkOption {
         type = lib.types.bool;

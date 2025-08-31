@@ -13,25 +13,25 @@
         default = false;
         description = "Enable Vaultwarden";
       };
-      
+
       port = lib.mkOption {
         type = lib.types.port;
         default = 8322;
         description = "Port for Vaultwarden to listen on";
       };
-      
+
       address = lib.mkOption {
         type = lib.types.str;
         default = "0.0.0.0";
         description = "Address for Vaultwarden to bind to";
       };
-      
+
       backupDir = lib.mkOption {
         type = lib.types.path;
         default = "/data/passwords";
         description = "Directory to store Vaultwarden data and backups";
       };
-      
+
       firewallPorts = lib.mkOption {
         type = lib.types.submodule {
           options = {
@@ -78,7 +78,7 @@
           files = {
             "env" = {
               mode = "0400";
-              additionalReaders = [ "vaultwarden" ];
+              additionalReaders = ["vaultwarden"];
             };
           };
           prompts."admin-token".input = {
@@ -94,30 +94,6 @@
           '';
         })
       ];
-
-      # Restic backup configuration for Vaultwarden data
-    #   services.restic.backups.vaultwarden = {
-    #     initialize = true;
-
-    #     environmentFile = config.my.secrets."restic-env-file/env";
-    #     repositoryFile = config.my.secrets."restic-repo-file/vault-name";
-    #     passwordFile = config.my.secrets."restic-password/password";
-
-    #     paths = [
-    #       cfg.backupDir
-    #     ];
-
-    #     pruneOpts = [
-    #       "--keep-daily 7"
-    #       "--keep-weekly 5"
-    #       "--keep-monthly 12"
-    #     ];
-    #   };
-
-    #   # Ensure backup directory exists
-    #   systemd.tmpfiles.rules = [
-    #     "d ${cfg.backupDir} 0755 vaultwarden vaultwarden -"
-    #   ];
     };
   };
-} 
+}
