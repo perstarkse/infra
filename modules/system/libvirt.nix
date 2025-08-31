@@ -23,6 +23,20 @@
         description = "Enable SPICE USB redirection support.";
       };
 
+      shutdownOnSuspend = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Shutdown selected VMs when host suspends.";
+        };
+
+        vms = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          description = "List of VM names to shutdown before host suspend.";
+        };
+      };
+
       # Network configuration options
       networks = lib.mkOption {
         type = lib.types.listOf (lib.types.submodule {
@@ -205,6 +219,48 @@
       environment.systemPackages = with pkgs; [
         dnsmasq
       ];
+
+      # systemd service for VM shutdown on suspend
+      systemd.services."libvirt-shutdown-vms-on-suspend" = lib.mkIf cfg.shutdownOnSuspend.enable {
+        description = "Shutdown selected libvirt VMs on host suspend";
+        wantedBy = ["sleep.target"];
+        before = ["sleep.target"];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "shutdown-vms-on-suspend" ''
+            timeout_per_vm=30
+
+            shutdown_vm() {
+              local vm="$1"
+              echo "Requesting shutdown of $vm..."
+              virsh shutdown "$vm" || true
+
+              for i in $(seq 1 "$timeout_per_vm"); do
+                state="$(virsh domstate "$vm" 2>/dev/null || true)"
+                if [ "$state" != "running" ]; then
+                  echo "$vm shut down gracefully."
+                  return 0
+                fi
+                sleep 1
+              done
+
+              echo "$vm did not shut down in time, forcing destroy..."
+              virsh destroy "$vm" || true
+            }
+
+            pids=()
+            for vm in ${lib.escapeShellArgs cfg.shutdownOnSuspend.vms}; do
+              shutdown_vm "$vm" &
+              pids+=($!)
+            done
+
+            for pid in "''${pids[@]}"; do
+              wait "$pid"
+            done
+          '';
+        };
+        path = [pkgs.libvirt];
+      };
 
       # Configure networks using NixVirt templates
       virtualisation.libvirt.connections."qemu:///system" = {

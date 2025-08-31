@@ -75,7 +75,7 @@
           withRbw = true;
         };
         helix = {
-          languages = ["nix" "markdown" "rust" "jinja"];
+          languages = ["nix" "markdown" "rust" "jinja" "spellchecking"];
         };
       };
 
@@ -163,6 +163,11 @@
   my.libvirtd = {
     enable = true;
     spiceUSBRedirection = true;
+
+    shutdownOnSuspend = {
+      enable = true;
+      vms = ["win11-gaming"];
+    };
 
     networks = [
       {
