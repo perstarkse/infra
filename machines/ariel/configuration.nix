@@ -130,18 +130,6 @@
 
   my.secrets.generateManifest = false;
 
-  # my.backups = {
-  #   documents = {
-  #     enable = true;
-  #     path = "/home/${config.my.mainUser.name}/documents";
-  #     frequency = "daily";
-  #     backend = {
-  #       type = "b2";
-  #       bucket = null;
-  #       lifecycleKeepPriorVersionsDays = 5;
-  #     };
-  #   };
-  # };
 
   nixpkgs.config.allowUnfree = true;
 
@@ -164,8 +152,13 @@
 
   my.greetd = {
     enable = true;
-    sessionType = "sway";
     greeting = "Enter the heliosphere via ariel!";
+  };
+
+    my.gui = {
+    enable = true;
+    session = "sway";
+    terminal = "kitty";
   };
 
   # Allow localsend receive port
@@ -174,7 +167,4 @@
   networking.wireless.enable = true;
   networking.wireless.networks = {
   };
-
-  # Fix SATA power management issues during suspend, did not work
-  # boot.kernelParams = [ "libata.force=noncq" ];
 }

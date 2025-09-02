@@ -65,6 +65,8 @@
       enableIPv6 = true;
     };
 
+    nix.settings.trusted-users = ["root" mainUser];
+
     users.groups.secret-readers = {};
 
     users.users.${mainUser} = {
