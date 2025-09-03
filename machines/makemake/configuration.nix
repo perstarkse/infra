@@ -22,6 +22,7 @@
       minne
       minecraft
       backups
+      k3s
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [media mailserver]);
@@ -93,6 +94,15 @@
   ];
 
   programs.fuse.userAllowOther = true;
+
+  my.k3s = {
+    enable = true;
+    initServer = true;
+    tlsSan = "10.0.0.10";
+    # disable = ["servicelb" "traefik"];
+    extraFlags = [
+    ];
+  };
 
   my.vaultwarden = {
     enable = true;

@@ -28,10 +28,19 @@
         description = "TLS SAN for the k3s server";
       };
 
-      disableServiceLb = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Disable the built-in service load balancer";
+      # Simplified disable options
+      disable = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "List of k3s components to disable";
+        example = ["traefik" "servicelb" "metrics-server"];
+      };
+
+      extraFlags = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Extra flags to pass to k3s";
+        example = ["--cluster-cidr=10.42.0.0/16"];
       };
 
       firewallPorts = lib.mkOption {
@@ -39,7 +48,7 @@
           options = {
             tcp = lib.mkOption {
               type = lib.types.listOf lib.types.port;
-              default = [6443 2379 2380];
+              default = [6443 2379 2380 10250 10251 10252];
               description = "TCP ports to allow in firewall";
             };
             udp = lib.mkOption {
@@ -55,33 +64,28 @@
     };
 
     config = lib.mkIf cfg.enable {
-      # Common flags for ALL server nodes
-      _module.args.serverFlags = [
-        "--tls-san ${cfg.tlsSan}"
-      ] ++ lib.optionals cfg.disableServiceLb [
-        "--disable=servicelb"
-      ];
-
-      # Firewall configuration
-      networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;
-      networking.firewall.allowedUDPPorts = cfg.firewallPorts.udp;
-
-      # k3s service configuration
+      # Use the standard NixOS k3s service with proper configuration
       services.k3s = {
         enable = true;
         role = "server";
-        tokenFile = config.my.secrets."k3s-token/password";
-      } // (
-        if cfg.initServer
-        then {
-          clusterInit = true;
-          extraFlags = toString config._module.args.serverFlags;
-        }
-        else {
-          serverAddr = lib.head cfg.serverAddrs;
-          extraFlags = toString config._module.args.serverFlags;
-        }
-      );
+        tokenFile = config.my.secrets.getPath "k3s" "token";
+        clusterInit = cfg.initServer;
+        serverAddr =
+          if cfg.serverAddrs != []
+          then lib.head cfg.serverAddrs
+          else "";
+        extraFlags =
+          # Add TLS SAN
+          (lib.optional (cfg.tlsSan != "") "--tls-san=${cfg.tlsSan}")
+          # Add disable flags
+          ++ (map (component: "--disable=${component}") cfg.disable)
+          # Add any extra flags
+          ++ cfg.extraFlags;
+      };
+
+      # Firewall configuration (ignored when using nftables, but needed for other machines)
+      networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;
+      networking.firewall.allowedUDPPorts = cfg.firewallPorts.udp;
     };
   };
-} 
+}

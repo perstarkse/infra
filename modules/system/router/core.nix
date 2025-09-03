@@ -1,11 +1,18 @@
-{ lib, config, pkgs, ... }:
 {
-  config.flake.nixosModules.router-core = { lib, config, ... }:
-  let
+  lib,
+  config,
+  pkgs,
+  ...
+}: {
+  config.flake.nixosModules.router-core = {
+    lib,
+    config,
+    ...
+  }: let
     cfg = config.my.router;
     inherit (lib) mkEnableOption mkOption types;
 
-    machineSubmodule = types.submodule ({ config, ... }: {
+    machineSubmodule = types.submodule ({config, ...}: {
       options = {
         name = mkOption {
           type = types.str;
@@ -20,7 +27,7 @@
           description = "MAC address for DHCP reservation";
         };
         portForwards = mkOption {
-          type = types.listOf (types.submodule ({ ... }: {
+          type = types.listOf (types.submodule ({...}: {
             options = {
               port = mkOption {
                 type = types.int;
@@ -39,7 +46,7 @@
       };
     });
 
-    serviceSubmodule = types.submodule ({ ... }: {
+    serviceSubmodule = types.submodule ({...}: {
       options = {
         name = mkOption {
           type = types.str;
@@ -51,7 +58,6 @@
         };
       };
     });
-
   in {
     options = {
       my.router = {
@@ -175,6 +181,34 @@
               description = "Enable ddclient for dynamic DNS";
             };
           };
+          wildcardCerts = mkOption {
+            type = types.listOf (types.submodule {
+              options = {
+                name = mkOption {
+                  type = types.str;
+                  description = "Handle for this cert";
+                };
+                baseDomain = mkOption {
+                  type = types.str;
+                  description = "Domain base (e.g. stark.pub)";
+                };
+                dnsProvider = mkOption {
+                  type = types.str;
+                  description = "lego DNS provider (cloudflare, …)";
+                };
+                environmentFile = mkOption {
+                  type = types.nullOr types.path;
+                  default = null;
+                };
+                group = mkOption {
+                  type = types.str;
+                  default = "nginx";
+                };
+              };
+            });
+            default = [];
+            description = "Wildcard certs to issue via ACME DNS‑01.";
+          };
           virtualHosts = mkOption {
             type = types.listOf (types.submodule {
               options = {
@@ -210,8 +244,18 @@
                   default = false;
                   description = "Restrict access to Cloudflare edge IPs only (uses updatable snippet).";
                 };
+                noAcme = lib.mkOption {
+                  type = lib.types.bool;
+                  default = false;
+                  description = "Disable ACME for this vhost";
+                };
+                useWildcard = mkOption {
+                  type = types.nullOr types.str;
+                  default = null;
+                  description = "Name of wildcard cert from nginx.wildcardCerts this vhost should use.";
+                };
                 acmeDns01 = mkOption {
-                  type = types.nullOr (types.submodule ({ ... }: {
+                  type = types.nullOr (types.submodule ({...}: {
                     options = {
                       dnsProvider = mkOption {
                         type = types.str;
@@ -350,7 +394,7 @@
             description = "Add route/forwarding between VPN and LAN";
           };
           peers = mkOption {
-            type = types.listOf (types.submodule ({ ... }: {
+            type = types.listOf (types.submodule ({...}: {
               options = {
                 name = mkOption {
                   type = types.str;
@@ -401,4 +445,4 @@
       };
     };
   };
-} 
+}

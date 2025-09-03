@@ -28,23 +28,20 @@
   my.secrets.discover = {
     enable = true;
     dir = ../../vars/generators;
-    includeTags = ["ddclient" "cloudflare" "wireguard" "router"];
+    includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router"];
   };
 
   my.secrets.generateManifest = false;
-
-  my.k3s = {
-    enable = false;
-    initServer = true;
-    tlsSan = "10.0.0.1";
-  };
 
   my.router = {
     enable = true;
     hostname = "io";
     lan = {
       subnet = "10.0.0";
-      dhcpRange = { start = 100; end = 200; };
+      dhcpRange = {
+        start = 100;
+        end = 200;
+      };
       interfaces = ["enp2s0" "enp3s0" "enp4s0"];
     };
     wan.interface = "enp1s0";
@@ -74,20 +71,51 @@
         ip = "10";
         mac = "00:d0:b4:02:bb:3c";
         portForwards = [
-          { port = 25; protocol = "tcp"; }
-          { port = 465; protocol = "tcp"; }
-          { port = 993; protocol = "tcp"; }
-          { port = 32400; protocol = "tcp"; }
+          {
+            port = 25;
+            protocol = "tcp";
+          }
+          {
+            port = 465;
+            protocol = "tcp";
+          }
+          {
+            port = 993;
+            protocol = "tcp";
+          }
+          {
+            port = 32400;
+            protocol = "tcp";
+          }
         ];
       }
     ];
 
     services = [
-      { name = "mail.stark.pub";    target = "10.0.0.10"; }
-      { name = "chat.stark.pub";    target = "10.0.0.1"; }
-      { name = "minne.stark.pub";   target = "10.0.0.1"; }
-      { name = "request.stark.pub"; target = "10.0.0.1"; }
-      { name = "vault.stark.pub";   target = "10.0.0.1"; }
+      {
+        name = "mail.stark.pub";
+        target = "10.0.0.10";
+      }
+      {
+        name = "chat.stark.pub";
+        target = "10.0.0.1";
+      }
+      {
+        name = "minne.stark.pub";
+        target = "10.0.0.1";
+      }
+      {
+        name = "request.stark.pub";
+        target = "10.0.0.1";
+      }
+      {
+        name = "vault.stark.pub";
+        target = "10.0.0.1";
+      }
+      {
+        name = "kube-test.lan.stark.pub";
+        target = "10.0.0.1";
+      }
     ];
 
     dhcp = {
@@ -113,10 +141,48 @@
       enable = true;
       acmeEmail = "services@stark.pub";
       ddclient.enable = true;
+      wildcardCerts = [
+        {
+          name = "lanstark";
+          baseDomain = "lan.stark.pub";
+          dnsProvider = "cloudflare";
+          environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+          group = "nginx";
+        }
+      ];
       virtualHosts = [
-        { domain = "vault.stark.pub";   target = "makemake"; port = 8322; websockets = true; lanOnly = true; acmeDns01 = { dnsProvider = "cloudflare"; environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token"; }; }
-        { domain = "chat.stark.pub";    target = "makemake"; port = 7909; websockets = true; cloudflareOnly = true; }
-        { domain = "request.stark.pub"; target = "makemake"; port = 5055; websockets = true; cloudflareOnly = true; }
+        {
+          domain = "kube-test.lan.stark.pub";
+          target = "10.0.0.10";
+          port = 80;
+          websockets = false;
+          useWildcard = "lanstark";
+        }
+        {
+          domain = "vault.stark.pub";
+          target = "makemake";
+          port = 8322;
+          websockets = true;
+          lanOnly = true;
+          acmeDns01 = {
+            dnsProvider = "cloudflare";
+            environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+          };
+        }
+        {
+          domain = "chat.stark.pub";
+          target = "makemake";
+          port = 7909;
+          websockets = true;
+          cloudflareOnly = true;
+        }
+        {
+          domain = "request.stark.pub";
+          target = "makemake";
+          port = 5055;
+          websockets = true;
+          cloudflareOnly = true;
+        }
         {
           domain = "minne.stark.pub";
           target = "makemake";
@@ -160,12 +226,21 @@
         enable = true;
         port = 9990;
         exporters = {
-          node = { enable = true; enabledCollectors = ["systemd"]; };
+          node = {
+            enable = true;
+            enabledCollectors = ["systemd"];
+          };
           unbound.enable = true;
         };
         scrapeConfigs = [
-          { job_name = "node";     static_configs = [{targets = ["localhost:9100"];}]; }
-          { job_name = "unbound";  static_configs = [{targets = ["localhost:9167"];}]; }
+          {
+            job_name = "node";
+            static_configs = [{targets = ["localhost:9100"];}];
+          }
+          {
+            job_name = "unbound";
+            static_configs = [{targets = ["localhost:9167"];}];
+          }
         ];
       };
       netdata.enable = false;

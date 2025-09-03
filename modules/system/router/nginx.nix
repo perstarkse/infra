@@ -1,7 +1,15 @@
-{ lib, config, pkgs, ... }:
 {
-  config.flake.nixosModules.router-nginx = { lib, config, pkgs, ... }:
-  let
+  lib,
+  config,
+  pkgs,
+  ...
+}: {
+  config.flake.nixosModules.router-nginx = {
+    lib,
+    config,
+    pkgs,
+    ...
+  }: let
     cfg = config.my.router;
     nginxCfg = cfg.nginx;
     helpers = config.routerHelpers or {};
@@ -17,8 +25,7 @@
     cfAllow = "${cfDir}/allow.conf";
     cfRealip = "${cfDir}/realip.conf";
     cfGeo = "${cfDir}/edge-geo.conf";
-   in
-  {
+  in {
     config = lib.mkIf enabled {
       security.acme = {
         acceptTerms = true;
@@ -66,64 +73,129 @@
           }
         '';
 
-        virtualHosts = lib.listToAttrs (map (vhost:
-          let
-            targetIp = if lib.hasPrefix "${lanSubnet}." vhost.target then
-              vhost.target
-            else
-              let machine = lib.findFirst (m: m.name == vhost.target) null machines;
-              in if machine != null then
-                "${lanSubnet}.${machine.ip}"
-              else
-                vhost.target;
-            targetUrl = "http://${targetIp}:${toString vhost.port}";
-            lanAllow = ''
-              allow ${lanCidr};
-              allow ${ulaPrefix}::/64;
-              allow ${wgCidr};
-            '';
-            acl = if (vhost.cloudflareOnly or false) then ''
-              # When Cloudflare-only, allow if LAN/WG or if request comes via CF edge.
-              # Use $cf_access_ok from http context; otherwise return 403.
-              if ($cf_access_ok = 0) { return 403; }
-            '' else if (vhost.lanOnly or false) then ''
-              ${lanAllow}
-              deny all;
-            '' else "";
-            mergedExtra = lib.concatStringsSep "\n" (lib.filter (s: s != "") [ (vhost.extraConfig or "") acl ]);
-          in
-          lib.nameValuePair vhost.domain {
-            serverName = vhost.domain;
-            listen = [
-              { addr = "0.0.0.0"; port = 80; }
-              { addr = "0.0.0.0"; port = 443; ssl = true; }
-            ];
-            enableACME = true;
-            forceSSL = true;
-            locations."/" = {
-              recommendedProxySettings = true;
-              proxyWebsockets = vhost.websockets;
-              proxyPass = targetUrl;
-              extraConfig = mergedExtra;
-            };
-          }
-        ) nginxCfg.virtualHosts);
+        virtualHosts = lib.listToAttrs (map (
+            vhost: let
+              targetIp =
+                if lib.hasPrefix "${lanSubnet}." vhost.target
+                then vhost.target
+                else let
+                  machine = lib.findFirst (m: m.name == vhost.target) null machines;
+                in
+                  if machine != null
+                  then "${lanSubnet}.${machine.ip}"
+                  else vhost.target;
+
+              targetUrl = "http://${targetIp}:${toString vhost.port}";
+
+              lanAllow = ''
+                allow ${lanCidr};
+                allow ${ulaPrefix}::/64;
+                allow ${wgCidr};
+              '';
+
+              acl =
+                if (vhost.cloudflareOnly or false)
+                then ''
+                  if ($cf_access_ok = 0) { return 403; }
+                ''
+                else if (vhost.lanOnly or false)
+                then ''
+                  ${lanAllow}
+                  deny all;
+                ''
+                else "";
+
+              mergedExtra =
+                lib.concatStringsSep "\n"
+                (lib.filter (s: s != "") [(vhost.extraConfig or "") acl]);
+
+              # common part
+              baseCfg = {
+                serverName = vhost.domain;
+                listen = [
+                  {
+                    addr = "0.0.0.0";
+                    port = 80;
+                  }
+                  {
+                    addr = "0.0.0.0";
+                    port = 443;
+                    ssl = true;
+                  }
+                ];
+                locations."/" = {
+                  recommendedProxySettings = true;
+                  proxyWebsockets = vhost.websockets;
+                  proxyPass = targetUrl;
+                  extraConfig = mergedExtra;
+                };
+              };
+
+              # ssl policy
+              sslConfig =
+                # Explicit wildcard certificate case
+                if vhost.useWildcard != null
+                then let
+                  wc = lib.findFirst (c: c.name == vhost.useWildcard) null nginxCfg.wildcardCerts;
+                in
+                  if wc == null
+                  then throw "nginx: unknown wildcard cert ‘‘${vhost.useWildcard}’’ for vhost ‘‘${vhost.domain}’’"
+                  else {
+                    enableACME = false; # don’t request per‑vhost cert
+                    useACMEHost = wc.baseDomain; # reuse wildcard cert
+                    forceSSL = true; # always serve HTTPS
+                  }
+                # Forced no-ACME/self-signed case
+                else if vhost.noAcme or false
+                then {
+                  enableACME = false;
+                  forceSSL = true;
+                  sslCertificate = "/etc/ssl/certs/ssl-cert-snakeoil.pem";
+                  sslCertificateKey = "/etc/ssl/private/ssl-cert-snakeoil.key";
+                }
+                # Default: issue ACME cert per vhost
+                else {
+                  enableACME = true;
+                  forceSSL = true;
+                };
+            in
+              lib.nameValuePair vhost.domain (baseCfg // sslConfig)
+          )
+          nginxCfg.virtualHosts);
       };
 
-      security.acme.certs = lib.mkMerge (map (vhost:
-        let acme = vhost.acmeDns01 or null; in
-        lib.optionalAttrs (acme != null) {
-          "${vhost.domain}" = lib.mkMerge [
-            {
-              dnsProvider = acme.dnsProvider;
-              group = acme.group;
-              webroot = null;
-            }
-            (lib.optionalAttrs (acme.environmentFile != null) { environmentFile = acme.environmentFile; })
-          ];
-        }
-      ) nginxCfg.virtualHosts);
-
+      security.acme.certs = lib.mkMerge (
+        (map (
+            vhost: let
+              acme = vhost.acmeDns01 or null;
+            in
+              lib.optionalAttrs (acme != null) {
+                "${vhost.domain}" =
+                  {
+                    dnsProvider = acme.dnsProvider;
+                    group = acme.group;
+                    webroot = null;
+                  }
+                  // lib.optionalAttrs (acme.environmentFile != null) {
+                    environmentFile = acme.environmentFile;
+                  };
+              }
+          )
+          nginxCfg.virtualHosts)
+        ++ (map (wc: {
+            "${wc.baseDomain}" =
+              {
+                dnsProvider = wc.dnsProvider;
+                group = wc.group;
+                webroot = null;
+                extraDomainNames = ["*.${wc.baseDomain}"];
+              }
+              // lib.optionalAttrs (wc.environmentFile != null) {
+                environmentFile = wc.environmentFile;
+              };
+          })
+          nginxCfg.wildcardCerts)
+      );
       systemd.tmpfiles.rules = lib.mkIf cfNeeded [
         "d ${cfDir} 0755 root root - -"
         "f ${cfAllow} 0644 root root - -"
@@ -133,8 +205,8 @@
 
       systemd.services.cloudflare-ips-update = lib.mkIf cfNeeded {
         description = "Update Cloudflare IP snippets for nginx";
-        wants = [ "network-online.target" ];
-        after = [ "network-online.target" ];
+        wants = ["network-online.target"];
+        after = ["network-online.target"];
         serviceConfig = {
           Type = "oneshot";
           ExecStart = "${pkgs.writeShellScript "cloudflare-ips-update" ''
@@ -180,11 +252,11 @@
             fi
           ''}";
         };
-        wantedBy = [ "multi-user.target" ];
+        wantedBy = ["multi-user.target"];
       };
 
       systemd.timers.cloudflare-ips-update = lib.mkIf cfNeeded {
-        wantedBy = [ "timers.target" ];
+        wantedBy = ["timers.target"];
         timerConfig = {
           OnBootSec = "5m";
           OnUnitActiveSec = "12h";
@@ -193,4 +265,4 @@
       };
     };
   };
-} 
+}
