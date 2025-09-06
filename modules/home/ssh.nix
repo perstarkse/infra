@@ -8,6 +8,14 @@
       enable = true;
     };
 
+    programs.keychain = {
+      enable = true;
+      agents = ["ssh"];
+      keys = ["~/.ssh/id_ed25519"];
+      extraFlags = ["--timeout" "180" "--quiet"];
+      enableFishIntegration = true;
+    };
+
     home.file.".ssh/config" = {
       text = ''
         Host *
