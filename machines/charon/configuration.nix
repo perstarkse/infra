@@ -218,6 +218,7 @@
     devenv
     localsend
     bluetuith
+    codex
   ];
 
   # Allow localsend receive port
