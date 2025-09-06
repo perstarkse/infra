@@ -34,8 +34,32 @@
 
       services.ddclient = lib.mkIf nginxCfg.ddclient.enable {
         enable = true;
-        package = pkgs.ddclient;
-        configFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
+        protocol = "cloudflare";
+        username = "token";
+        passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
+        zone = "stark.pub";
+
+        use = "";
+        usev4 = "webv4, webv4=ipify-ipv4";
+        usev6 = ""; # disable IPv6 detection
+
+        domains = [
+          "chat.stark.pub"
+          "minne.stark.pub"
+          "vault.stark.pub"
+          "request.stark.pub"
+          "encke.stark.pub"
+          "minne-demo.stark.pub"
+        ];
+
+        ssl = true;
+        interval = "10min";
+        quiet = true; # optional
+
+        # Optional: TTL=auto (1) on Cloudflare
+        extraConfig = ''
+          ttl=1
+        '';
       };
 
       services.nginx = {
