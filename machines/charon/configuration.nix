@@ -256,7 +256,7 @@
   hardware.cpu.amd.updateMicrocode = true;
   services.fstrim.enable = true;
 
-  services.udev.extraRules = ''
-    ACTION=="add", SUBSYSTEM=="scsi_host", KERNEL=="host*", ATTR{link_power_management_policy}="max_performance"
-  '';
+  # services.udev.extraRules = ''
+  #   ACTION=="add", SUBSYSTEM=="scsi_host", KERNEL=="host*", ATTR{link_power_management_policy}="max_performance"
+  # '';
 }
