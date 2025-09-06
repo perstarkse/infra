@@ -112,38 +112,15 @@
             printf '\n```\n'
           end
         '';
-        gui =
-          if osConfig.my.gui.session == "sway"
-          then ''
-            function gui
-              if test (count $argv) -gt 0
-                if type -q setsid
-                  setsid -f $argv >/dev/null 2>&1
-                else
-                  command $argv >/dev/null 2>&1 & disown
-                end
-              else
-                echo "Usage: gui <command>"
-                return 1
-              end
-            end
-            complete -c gui -w command
-          ''
-          else ''
-            function gui
-              if test (count $argv) -gt 0
-                if type -q setsid
-                  setsid -f $argv >/dev/null 2>&1
-                else
-                  command $argv >/dev/null 2>&1 & disown
-                end
-              else
-                echo "Usage: gui <command>"
-                return 1
-              end
-            end
-            complete -c gui -w command
-          '';
+        gui = ''
+          if test (count $argv) -gt 0
+            swaymsg exec -- $argv
+          else
+            echo "Usage: gui <command>"
+            return 1
+          end
+          complete -c gui -w command
+        '';
       };
     };
   };
