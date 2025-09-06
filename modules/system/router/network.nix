@@ -1,7 +1,15 @@
-{ lib, config, pkgs, ... }:
 {
-  config.flake.nixosModules.router-network = { lib, config, pkgs, ... }:
-  let
+  lib,
+  config,
+  pkgs,
+  ...
+}: {
+  config.flake.nixosModules.router-network = {
+    lib,
+    config,
+    pkgs,
+    ...
+  }: let
     cfg = config.my.router;
     helpers = config.routerHelpers or {};
     wan = helpers.wanInterface or cfg.wan.interface;
@@ -13,8 +21,7 @@
     dhcpStart = helpers.dhcpStart or "${lanSubnet}.${toString cfg.lan.dhcpRange.start}";
     dhcpEnd = helpers.dhcpEnd or "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
     _unused = [lanCidr dhcpStart dhcpEnd];
-  in
-  {
+  in {
     config = lib.mkIf cfg.enable {
       boot.kernel.sysctl = {
         "net.ipv4.conf.all.forwarding" = true;
@@ -51,61 +58,61 @@
           };
         };
 
-        networks = {
-          "20-wan" = {
-            matchConfig.Name = wan;
-            networkConfig = {
-              DHCP = "yes";
-              IPv4Forwarding = true;
-              IPv6Forwarding = true;
-              IPv6AcceptRA = true;
+        networks =
+          {
+            "20-wan" = {
+              matchConfig.Name = wan;
+              networkConfig = {
+                DHCP = "yes";
+                IPv4Forwarding = true;
+                IPv6Forwarding = true;
+                IPv6AcceptRA = true;
+              };
+              dhcpV6Config.WithoutRA = "solicit";
+              linkConfig.RequiredForOnline = "routable";
             };
-            dhcpV6Config.WithoutRA = "solicit";
-            linkConfig.RequiredForOnline = "routable";
-          };
 
-          "10-br-lan" = {
-            matchConfig.Name = "br-lan";
-            address = [
-              "${routerIp}/24"
-              "${ulaPrefix}::1/64"
-            ];
-            networkConfig = {
-              ConfigureWithoutCarrier = true;
-              DHCPPrefixDelegation = true;
-              IPv6SendRA = true;
-              IPv6AcceptRA = false;
-            };
-            bridgeConfig = {};
-            ipv6Prefixes = [
-              {
-                AddressAutoconfiguration = true;
-                OnLink = true;
-                Prefix = "${ulaPrefix}::/64";
-              }
-            ];
-            linkConfig.RequiredForOnline = "no";
-          };
-        } // lib.listToAttrs (map (iface:
-          lib.nameValuePair "30-${iface}-lan" {
-            matchConfig.Name = iface;
-            networkConfig = {
-              Bridge = "br-lan";
-              ConfigureWithoutCarrier = true;
+            "10-br-lan" = {
+              matchConfig.Name = "br-lan";
+              address = [
+                "${routerIp}/24"
+                "${ulaPrefix}::1/64"
+              ];
+              networkConfig = {
+                ConfigureWithoutCarrier = true;
+                DHCPPrefixDelegation = true;
+                IPv6SendRA = true;
+                IPv6AcceptRA = false;
+              };
+              bridgeConfig = {};
+              ipv6Prefixes = [
+                {
+                  AddressAutoconfiguration = true;
+                  OnLink = true;
+                  Prefix = "${ulaPrefix}::/64";
+                }
+              ];
+              linkConfig.RequiredForOnline = "no";
             };
           }
-        ) lanIfaces);
+          // lib.listToAttrs (map (
+              iface:
+                lib.nameValuePair "30-${iface}-lan" {
+                  matchConfig.Name = iface;
+                  networkConfig = {
+                    Bridge = "br-lan";
+                    ConfigureWithoutCarrier = true;
+                  };
+                }
+            )
+            lanIfaces);
       };
 
       systemd.services.nftables = {
-        after = ["systemd-networkd.service" "network-online.target"];
-        wants = ["network-online.target"];
-      };
-
-      systemd.services.systemd-networkd = {
-        wantedBy = lib.mkForce ["multi-user.target"];
-        after = ["network-pre.target"];
+        after = ["sysinit.target"];
+        before = ["network-pre.target"];
+        wants = ["network-pre.target"];
       };
     };
   };
-} 
+}
