@@ -1,6 +1,5 @@
 {
   config.flake.homeModules.kitty = {
-    pkgs,
     config,
     lib,
     osConfig,

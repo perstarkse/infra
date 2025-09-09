@@ -18,7 +18,7 @@
       cp "$prompts/api_key" "$out/api_key"
     '';
     meta = {
-      tags = [ "openrouter" "api-key" "dev" "fish" ];
+      tags = ["openrouter" "api-key" "dev" "fish"];
     };
   };
-} 
+}

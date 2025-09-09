@@ -28,7 +28,7 @@
       cp "$prompts/application_key" "$out/application_key"
     '';
     meta = {
-      tags = [ "b2" "backups" ];
+      tags = ["b2" "backups"];
     };
   };
-} 
+}

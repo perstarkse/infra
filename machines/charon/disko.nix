@@ -64,7 +64,7 @@
           type = "filesystem";
           format = "ext4";
           mountpoint = "/mnt/sdb";
-          mountOptions = ["noatime"];
+          # mountOptions = ["noatime"];
         };
       };
 
@@ -75,7 +75,7 @@
           type = "filesystem";
           format = "ext4";
           mountpoint = "/mnt/sdc";
-          mountOptions = ["noatime"];
+          # mountOptions = ["noatime"];
         };
       };
 

@@ -255,10 +255,18 @@
   };
 
   hardware.cpu.amd.updateMicrocode = true;
-  services.fstrim.enable = true;
 
   # Did not work, fails entering suspend
   # boot.kernelParams = ["ahci.mobile_lpm_policy=0"];
+
+  boot.initrd.availableKernelModules = [
+    "nvme"
+    "xhci_pci"
+    "ahci"
+    "usbhid"
+    "usb_storage"
+    "sd_mod"
+  ];
 
   # Did not work
   # services.udev.extraRules = ''
@@ -266,32 +274,32 @@
   # '';
 
   # Suspend hook — flip SATA LPM and (optionally) standby the Intel SSDs
-  systemd.services.pre-sleep-sata-lpm = {
-    description = "Pre-Sleep (SATA LPM relax + SSD standby)";
-    wantedBy = ["sleep.target"];
-    before = ["sleep.target" "systemd-suspend.service"];
-    serviceConfig.Type = "oneshot";
-    # Ensure logger/hdparm are in PATH
-    path = [pkgs.util-linux pkgs.hdparm];
-    script = ''
-      for pol in /sys/class/scsi_host/host*/link_power_management_policy; do
-        echo max_performance > "$pol" || true
-      done
-    '';
-  };
+  # systemd.services.pre-sleep-sata-lpm = {
+  #   description = "Pre-Sleep (SATA LPM relax + SSD standby)";
+  #   wantedBy = ["sleep.target"];
+  #   before = ["sleep.target" "systemd-suspend.service"];
+  #   serviceConfig.Type = "oneshot";
+  #   # Ensure logger/hdparm are in PATH
+  #   path = [pkgs.util-linux pkgs.hdparm];
+  #   script = ''
+  #     for pol in /sys/class/scsi_host/host*/link_power_management_policy; do
+  #       echo max_performance > "$pol" || true
+  #     done
+  #   '';
+  # };
 
-  # Resume hook — restore preferred LPM
-  systemd.services.resume-sata-lpm = {
-    description = "Post-Resume (restore SATA LPM)";
-    wantedBy = ["suspend.target" "hibernate.target" "hybrid-sleep.target"];
-    after = ["suspend.target" "hibernate.target" "hybrid-sleep.target"];
-    serviceConfig.Type = "oneshot";
-    path = [pkgs.util-linux];
-    script = ''
-      for pol in /sys/class/scsi_host/host*/link_power_management_policy; do
-        echo med_power_with_dipm > "$pol" || true
-      done
-      logger -t resume-sata-lpm "Restored LPM=med_power_with_dipm"
-    '';
-  };
+  # # Resume hook — restore preferred LPM
+  # systemd.services.resume-sata-lpm = {
+  #   description = "Post-Resume (restore SATA LPM)";
+  #   wantedBy = ["suspend.target" "hibernate.target" "hybrid-sleep.target"];
+  #   after = ["suspend.target" "hibernate.target" "hybrid-sleep.target"];
+  #   serviceConfig.Type = "oneshot";
+  #   path = [pkgs.util-linux];
+  #   script = ''
+  #     for pol in /sys/class/scsi_host/host*/link_power_management_policy; do
+  #       echo med_power_with_dipm > "$pol" || true
+  #     done
+  #     logger -t resume-sata-lpm "Restored LPM=med_power_with_dipm"
+  #   '';
+  # };
 }

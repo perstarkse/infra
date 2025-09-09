@@ -30,7 +30,7 @@
       };
     };
 
-    scriptEnv = pkgs.python3.withPackages (ps: [blinkStickPkg]);
+    scriptEnv = pkgs.python3.withPackages (_: [blinkStickPkg]);
 
     blinkstickScripts = pkgs.writeScriptBin "blinkstick-scripts" ''
       #!${scriptEnv.interpreter}

@@ -18,7 +18,7 @@
       cp "$prompts/credentials" "$out/credentials"
     '';
     meta = {
-      tags = [ "oumuamua" "service" "surrealdb" ];
+      tags = ["oumuamua" "service" "surrealdb"];
     };
   };
 }

@@ -1,12 +1,11 @@
-{inputs, ...}: {
+{...}: {
   config.flake.homeModules.waybar = {
-    pkgs,
     lib,
     config,
     ...
   }: let
     cfg = config.my.waybar;
-    
+
     commonModules = {
       "network" = {
         "interface" = "se-mma-wg-001";
@@ -115,10 +114,22 @@
       };
     };
 
-    wmModules = if cfg.windowManager == "hyprland" then hyprlandModules else swayModules;
-    wmWorkspaces = if cfg.windowManager == "hyprland" then "hyprland/workspaces" else "sway/workspaces";
-    wmWindow = if cfg.windowManager == "hyprland" then "hyprland/window" else "sway/window";
-    wmLanguage = if cfg.windowManager == "hyprland" then "hyprland/language" else "sway/language";
+    wmModules =
+      if cfg.windowManager == "hyprland"
+      then hyprlandModules
+      else swayModules;
+    wmWorkspaces =
+      if cfg.windowManager == "hyprland"
+      then "hyprland/workspaces"
+      else "sway/workspaces";
+    wmWindow =
+      if cfg.windowManager == "hyprland"
+      then "hyprland/window"
+      else "sway/window";
+    wmLanguage =
+      if cfg.windowManager == "hyprland"
+      then "hyprland/language"
+      else "sway/language";
   in {
     options = {
       my.waybar = {
@@ -156,16 +167,18 @@
           }
         '';
         settings = {
-          mainBar = {
-            layer = "top";
-            position = "bottom";
-            height = 20;
-            modules-left = [wmWorkspaces];
-            modules-center = [wmWindow];
-            modules-right = ["network" "disk" wmLanguage "bluetooth" "pulseaudio" "clock" "privacy"];
-          } // commonModules // wmModules;
+          mainBar =
+            {
+              layer = "top";
+              position = "bottom";
+              height = 20;
+              modules-left = [wmWorkspaces];
+              modules-center = [wmWindow];
+              modules-right = ["network" "disk" wmLanguage "bluetooth" "pulseaudio" "clock" "privacy"];
+            }
+            // commonModules // wmModules;
         };
       };
     };
   };
-} 
+}

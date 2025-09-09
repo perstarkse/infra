@@ -1,13 +1,7 @@
 {
-  lib,
-  config,
-  pkgs,
-  ...
-}: {
   config.flake.nixosModules.router-network = {
     lib,
     config,
-    pkgs,
     ...
   }: let
     cfg = config.my.router;
@@ -17,10 +11,6 @@
     ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
     routerIp = helpers.routerIp or "${lanSubnet}.1";
-    lanCidr = helpers.lanCidr or "${lanSubnet}.0/24";
-    dhcpStart = helpers.dhcpStart or "${lanSubnet}.${toString cfg.lan.dhcpRange.start}";
-    dhcpEnd = helpers.dhcpEnd or "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
-    _unused = [lanCidr dhcpStart dhcpEnd];
   in {
     config = lib.mkIf cfg.enable {
       boot.kernel.sysctl = {

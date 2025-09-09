@@ -2,7 +2,6 @@
   config.flake.nixosModules.vfio = {
     lib,
     config,
-    pkgs,
     ...
   }: {
     options.my.vfio = {

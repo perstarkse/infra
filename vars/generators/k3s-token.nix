@@ -18,7 +18,7 @@
       cp "$prompts/token" "$out/token"
     '';
     meta = {
-      tags = [ "k3s" ];
+      tags = ["k3s"];
     };
   };
-} 
+}

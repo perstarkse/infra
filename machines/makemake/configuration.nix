@@ -3,7 +3,6 @@
   config,
   pkgs,
   vars-helper,
-  lib,
   private-infra,
   ...
 }: {

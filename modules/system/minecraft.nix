@@ -1,5 +1,10 @@
-{inputs, lib, ...}: {
-  config.flake.nixosModules.minecraft = { lib, config, pkgs, ... }: let
+{inputs, ...}: {
+  config.flake.nixosModules.minecraft = {
+    lib,
+    config,
+    pkgs,
+    ...
+  }: let
     cfg = config.my.minecraft;
 
     modItemType = lib.types.submodule ({...}: {
@@ -52,7 +57,7 @@
       };
     });
   in {
-    imports = [ inputs.nix-minecraft.nixosModules.minecraft-servers ];
+    imports = [inputs.nix-minecraft.nixosModules.minecraft-servers];
 
     options.my.minecraft = {
       enable = lib.mkEnableOption "Enable Minecraft servers via nix-minecraft";
@@ -77,27 +82,33 @@
     };
 
     config = lib.mkIf cfg.enable {
-      nixpkgs.overlays = [ inputs.nix-minecraft.overlay ];
+      nixpkgs.overlays = [inputs.nix-minecraft.overlay];
 
       services.minecraft-servers = {
         enable = true;
         eula = cfg.eula;
         openFirewall = cfg.openFirewall;
-        servers = lib.mapAttrs (serverName: sCfg: {
-          enable = sCfg.enable;
-          package = sCfg.package;
-          openFirewall = sCfg.openFirewall;
-          symlinks = lib.mkIf (sCfg.mods != []) {
-            mods = pkgs.linkFarmFromDrvs "mods" (builtins.attrValues (
-              builtins.listToAttrs (map (m: {
-                name = m.name;
-                value = pkgs.fetchurl { url = m.url; sha512 = m.sha512; };
-              }) sCfg.mods)
-            ));
-          };
-          serverProperties = sCfg.serverProperties;
-        }) cfg.servers;
+        servers =
+          lib.mapAttrs (_: sCfg: {
+            enable = sCfg.enable;
+            package = sCfg.package;
+            openFirewall = sCfg.openFirewall;
+            symlinks = lib.mkIf (sCfg.mods != []) {
+              mods = pkgs.linkFarmFromDrvs "mods" (builtins.attrValues (
+                builtins.listToAttrs (map (m: {
+                    name = m.name;
+                    value = pkgs.fetchurl {
+                      url = m.url;
+                      sha512 = m.sha512;
+                    };
+                  })
+                  sCfg.mods)
+              ));
+            };
+            serverProperties = sCfg.serverProperties;
+          })
+          cfg.servers;
       };
     };
   };
-} 
+}

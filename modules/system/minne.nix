@@ -97,7 +97,7 @@
           ];
 
           # Load environment file for all secrets
-          EnvironmentFile =  [
+          EnvironmentFile = [
             (config.my.secrets.getPath "minne-env" "env")
           ];
         };

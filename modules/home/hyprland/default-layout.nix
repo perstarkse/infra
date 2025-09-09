@@ -1,9 +1,5 @@
-{inputs, ...}: {
-  config.flake.homeModules.default-layout = {
-    pkgs,
-    lib,
-    ...
-  }: let
+{...}: {
+  config.flake.homeModules.default-layout = {...}: let
     mainMod = "SUPER";
   in {
     wayland.windowManager.hyprland.settings = {
@@ -48,11 +44,11 @@
 
         "${mainMod}, S, layoutmsg, split"
         "${mainMod} SHIFT, S, layoutmsg, togglesplit"
-  
+
         "${mainMod} SHIFT, Q, killactive,"
         "${mainMod}, F, fullscreen, 0"
         "${mainMod} SHIFT, F, togglefloating,"
       ];
     };
   };
-} 
+}

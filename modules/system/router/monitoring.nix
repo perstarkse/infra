@@ -1,14 +1,13 @@
-{ lib, config, pkgs, ... }:
 {
-  config.flake.nixosModules.router-monitoring = { lib, config, pkgs, ... }:
-  let
+  config.flake.nixosModules.router-monitoring = {
+    lib,
+    config,
+    ...
+  }: let
     cfg = config.my.router;
     mon = cfg.monitoring;
-    helpers = config.routerHelpers or {};
-    routerIp = helpers.routerIp or "${helpers.lanSubnet or cfg.lan.subnet}.1";
     enabled = cfg.enable && mon.enable;
-   in
-  {
+  in {
     config = lib.mkIf enabled {
       services.netdata = lib.mkIf mon.netdata.enable {
         enable = true;
@@ -40,4 +39,4 @@
       };
     };
   };
-} 
+}

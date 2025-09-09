@@ -17,4 +17,4 @@
       router-wireguard
     ];
   };
-} 
+}

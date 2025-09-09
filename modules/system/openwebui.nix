@@ -107,13 +107,17 @@
         description = "Timer for OpenWebUI container updates";
         wantedBy = ["timers.target"];
         timerConfig = {
-          OnCalendar = if cfg.updateSchedule == "daily" then "daily"
-                      else if cfg.updateSchedule == "weekly" then "weekly"
-                      else if cfg.updateSchedule == "monthly" then "monthly"
-                      else "weekly";
+          OnCalendar =
+            if cfg.updateSchedule == "daily"
+            then "daily"
+            else if cfg.updateSchedule == "weekly"
+            then "weekly"
+            else if cfg.updateSchedule == "monthly"
+            then "monthly"
+            else "weekly";
           Persistent = true;
         };
       };
     };
   };
-} 
+}

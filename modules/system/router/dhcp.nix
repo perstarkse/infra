@@ -1,7 +1,13 @@
-{ lib, config, ... }:
 {
-  config.flake.nixosModules.router-dhcp = { lib, config, ... }:
-  let
+  lib,
+  config,
+  ...
+}: {
+  config.flake.nixosModules.router-dhcp = {
+    lib,
+    config,
+    ...
+  }: let
     cfg = config.my.router;
     dhcpCfg = cfg.dhcp;
     helpers = config.routerHelpers or {};
@@ -12,8 +18,7 @@
     dhcpEnd = helpers.dhcpEnd or "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
     machines = cfg.machines;
     enabled = cfg.enable && dhcpCfg.enable;
-   in
-  {
+  in {
     config = lib.mkIf enabled {
       services.kea = {
         ctrl-agent = {
@@ -43,16 +48,27 @@
               {
                 id = 1;
                 subnet = lanCidr;
-                pools = [ { pool = "${dhcpStart} - ${dhcpEnd}"; } ];
-                reservations = map (machine: {
-                  "hw-address" = machine.mac;
-                  "ip-address" = "${lanSubnet}.${machine.ip}";
-                  hostname = machine.name;
-                }) machines;
+                pools = [{pool = "${dhcpStart} - ${dhcpEnd}";}];
+                reservations =
+                  map (machine: {
+                    "hw-address" = machine.mac;
+                    "ip-address" = "${lanSubnet}.${machine.ip}";
+                    hostname = machine.name;
+                  })
+                  machines;
                 "option-data" = [
-                  { name = "routers"; data = routerIp; }
-                  { name = "domain-name-servers"; data = routerIp; }
-                  { name = "domain-name"; data = dhcpCfg.domainName; }
+                  {
+                    name = "routers";
+                    data = routerIp;
+                  }
+                  {
+                    name = "domain-name-servers";
+                    data = routerIp;
+                  }
+                  {
+                    name = "domain-name";
+                    data = dhcpCfg.domainName;
+                  }
                 ];
               }
             ];
@@ -70,4 +86,4 @@
       };
     };
   };
-} 
+}

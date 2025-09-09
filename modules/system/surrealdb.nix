@@ -1,4 +1,4 @@
-{ inputs, ... }: {
+{
   config.flake.nixosModules.surrealdb = {
     config,
     lib,
@@ -75,7 +75,7 @@
         description = "SurrealDB - Database Server";
         wantedBy = ["multi-user.target"];
         after = ["network.target"];
-        
+
         serviceConfig = {
           Type = "simple";
           User = "surrealdb";
@@ -112,4 +112,4 @@
       ];
     };
   };
-} 
+}

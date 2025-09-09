@@ -2,7 +2,6 @@
   config.flake.nixosModules.vaultwarden = {
     config,
     lib,
-    pkgs,
     ...
   }: let
     cfg = config.my.vaultwarden;

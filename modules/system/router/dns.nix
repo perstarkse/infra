@@ -1,7 +1,13 @@
-{ lib, config, ... }:
 {
-  config.flake.nixosModules.router-dns = { lib, config, ... }:
-  let
+  lib,
+  config,
+  ...
+}: {
+  config.flake.nixosModules.router-dns = {
+    lib,
+    config,
+    ...
+  }: let
     cfg = config.my.router;
     dnsCfg = cfg.dns;
     helpers = config.routerHelpers or {};
@@ -14,13 +20,12 @@
     wgSubnet = (cfg.wireguard or {}).subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/24";
     enabled = cfg.enable && dnsCfg.enable;
-   in
-  {
+  in {
     config = lib.mkIf enabled {
       services.unbound = {
         enable = true;
         settings = {
-          "remote-control" = { "control-enable" = true; };
+          "remote-control" = {"control-enable" = true;};
           server = {
             interface = [
               "127.0.0.1"
@@ -64,4 +69,4 @@
       };
     };
   };
-} 
+}

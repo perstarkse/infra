@@ -1,11 +1,9 @@
 {
-  config.flake.homeModules.ssh = {
-    config,
-    lib,
-    ...
-  }: {
+  config.flake.homeModules.ssh = {...}: {
     programs.ssh = {
       enable = true;
+      # Silence HM deprecation warning about default config removal
+      enableDefaultConfig = false;
     };
 
     # programs.keychain = {

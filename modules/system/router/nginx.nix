@@ -1,9 +1,4 @@
 {
-  lib,
-  config,
-  pkgs,
-  ...
-}: {
   config.flake.nixosModules.router-nginx = {
     lib,
     config,

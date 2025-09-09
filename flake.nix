@@ -72,10 +72,14 @@
     };
 
     nix-minecraft.url = "github:Infinidoge/nix-minecraft";
+
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
-    self,
     flake-parts,
     clan-core,
     home-manager,
@@ -87,6 +91,7 @@
       imports = [
         clan-core.flakeModules.default
         home-manager.flakeModules.home-manager
+        inputs.treefmt-nix.flakeModule
         (inputs.import-tree ./modules)
       ];
 
@@ -171,17 +176,60 @@
           };
         };
       };
-      # sops HM module is now wrapped in `modules/home/sops.nix` as `modules.homeModules.sops`.
-      systems = ["x86_64-linux" "aarch64-linux"];
+
+      systems = ["x86_64-linux"];
 
       perSystem = {
         pkgs,
         system,
+        config,
         ...
-      }: {
-        devShells.default = pkgs.mkShell {
-          packages = [clan-core.packages.${system}.clan-cli];
+      }: let
+        lib = pkgs.lib;
+        # Cleaned copy of the repo for tooling checks
+        src = lib.cleanSource ./.;
+
+        # Per-host build checks for the current system only
+        nixosConfigs = config.flake.nixosConfigurations or {};
+        buildChecks = lib.mapAttrs (
+          _: cfg: cfg.config.system.build.toplevel
+        ) (lib.filterAttrs (_: cfg: (cfg.pkgs.system or null) == system) nixosConfigs);
+      in {
+        # Configure treefmt via its flake module
+        treefmt = {
+          projectRootFile = "flake.nix";
+          programs.alejandra.enable = true;
         };
+
+        # `nix fmt` uses treefmt wrapper built by the module
+        formatter = config.treefmt.build.wrapper;
+
+        # Developer shell with common tools
+        devShells.default = pkgs.mkShell {
+          packages = [
+            clan-core.packages.${system}.clan-cli
+            config.treefmt.build.wrapper
+            pkgs.statix
+            pkgs.deadnix
+          ];
+        };
+
+        # Flake checks: formatting, lint, dead code, and per-host builds
+        checks =
+          buildChecks
+          // {
+            treefmt = config.treefmt.check;
+
+            statix = pkgs.runCommandLocal "statix-check" {nativeBuildInputs = [pkgs.statix];} ''
+              statix check ${src}
+              : > $out
+            '';
+
+            deadnix = pkgs.runCommandLocal "deadnix-check" {nativeBuildInputs = [pkgs.deadnix];} ''
+              deadnix --fail ${src}
+              : > $out
+            '';
+          };
       };
     });
 }

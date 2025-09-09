@@ -1,5 +1,4 @@
-{ inputs, ... }:
-{
+{inputs, ...}: {
   config.flake.homeModules.sway = {
     pkgs,
     config,
@@ -29,7 +28,7 @@
         terminal = terminal;
 
         workspaceAutoBackAndForth = true;
-        defaultWorkspace = "workspace number 1";      
+        defaultWorkspace = "workspace number 1";
 
         gaps = {
           inner = 0;

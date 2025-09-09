@@ -18,7 +18,7 @@
       cp "$prompts/aws_secret_access_key" "$out/aws_secret_access_key"
     '';
     meta = {
-      tags = [ "aws" "api-key" "dev" "fish" ];
+      tags = ["aws" "api-key" "dev" "fish"];
     };
   };
-} 
+}

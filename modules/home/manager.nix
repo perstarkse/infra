@@ -1,5 +1,5 @@
 {inputs, ...}: {
-  config.flake.nixosModules.home-module = {pkgs, ...}: {
+  config.flake.nixosModules.home-module = {...}: {
     imports = [
       inputs.home-manager.nixosModules.home-manager
     ];

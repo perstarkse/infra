@@ -1,8 +1,6 @@
 {
   config.flake.nixosModules.shared = {
     config,
-    clan-core,
-    lib,
     pkgs,
     ...
   }: let

@@ -18,7 +18,7 @@
       cp "$prompts/env" "$out/env"
     '';
     meta = {
-      tags = [ "oumuamua" "service" "minne" ];
+      tags = ["oumuamua" "service" "minne"];
     };
   };
-} 
+}

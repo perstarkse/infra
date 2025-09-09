@@ -18,7 +18,7 @@
       cp "$prompts/api_key" "$out/api_key"
     '';
     meta = {
-      tags = [ "openai" "api-key" "dev" "fish" ];
+      tags = ["openai" "api-key" "dev" "fish"];
     };
   };
-} 
+}

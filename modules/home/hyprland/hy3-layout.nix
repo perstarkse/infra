@@ -1,9 +1,5 @@
-{inputs, ...}: {
-  config.flake.homeModules.hy3-layout = {
-    pkgs,
-    lib,
-    ...
-  }: let
+{...}: {
+  config.flake.homeModules.hy3-layout = {lib, ...}: let
     mainMod = "SUPER";
   in {
     wayland.windowManager.hyprland.settings = {
@@ -61,7 +57,7 @@
               urgent = "rgba(ff223340)";
               "urgent.border" = "rgba(ff2233ee)";
               "urgent.text" = "rgba(ffffffff)";
-  
+
               locked = "rgba(90903340)";
               "locked.border" = "rgba(909033ee)";
               "locked.text" = "rgba(ffffffff)";
@@ -112,4 +108,4 @@
       ];
     };
   };
-} 
+}

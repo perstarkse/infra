@@ -21,7 +21,7 @@ in {
         DEFAULT = "https://duckduckgo.com/?q={}";
         nw = "https://nixos.wiki/index.php?search={}&go=Go";
         mn = "https://mynixos.com/search?q={}";
-        };
+      };
       settings =
         {
           editor.command = [osConfig.my.gui._terminalCommand "hx" "{file}"];

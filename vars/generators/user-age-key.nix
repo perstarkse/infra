@@ -18,7 +18,7 @@
       cp "$prompts/key" "$out/key"
     '';
     meta = {
-      tags = [ "user" "user-age" ];
+      tags = ["user" "user-age"];
     };
   };
-} 
+}

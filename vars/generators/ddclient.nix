@@ -17,7 +17,7 @@
       cp "$prompts/ddclient.conf" "$out/ddclient.conf"
     '';
     meta = {
-      tags = [ "ddclient" "service" ];
+      tags = ["ddclient" "service"];
     };
   };
-} 
+}

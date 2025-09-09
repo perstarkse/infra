@@ -1,9 +1,5 @@
 {
-  config.flake.homeModules.xdg-userdirs = {
-    pkgs,
-    config,
-    ...
-  }: {
+  config.flake.homeModules.xdg-userdirs = {config, ...}: {
     config = {
       xdg.userDirs = {
         enable = true;

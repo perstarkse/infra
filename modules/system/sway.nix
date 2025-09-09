@@ -1,4 +1,4 @@
-{inputs, ...}: {
+{
   config.flake.nixosModules.sway = {
     pkgs,
     config,
@@ -21,4 +21,4 @@
       services.displayManager.sessionPackages = [pkgs.sway];
     };
   };
-} 
+}

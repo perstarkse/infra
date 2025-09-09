@@ -1,5 +1,9 @@
 {
-  config.flake.homeModules.xdg-mimeapps = {pkgs, osConfig, ...}: {
+  config.flake.homeModules.xdg-mimeapps = {
+    pkgs,
+    osConfig,
+    ...
+  }: {
     xdg.mimeApps = {
       enable = true;
       defaultApplications = {
@@ -34,7 +38,6 @@
       terminal = false;
       mimeType = ["inode/directory"];
     };
-
 
     xdg.desktopEntries.mupdf = {
       name = "MuPDF";

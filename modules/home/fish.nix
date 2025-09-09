@@ -1,9 +1,7 @@
 {
   config.flake.homeModules.fish = {
-    config,
-    lib,
-    osConfig,
     pkgs,
+    osConfig,
     ...
   }: {
     programs.fish = {

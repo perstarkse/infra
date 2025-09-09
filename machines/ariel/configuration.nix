@@ -130,7 +130,6 @@
 
   my.secrets.generateManifest = false;
 
-
   nixpkgs.config.allowUnfree = true;
 
   my.mainUser.name = "p";
@@ -155,7 +154,7 @@
     greeting = "Enter the heliosphere via ariel!";
   };
 
-    my.gui = {
+  my.gui = {
     enable = true;
     session = "sway";
     terminal = "kitty";

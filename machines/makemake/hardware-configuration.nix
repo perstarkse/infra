@@ -12,7 +12,7 @@
   boot.initrd.kernelModules = ["vfio-pci"];
   boot.kernelModules = ["kvm-intel" "vfio-pci" "iommu"];
   boot.kernelParams = ["intel_iommu=on" "iommu=pt"];
-  
+
   # boot.postBootCommands = ''
   #   DEVS="0000:02:00.0 0000:03:00.0 0000:04:00.0"
 

@@ -16,10 +16,10 @@
       };
     };
     script = ''
-        cp "$prompts/api-token" "$out/api-token"
+      cp "$prompts/api-token" "$out/api-token"
     '';
     meta = {
-      tags = [ "cloudflare" "api-key" "dns" ];
+      tags = ["cloudflare" "api-key" "dns"];
     };
   };
-} 
+}

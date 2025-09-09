@@ -18,7 +18,7 @@
       cp "$prompts/key" "$out/key"
     '';
     meta = {
-        tags = [ "user" "user-ssh" ];
+      tags = ["user" "user-ssh"];
     };
   };
-} 
+}
