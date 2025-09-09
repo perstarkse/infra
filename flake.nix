@@ -188,9 +188,6 @@
         ...
       }: let
         inherit (pkgs) lib;
-        # Cleaned copy of the repo for tooling checks
-        src = lib.cleanSource ./.;
-
         nixosConfigs = config.flake.nixosConfigurations or {};
         buildChecks = lib.mapAttrs (
           _: cfg: cfg.config.system.build.toplevel
@@ -199,6 +196,8 @@
         treefmt = {
           projectRootFile = "flake.nix";
           programs.alejandra.enable = true;
+          programs.statix.enable = true;
+          programs.deadnix.enable = true;
         };
 
         formatter = config.treefmt.build.wrapper;
@@ -212,20 +211,8 @@
           ];
         };
 
-        # Flake checks: formatting, lint, dead code, and per-host builds
-        checks =
-          buildChecks
-          // {
-            statix = pkgs.runCommandLocal "statix-check" {nativeBuildInputs = [pkgs.statix];} ''
-              statix check ${src}
-              : > $out
-            '';
-
-            deadnix = pkgs.runCommandLocal "deadnix-check" {nativeBuildInputs = [pkgs.deadnix];} ''
-              deadnix --fail ${src}
-              : > $out
-            '';
-          };
+        # Flake checks: treefmt (module-provided) + per-host builds
+        checks = buildChecks;
       };
     });
 }
