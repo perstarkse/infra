@@ -86,53 +86,7 @@
     home.stateVersion = "25.11";
   };
 
-  my.secrets.discover = {
-    enable = true;
-    dir = ../../vars/generators;
-    includeTags = ["aws" "openai" "openrouter" "user" "b2"];
-  };
-
-  my.secrets.exposeUserSecrets = [
-    {
-      enable = true;
-      secretName = "user-ssh-key";
-      file = "key";
-      user = config.my.mainUser.name;
-      dest = "/home/${config.my.mainUser.name}/.ssh/id_ed25519";
-    }
-    {
-      enable = true;
-      secretName = "user-age-key";
-      file = "key";
-      user = config.my.mainUser.name;
-      dest = "/home/${config.my.mainUser.name}/.config/sops/age/keys.txt";
-    }
-  ];
-
-  my.secrets.allowReadAccess = [
-    {
-      readers = [config.my.mainUser.name];
-      path = config.my.secrets.getPath "api-key-openai" "api_key";
-    }
-    {
-      readers = [config.my.mainUser.name];
-      path = config.my.secrets.getPath "api-key-openrouter" "api_key";
-    }
-    {
-      readers = [config.my.mainUser.name];
-      path = config.my.secrets.getPath "api-key-aws-access" "aws_access_key_id";
-    }
-    {
-      readers = [config.my.mainUser.name];
-      path = config.my.secrets.getPath "api-key-aws-secret" "aws_secret_access_key";
-    }
-  ];
-
-  my.secrets.generateManifest = false;
-
   nixpkgs.config.allowUnfree = true;
-
-  my.mainUser.name = "p";
 
   time.timeZone = "Europe/Stockholm";
 
@@ -148,22 +102,72 @@
   services.blueman.enable = true;
 
   security.polkit.enable = true;
+  my = {
+    secrets = {
+      discover = {
+        enable = true;
+        dir = ../../vars/generators;
+        includeTags = ["aws" "openai" "openrouter" "user" "b2"];
+      };
 
-  my.greetd = {
-    enable = true;
-    greeting = "Enter the heliosphere via ariel!";
+      exposeUserSecrets = [
+        {
+          enable = true;
+          secretName = "user-ssh-key";
+          file = "key";
+          user = config.my.mainUser.name;
+          dest = "/home/${config.my.mainUser.name}/.ssh/id_ed25519";
+        }
+        {
+          enable = true;
+          secretName = "user-age-key";
+          file = "key";
+          user = config.my.mainUser.name;
+          dest = "/home/${config.my.mainUser.name}/.config/sops/age/keys.txt";
+        }
+      ];
+
+      allowReadAccess = [
+        {
+          readers = [config.my.mainUser.name];
+          path = config.my.secrets.getPath "api-key-openai" "api_key";
+        }
+        {
+          readers = [config.my.mainUser.name];
+          path = config.my.secrets.getPath "api-key-openrouter" "api_key";
+        }
+        {
+          readers = [config.my.mainUser.name];
+          path = config.my.secrets.getPath "api-key-aws-access" "aws_access_key_id";
+        }
+        {
+          readers = [config.my.mainUser.name];
+          path = config.my.secrets.getPath "api-key-aws-secret" "aws_secret_access_key";
+        }
+      ];
+
+      generateManifest = false;
+    };
+
+    mainUser.name = "p";
+
+    greetd = {
+      enable = true;
+      greeting = "Enter the heliosphere via ariel!";
+    };
+
+    gui = {
+      enable = true;
+      session = "sway";
+      terminal = "kitty";
+    };
   };
+  networking = {
+    # Allow localsend receive port
+    firewall.allowedTCPPorts = [53317];
 
-  my.gui = {
-    enable = true;
-    session = "sway";
-    terminal = "kitty";
-  };
-
-  # Allow localsend receive port
-  networking.firewall.allowedTCPPorts = [53317];
-
-  networking.wireless.enable = true;
-  networking.wireless.networks = {
+    wireless.enable = true;
+    wireless.networks = {
+    };
   };
 }

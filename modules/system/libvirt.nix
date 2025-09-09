@@ -207,14 +207,123 @@
     };
 
     config = lib.mkIf cfg.enable {
-      virtualisation.libvirt = {
-        enable = true;
-        verbose = true;
-        swtpm.enable = true;
-      };
+      virtualisation = {
+        libvirt = {
+          enable = true;
+          verbose = true;
+          swtpm.enable = true;
+        };
 
-      # Enable SPICE USB redirection if requested
-      virtualisation.spiceUSBRedirection.enable = cfg.spiceUSBRedirection;
+        # Enable SPICE USB redirection if requested
+        spiceUSBRedirection.enable = cfg.spiceUSBRedirection;
+
+        # Configure networks using NixVirt templates
+        libvirt.connections."qemu:///system" = {
+          networks = lib.mkIf (cfg.networks != []) (
+            map (network: {
+              definition = inputs.NixVirt.lib.network.writeXML (
+                if network.mode == "bridge"
+                then
+                  inputs.NixVirt.lib.network.templates.bridge {
+                    inherit (network) uuid;
+                    subnet_byte = lib.toInt (lib.last (lib.splitString "." network.gateway));
+                  }
+                else if network.mode == "isolated"
+                then {
+                  inherit (network) name;
+                  inherit (network) uuid;
+                  forward = {
+                    mode = "none";
+                  };
+                  mac = {
+                    address = "52:54:00:02:77:4b";
+                  };
+                  ip = {
+                    address = "192.168.122.1";
+                    netmask = "255.255.255.0";
+                    dhcp = {
+                      range = {
+                        start = "192.168.122.2";
+                        end = "192.168.122.254";
+                      };
+                    };
+                  };
+                }
+                else {
+                  inherit (network) name;
+                  inherit (network) uuid;
+                  forward = {
+                    inherit (network) mode;
+                    nat = lib.mkIf (network.mode == "nat") {
+                      port = {
+                        start = 1024;
+                        end = 65535;
+                      };
+                    };
+                  };
+                  mac = {
+                    address = "52:54:00:02:77:4b";
+                  };
+                  ip = {
+                    address = network.gateway;
+                    netmask = "255.255.255.0";
+                    dhcp = {
+                      range = {
+                        start = network.dhcpStart;
+                        end = network.dhcpEnd;
+                      };
+                    };
+                  };
+                }
+              );
+              active = true;
+              restart = true;
+            })
+            cfg.networks
+          );
+
+          domains = lib.mkIf (cfg.domains != []) (
+            map (domain: {
+              definition = let
+                templateFunc =
+                  {
+                    "linux" = inputs.NixVirt.lib.domain.templates.linux;
+                    "windows" = inputs.NixVirt.lib.domain.templates.windows;
+                    "q35" = inputs.NixVirt.lib.domain.templates.q35;
+                    "pc" = inputs.NixVirt.lib.domain.templates.pc;
+                  }.${
+                    domain.template
+                  };
+
+                templateArgs =
+                  {
+                    inherit (domain) name;
+                    inherit (domain) uuid;
+                    inherit (domain) memory;
+                    storage_vol = domain.storageVol;
+                    backing_vol = domain.backingVol;
+                    install_vol = domain.installVol;
+                    bridge_name = domain.bridgeName;
+                    virtio_net = domain.virtioNet;
+                    virtio_video = domain.virtioVideo;
+                    virtio_drive = domain.virtioDrive;
+                  }
+                  // lib.optionalAttrs (domain.template == "windows") {
+                    nvram_path = domain.nvramPath;
+                    install_virtio = domain.installVirtio;
+                  };
+              in
+                inputs.NixVirt.lib.domain.writeXML (templateFunc templateArgs);
+              inherit (domain) active;
+              inherit (domain) restart;
+            })
+            cfg.domains
+          );
+        };
+
+        # Allow bridges for qemu-bridge-helper
+        libvirtd.allowedBridges = ["virbr0" "virbr1" "virbr2" "virbr3" "virbr4" "virbr5"];
+      };
 
       environment.systemPackages = with pkgs; [
         dnsmasq
@@ -262,110 +371,6 @@
         path = [pkgs.libvirt];
       };
 
-      # Configure networks using NixVirt templates
-      virtualisation.libvirt.connections."qemu:///system" = {
-        networks = lib.mkIf (cfg.networks != []) (
-          map (network: {
-            definition = inputs.NixVirt.lib.network.writeXML (
-              if network.mode == "bridge"
-              then
-                inputs.NixVirt.lib.network.templates.bridge {
-                  uuid = network.uuid;
-                  subnet_byte = lib.toInt (lib.last (lib.splitString "." network.gateway));
-                }
-              else if network.mode == "isolated"
-              then {
-                name = network.name;
-                uuid = network.uuid;
-                forward = {
-                  mode = "none";
-                };
-                mac = {
-                  address = "52:54:00:02:77:4b";
-                };
-                ip = {
-                  address = "192.168.122.1";
-                  netmask = "255.255.255.0";
-                  dhcp = {
-                    range = {
-                      start = "192.168.122.2";
-                      end = "192.168.122.254";
-                    };
-                  };
-                };
-              }
-              else {
-                name = network.name;
-                uuid = network.uuid;
-                forward = {
-                  mode = network.mode;
-                  nat = lib.mkIf (network.mode == "nat") {
-                    port = {
-                      start = 1024;
-                      end = 65535;
-                    };
-                  };
-                };
-                mac = {
-                  address = "52:54:00:02:77:4b";
-                };
-                ip = {
-                  address = network.gateway;
-                  netmask = "255.255.255.0";
-                  dhcp = {
-                    range = {
-                      start = network.dhcpStart;
-                      end = network.dhcpEnd;
-                    };
-                  };
-                };
-              }
-            );
-            active = true;
-            restart = true;
-          })
-          cfg.networks
-        );
-
-        domains = lib.mkIf (cfg.domains != []) (
-          map (domain: {
-            definition = let
-              templateFunc =
-                {
-                  "linux" = inputs.NixVirt.lib.domain.templates.linux;
-                  "windows" = inputs.NixVirt.lib.domain.templates.windows;
-                  "q35" = inputs.NixVirt.lib.domain.templates.q35;
-                  "pc" = inputs.NixVirt.lib.domain.templates.pc;
-                }.${
-                  domain.template
-                };
-
-              templateArgs =
-                {
-                  name = domain.name;
-                  uuid = domain.uuid;
-                  memory = domain.memory;
-                  storage_vol = domain.storageVol;
-                  backing_vol = domain.backingVol;
-                  install_vol = domain.installVol;
-                  bridge_name = domain.bridgeName;
-                  virtio_net = domain.virtioNet;
-                  virtio_video = domain.virtioVideo;
-                  virtio_drive = domain.virtioDrive;
-                }
-                // lib.optionalAttrs (domain.template == "windows") {
-                  nvram_path = domain.nvramPath;
-                  install_virtio = domain.installVirtio;
-                };
-            in
-              inputs.NixVirt.lib.domain.writeXML (templateFunc templateArgs);
-            active = domain.active;
-            restart = domain.restart;
-          })
-          cfg.domains
-        );
-      };
-
       # Firewall configuration for networks
       networking.firewall = {
         allowedTCPPorts = lib.concatLists (map (network: network.firewallPorts.tcp) cfg.networks);
@@ -382,9 +387,6 @@
               cfg.networks))
         );
       };
-
-      # Allow bridges for qemu-bridge-helper
-      virtualisation.libvirtd.allowedBridges = ["virbr0" "virbr1" "virbr2" "virbr3" "virbr4" "virbr5"];
     };
   };
 }

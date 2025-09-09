@@ -1,8 +1,4 @@
 {
-  lib,
-  config,
-  ...
-}: {
   config.flake.nixosModules.router-firewall = {
     lib,
     config,
@@ -11,14 +7,11 @@
     cfg = config.my.router;
     helpers = config.routerHelpers or {};
     lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
-    ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     wan = helpers.wanInterface or cfg.wan.interface;
-    lanCidr = helpers.lanCidr or "${lanSubnet}.0/24";
-    _unused = [lanCidr ulaPrefix];
 
     machinesByName = lib.listToAttrs (map (m: lib.nameValuePair m.name m) cfg.machines);
     forwardRules = lib.concatStringsSep "\n" (lib.mapAttrsToList (
-        machineName: machine:
+        _: machine:
           lib.concatStringsSep "\n" (map (
               pf: "iifname \"${wan}\" oifname \"br-lan\" ip daddr ${lanSubnet}.${machine.ip} ${pf.protocol} dport ${toString pf.port} accept"
             )
@@ -26,7 +19,7 @@
       )
       machinesByName);
     dnatRules = lib.concatStringsSep "\n" (lib.mapAttrsToList (
-        machineName: machine:
+        _: machine:
           lib.concatStringsSep "\n" (map (
               pf: "iifname \"${wan}\" ${pf.protocol} dport ${toString pf.port} dnat to ${lanSubnet}.${machine.ip}"
             )

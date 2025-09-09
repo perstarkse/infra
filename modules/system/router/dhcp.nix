@@ -1,8 +1,4 @@
 {
-  lib,
-  config,
-  ...
-}: {
   config.flake.nixosModules.router-dhcp = {
     lib,
     config,
@@ -16,7 +12,7 @@
     routerIp = helpers.routerIp or "${lanSubnet}.1";
     dhcpStart = helpers.dhcpStart or "${lanSubnet}.${toString cfg.lan.dhcpRange.start}";
     dhcpEnd = helpers.dhcpEnd or "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
-    machines = cfg.machines;
+    inherit (cfg) machines;
     enabled = cfg.enable && dhcpCfg.enable;
   in {
     config = lib.mkIf enabled {

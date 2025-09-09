@@ -9,33 +9,35 @@
     enabled = cfg.enable && mon.enable;
   in {
     config = lib.mkIf enabled {
-      services.netdata = lib.mkIf mon.netdata.enable {
-        enable = true;
-        config.global = {
-          "bind to" = mon.netdata.bindAddress;
+      services = {
+        netdata = lib.mkIf mon.netdata.enable {
+          enable = true;
+          config.global = {
+            "bind to" = mon.netdata.bindAddress;
+          };
         };
-      };
 
-      services.ntopng = lib.mkIf mon.ntopng.enable {
-        enable = true;
-        httpPort = mon.ntopng.httpPort;
-        interfaces = mon.ntopng.interfaces;
-      };
-
-      services.grafana = lib.mkIf mon.grafana.enable {
-        enable = true;
-        settings.server = {
-          http_addr = mon.grafana.httpAddr;
-          http_port = mon.grafana.httpPort;
+        ntopng = lib.mkIf mon.ntopng.enable {
+          enable = true;
+          inherit (mon.ntopng) httpPort;
+          inherit (mon.ntopng) interfaces;
         };
-        dataDir = mon.grafana.dataDir;
-      };
 
-      services.prometheus = lib.mkIf mon.prometheus.enable {
-        enable = true;
-        port = mon.prometheus.port;
-        exporters = mon.prometheus.exporters;
-        scrapeConfigs = mon.prometheus.scrapeConfigs;
+        grafana = lib.mkIf mon.grafana.enable {
+          enable = true;
+          settings.server = {
+            http_addr = mon.grafana.httpAddr;
+            http_port = mon.grafana.httpPort;
+          };
+          inherit (mon.grafana) dataDir;
+        };
+
+        prometheus = lib.mkIf mon.prometheus.enable {
+          enable = true;
+          inherit (mon.prometheus) port;
+          inherit (mon.prometheus) exporters;
+          inherit (mon.prometheus) scrapeConfigs;
+        };
       };
     };
   };

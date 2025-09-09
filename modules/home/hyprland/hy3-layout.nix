@@ -1,4 +1,4 @@
-{...}: {
+{
   config.flake.homeModules.hy3-layout = {lib, ...}: let
     mainMod = "SUPER";
   in {

@@ -45,8 +45,22 @@
     };
 
     services.avahi.enable = true;
+    users = {
+      mutableUsers = false;
 
-    users.mutableUsers = false;
+      groups.secret-readers = {};
+
+      users.${mainUser} = {
+        isNormalUser = true;
+        extraGroups = ["wheel" "networkmanager" "video" "input" "libvirtd" "kvm" "qemu-libvirtd" "secret-readers"];
+        uid = 1000;
+        shell = pkgs.fish;
+        openssh.authorizedKeys.keys =
+          # Combine root's keys with the user's extra keys
+          config.users.users.root.openssh.authorizedKeys.keys
+          ++ config.my.mainUser.extraSshKeys;
+      };
+    };
 
     programs.ssh = {
       startAgent = true;
@@ -64,18 +78,5 @@
     };
 
     nix.settings.trusted-users = ["root" mainUser];
-
-    users.groups.secret-readers = {};
-
-    users.users.${mainUser} = {
-      isNormalUser = true;
-      extraGroups = ["wheel" "networkmanager" "video" "input" "libvirtd" "kvm" "qemu-libvirtd" "secret-readers"];
-      uid = 1000;
-      shell = pkgs.fish;
-      openssh.authorizedKeys.keys =
-        # Combine root's keys with the user's extra keys
-        config.users.users.root.openssh.authorizedKeys.keys
-        ++ config.my.mainUser.extraSshKeys;
-    };
   };
 }

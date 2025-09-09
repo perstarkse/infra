@@ -1,7 +1,13 @@
 {
-  boot.loader.grub.efiSupport = true;
-  boot.loader.grub.efiInstallAsRemovable = true;
-  boot.loader.grub.enable = true;
+  boot = {
+    loader = {
+      grub = {
+        efiSupport = true;
+        efiInstallAsRemovable = true;
+        enable = true;
+      };
+    };
+  };
   disko.devices = {
     disk = {
       main = {

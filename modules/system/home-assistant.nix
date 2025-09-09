@@ -4,11 +4,18 @@
       systemd.tmpfiles.rules = [
         "d /data/.state/home-assistant 0755 root root - -"
       ];
+      services = {
+        # System requirements for bluetooth
+        dbus.enable = true;
+        blueman.enable = true;
 
-      # System requirements for bluetooth
-      services.dbus.enable = true;
+        # Persistent device rules
+        udev.extraRules = ''
+          SUBSYSTEM=="tty", ATTRS{idVendor}=="1cf1", ATTRS{idProduct}=="0030", SYMLINK+="conbee", MODE="0666"
+          SUBSYSTEM=="usb", ATTRS{idVendor}=="0a12", ATTRS{idProduct}=="0001", SYMLINK+="bluetooth_dongle", MODE="0666"
+        '';
+      };
       hardware.bluetooth.enable = true;
-      services.blueman.enable = true;
 
       networking.firewall.allowedTCPPorts = [8123 1400];
 
@@ -31,12 +38,6 @@
           ];
         };
       };
-
-      # Persistent device rules
-      services.udev.extraRules = ''
-        SUBSYSTEM=="tty", ATTRS{idVendor}=="1cf1", ATTRS{idProduct}=="0030", SYMLINK+="conbee", MODE="0666"
-        SUBSYSTEM=="usb", ATTRS{idVendor}=="0a12", ATTRS{idProduct}=="0001", SYMLINK+="bluetooth_dongle", MODE="0666"
-      '';
     };
   };
 }

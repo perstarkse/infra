@@ -1,4 +1,4 @@
-{...}: {
+{
   config.flake.homeModules.waybar = {
     lib,
     config,

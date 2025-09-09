@@ -25,7 +25,7 @@
         terminal = osConfig.my.gui._terminalCommand;
       in {
         modifier = mod;
-        terminal = terminal;
+        inherit terminal;
 
         workspaceAutoBackAndForth = true;
         defaultWorkspace = "workspace number 1";

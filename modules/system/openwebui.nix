@@ -70,11 +70,39 @@
     config = lib.mkIf cfg.enable {
       # Enable OCI containers (Podman)
       virtualisation.oci-containers.backend = "podman";
+      systemd = {
+        # Ensure data directory exists
+        tmpfiles.rules = [
+          "d ${cfg.dataDir} 0755 root root - -"
+        ];
 
-      # Ensure data directory exists
-      systemd.tmpfiles.rules = [
-        "d ${cfg.dataDir} 0755 root root - -"
-      ];
+        # Auto-update service for container
+        services.openwebui-update = lib.mkIf cfg.autoUpdate {
+          description = "Update OpenWebUI container";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${pkgs.podman}/bin/podman pull ghcr.io/open-webui/open-webui:main";
+            ExecStartPost = "${pkgs.podman}/bin/podman container restart openwebui";
+          };
+        };
+
+        # Timer for automatic updates
+        timers.openwebui-update = lib.mkIf cfg.autoUpdate {
+          description = "Timer for OpenWebUI container updates";
+          wantedBy = ["timers.target"];
+          timerConfig = {
+            OnCalendar =
+              if cfg.updateSchedule == "daily"
+              then "daily"
+              else if cfg.updateSchedule == "weekly"
+              then "weekly"
+              else if cfg.updateSchedule == "monthly"
+              then "monthly"
+              else "weekly";
+            Persistent = true;
+          };
+        };
+      };
 
       # Firewall configuration
       networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;
@@ -90,33 +118,6 @@
         volumes = ["${cfg.dataDir}:/app/backend/data"];
         autoStart = true;
         # autoUpdate = cfg.autoUpdate;
-      };
-
-      # Auto-update service for container
-      systemd.services.openwebui-update = lib.mkIf cfg.autoUpdate {
-        description = "Update OpenWebUI container";
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = "${pkgs.podman}/bin/podman pull ghcr.io/open-webui/open-webui:main";
-          ExecStartPost = "${pkgs.podman}/bin/podman container restart openwebui";
-        };
-      };
-
-      # Timer for automatic updates
-      systemd.timers.openwebui-update = lib.mkIf cfg.autoUpdate {
-        description = "Timer for OpenWebUI container updates";
-        wantedBy = ["timers.target"];
-        timerConfig = {
-          OnCalendar =
-            if cfg.updateSchedule == "daily"
-            then "daily"
-            else if cfg.updateSchedule == "weekly"
-            then "weekly"
-            else if cfg.updateSchedule == "monthly"
-            then "monthly"
-            else "weekly";
-          Persistent = true;
-        };
       };
     };
   };

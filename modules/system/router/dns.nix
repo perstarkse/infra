@@ -1,8 +1,4 @@
 {
-  lib,
-  config,
-  ...
-}: {
   config.flake.nixosModules.router-dns = {
     lib,
     config,
@@ -15,8 +11,8 @@
     routerIp = helpers.routerIp or "${lanSubnet}.1";
     ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     lanCidr = helpers.lanCidr or "${lanSubnet}.0/24";
-    machines = cfg.machines;
-    services = cfg.services;
+    inherit (cfg) machines;
+    inherit (cfg) services;
     wgSubnet = (cfg.wireguard or {}).subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/24";
     enabled = cfg.enable && dnsCfg.enable;

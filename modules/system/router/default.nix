@@ -1,11 +1,5 @@
 {
-  config.flake.nixosModules.router = {
-    lib,
-    config,
-    pkgs,
-    modules,
-    ...
-  }: {
+  config.flake.nixosModules.router = {modules, ...}: {
     imports = with modules.nixosModules; [
       router-core
       router-network

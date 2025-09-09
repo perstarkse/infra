@@ -1,9 +1,4 @@
 {
-  lib,
-  config,
-  pkgs,
-  ...
-}: {
   config.flake.nixosModules.router-core = {
     lib,
     config,
@@ -12,7 +7,7 @@
     cfg = config.my.router;
     inherit (lib) mkEnableOption mkOption types;
 
-    machineSubmodule = types.submodule ({config, ...}: {
+    machineSubmodule = types.submodule {
       options = {
         name = mkOption {
           type = types.str;
@@ -27,7 +22,7 @@
           description = "MAC address for DHCP reservation";
         };
         portForwards = mkOption {
-          type = types.listOf (types.submodule ({...}: {
+          type = types.listOf (types.submodule {
             options = {
               port = mkOption {
                 type = types.int;
@@ -39,14 +34,14 @@
                 description = "Protocol to forward";
               };
             };
-          }));
+          });
           default = [];
           description = "Port forwarding rules for this machine";
         };
       };
-    });
+    };
 
-    serviceSubmodule = types.submodule ({...}: {
+    serviceSubmodule = types.submodule {
       options = {
         name = mkOption {
           type = types.str;
@@ -57,7 +52,7 @@
           description = "Target IP or hostname";
         };
       };
-    });
+    };
   in {
     options = {
       my.router = {
@@ -255,7 +250,7 @@
                   description = "Name of wildcard cert from nginx.wildcardCerts this vhost should use.";
                 };
                 acmeDns01 = mkOption {
-                  type = types.nullOr (types.submodule ({...}: {
+                  type = types.nullOr (types.submodule {
                     options = {
                       dnsProvider = mkOption {
                         type = types.str;
@@ -272,7 +267,7 @@
                         description = "Group that should own read access to issued certificates";
                       };
                     };
-                  }));
+                  });
                   default = null;
                   description = "Per-vhost DNS-01 ACME settings";
                 };
@@ -394,7 +389,7 @@
             description = "Add route/forwarding between VPN and LAN";
           };
           peers = mkOption {
-            type = types.listOf (types.submodule ({...}: {
+            type = types.listOf (types.submodule {
               options = {
                 name = mkOption {
                   type = types.str;
@@ -414,7 +409,7 @@
                   description = "Peer PersistentKeepalive seconds (null to disable)";
                 };
               };
-            }));
+            });
             default = [];
             description = "List of WireGuard peers";
           };
@@ -439,7 +434,7 @@
         dhcpEnd = "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
       in {
         inherit lanSubnet lanCidr routerIp dhcpStart dhcpEnd;
-        ulaPrefix = cfg.ipv6.ulaPrefix;
+        inherit (cfg.ipv6) ulaPrefix;
         wanInterface = cfg.wan.interface;
         lanInterfaces = cfg.lan.interfaces;
       };

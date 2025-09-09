@@ -1,9 +1,5 @@
 {
-  config.flake.homeModules.fish = {
-    pkgs,
-    osConfig,
-    ...
-  }: {
+  config.flake.homeModules.fish = {pkgs, ...}: {
     programs.fish = {
       enable = true;
       interactiveShellInit = ''

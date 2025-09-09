@@ -9,7 +9,7 @@
     cfg = config.my.backups;
   in {
     options.my.backups = mkOption {
-      type = types.attrsOf (types.submodule ({...}: {
+      type = types.attrsOf (types.submodule {
         options = {
           enable = mkEnableOption "Enable this backup job";
           path = mkOption {type = types.str;};
@@ -75,7 +75,7 @@
             };
           };
         };
-      }));
+      });
       default = {};
     };
 
@@ -217,7 +217,7 @@
                   (map (p: "--include=" + p) backup.include)
                   ++ (map (p: "--exclude=" + p) backup.exclude);
                 timerConfig.OnCalendar = backup.frequency;
-                pruneOpts = backup.pruneOpts;
+                inherit (backup) pruneOpts;
               }
           )
           cfg;

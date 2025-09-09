@@ -7,7 +7,7 @@
   }: let
     cfg = config.my.minecraft;
 
-    modItemType = lib.types.submodule ({...}: {
+    modItemType = lib.types.submodule {
       options = {
         name = lib.mkOption {
           type = lib.types.str;
@@ -22,9 +22,9 @@
           description = "sha512 of the mod JAR";
         };
       };
-    });
+    };
 
-    serverType = lib.types.submodule ({...}: {
+    serverType = lib.types.submodule {
       options = {
         enable = lib.mkOption {
           type = lib.types.bool;
@@ -55,7 +55,7 @@
           description = "Server properties";
         };
       };
-    });
+    };
   in {
     imports = [inputs.nix-minecraft.nixosModules.minecraft-servers];
 
@@ -86,26 +86,26 @@
 
       services.minecraft-servers = {
         enable = true;
-        eula = cfg.eula;
-        openFirewall = cfg.openFirewall;
+        inherit (cfg) eula;
+        inherit (cfg) openFirewall;
         servers =
           lib.mapAttrs (_: sCfg: {
-            enable = sCfg.enable;
-            package = sCfg.package;
-            openFirewall = sCfg.openFirewall;
+            inherit (sCfg) enable;
+            inherit (sCfg) package;
+            inherit (sCfg) openFirewall;
             symlinks = lib.mkIf (sCfg.mods != []) {
               mods = pkgs.linkFarmFromDrvs "mods" (builtins.attrValues (
                 builtins.listToAttrs (map (m: {
-                    name = m.name;
+                    inherit (m) name;
                     value = pkgs.fetchurl {
-                      url = m.url;
-                      sha512 = m.sha512;
+                      inherit (m) url;
+                      inherit (m) sha512;
                     };
                   })
                   sCfg.mods)
               ));
             };
-            serverProperties = sCfg.serverProperties;
+            inherit (sCfg) serverProperties;
           })
           cfg.servers;
       };

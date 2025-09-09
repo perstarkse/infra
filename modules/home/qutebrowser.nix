@@ -25,9 +25,11 @@ in {
       settings =
         {
           editor.command = [osConfig.my.gui._terminalCommand "hx" "{file}"];
-          content.javascript.clipboard = "access-paste";
-          content.pdfjs = !enableTor;
-          content.javascript.enabled = !enableTor;
+          content = {
+            javascript.clipboard = "access-paste";
+            pdfjs = !enableTor;
+            javascript.enabled = !enableTor;
+          };
         }
         // lib.optionalAttrs enableTor {
           settings.content.proxy = "socks://localhost:9050";

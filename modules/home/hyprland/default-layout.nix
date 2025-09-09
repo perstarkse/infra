@@ -1,5 +1,5 @@
-{...}: {
-  config.flake.homeModules.default-layout = {...}: let
+{
+  config.flake.homeModules.default-layout = let
     mainMod = "SUPER";
   in {
     wayland.windowManager.hyprland.settings = {

@@ -57,8 +57,8 @@
     config = {
       # Vaultwarden service configuration
       services.vaultwarden = {
-        enable = cfg.enable;
-        backupDir = cfg.backupDir;
+        inherit (cfg) enable;
+        inherit (cfg) backupDir;
         config = {
           ROCKET_PORT = cfg.port;
           ROCKET_ADDRESS = cfg.address;

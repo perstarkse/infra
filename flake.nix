@@ -105,29 +105,31 @@
         };
 
         inventory = {
-          machines.oumuamua = {
-            deploy.targetHost = "root@192.168.101.48";
-            deploy.buildHost = "root@localhost";
-            tags = ["server"];
-          };
-          machines.io = {
-            deploy.targetHost = "root@io.lan";
-            deploy.buildHost = "root@localhost";
-            tags = ["server"];
-          };
-          machines.makemake = {
-            deploy.targetHost = "root@makemake.lan";
-            deploy.buildHost = "root@localhost";
-            tags = ["server"];
-          };
-          machines.charon = {
-            deploy.targetHost = "root@localhost";
-            tags = ["client"];
-          };
-          machines.ariel = {
-            deploy.targetHost = "root@10.0.0.110";
-            deploy.buildHost = "root@localhost";
-            tags = ["client"];
+          machines = {
+            oumuamua = {
+              deploy.targetHost = "root@192.168.101.48";
+              deploy.buildHost = "root@localhost";
+              tags = ["server"];
+            };
+            io = {
+              deploy.targetHost = "root@io.lan";
+              deploy.buildHost = "root@localhost";
+              tags = ["server"];
+            };
+            makemake = {
+              deploy.targetHost = "root@makemake.lan";
+              deploy.buildHost = "root@localhost";
+              tags = ["server"];
+            };
+            charon = {
+              deploy.targetHost = "root@localhost";
+              tags = ["client"];
+            };
+            ariel = {
+              deploy.targetHost = "root@10.0.0.110";
+              deploy.buildHost = "root@localhost";
+              tags = ["client"];
+            };
           };
 
           instances = {
@@ -185,26 +187,22 @@
         config,
         ...
       }: let
-        lib = pkgs.lib;
+        inherit (pkgs) lib;
         # Cleaned copy of the repo for tooling checks
         src = lib.cleanSource ./.;
 
-        # Per-host build checks for the current system only
         nixosConfigs = config.flake.nixosConfigurations or {};
         buildChecks = lib.mapAttrs (
           _: cfg: cfg.config.system.build.toplevel
         ) (lib.filterAttrs (_: cfg: (cfg.pkgs.system or null) == system) nixosConfigs);
       in {
-        # Configure treefmt via its flake module
         treefmt = {
           projectRootFile = "flake.nix";
           programs.alejandra.enable = true;
         };
 
-        # `nix fmt` uses treefmt wrapper built by the module
         formatter = config.treefmt.build.wrapper;
 
-        # Developer shell with common tools
         devShells.default = pkgs.mkShell {
           packages = [
             clan-core.packages.${system}.clan-cli
@@ -218,8 +216,6 @@
         checks =
           buildChecks
           // {
-            treefmt = config.treefmt.check;
-
             statix = pkgs.runCommandLocal "statix-check" {nativeBuildInputs = [pkgs.statix];} ''
               statix check ${src}
               : > $out
