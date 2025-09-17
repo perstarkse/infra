@@ -142,7 +142,7 @@
         }
       ];
 
-      generateManifest = false;
+      generateManifest = true;
     };
 
     backups = {
@@ -259,8 +259,7 @@
 
   hardware.cpu.amd.updateMicrocode = true;
 
-  # Did not work, fails entering suspend
-  # boot.kernelParams = ["ahci.mobile_lpm_policy=0"];
+  boot.kernelParams = ["libata.noacpi=1" "mem_sleep_default=s2idle"];
 
   boot.initrd.availableKernelModules = [
     "nvme"
@@ -270,6 +269,21 @@
     "usb_storage"
     "sd_mod"
   ];
+  # Did not work, fails entering suspend
+  # boot.kernelParams = ["ahci.mobile_lpm_policy=0"];
+
+  # Disable START STOP UNIT for the two Intel enterprise SSDs
+  # services.udev.extraRules = ''
+  #   ACTION=="add|change", SUBSYSTEM=="scsi_disk", KERNEL=="5:0:0:0|6:0:0:0", \
+  #     ATTR{manage_start_stop}="0"
+  # '';
+
+  # services.udev.extraRules = ''
+  #   # Intel enterprise SATA SSDs occasionally choke on STANDBY IMMEDIATE during suspend.
+  #   ACTION=="add|change", SUBSYSTEM=="scsi_disk", \
+  #     ATTRS{vendor}=="INTEL", ATTRS{model}=="SSDSC2KB03*", \
+  #     ATTR{manage_start_stop}="0"
+  # '';
 
   # Did not work
   # services.udev.extraRules = ''
