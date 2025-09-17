@@ -1,9 +1,5 @@
 {
-  config.flake.nixosModules.nvidia = {
-    config,
-    pkgs,
-    ...
-  }: {
+  config.flake.nixosModules.nvidia = {pkgs, ...}: {
     config = {
       hardware.graphics = {
         enable = true;

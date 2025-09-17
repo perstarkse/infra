@@ -1,7 +1,6 @@
 {inputs, ...}: {
   config.flake.homeModules.sway = {
     pkgs,
-    config,
     lib,
     osConfig,
     ...

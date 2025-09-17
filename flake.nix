@@ -195,9 +195,11 @@
       in {
         treefmt = {
           projectRootFile = "flake.nix";
-          programs.alejandra.enable = true;
-          programs.statix.enable = true;
-          programs.deadnix.enable = true;
+          programs = {
+            alejandra.enable = true;
+            statix.enable = true;
+            deadnix.enable = true;
+          };
         };
 
         formatter = config.treefmt.build.wrapper;
