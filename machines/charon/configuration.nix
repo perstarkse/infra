@@ -13,6 +13,7 @@
       options
       shared
       interception-tools
+      blinkstick
       system-stylix
       sway
       terminal
@@ -50,7 +51,7 @@
         qutebrowser
         looking-glass-client
         bitwarden-client
-        blinkstick-scripts
+        blinkstick
         mail-clients-setup
         ssh
         xdg-mimeapps

@@ -1,10 +1,10 @@
 {
-  config.flake.homeModules.blinkstick-scripts = {
+  config.flake.homeModules.blinkstick = {
     pkgs,
     lib,
     ...
   }: let
-    blinkStickPkg = pkgs.python3Packages.buildPythonPackage rec {
+    blinkStickPkg = pkgs.python3Packages.buildPythonPackage {
       pname = "blinkstick";
       version = "1.2";
 
@@ -60,5 +60,11 @@
     '';
   in {
     home.packages = [blinkstickScripts];
+  };
+
+  config.flake.nixosModules.blinkstick = {lib, ...}: {
+    services.udev.extraRules = lib.mkAfter ''
+      SUBSYSTEM=="usb", ATTR{idVendor}=="20a0", ATTR{idProduct}=="41e5", MODE:="0666"
+    '';
   };
 }
