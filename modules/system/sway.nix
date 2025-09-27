@@ -11,6 +11,7 @@
       environment.systemPackages = [
         pkgs.sway
         pkgs.wl-clipboard
+        pkgs.wireplumber
       ];
 
       environment.sessionVariables = {

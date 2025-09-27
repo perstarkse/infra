@@ -235,6 +235,7 @@
     bluetuith
     codex
     ripgrep
+    discord
   ];
 
   # Allow localsend receive port
@@ -260,16 +261,19 @@
 
   hardware.cpu.amd.updateMicrocode = true;
 
-  boot.kernelParams = ["libata.noacpi=1" "mem_sleep_default=s2idle"];
+  powerManagement.enable = true;
 
-  boot.initrd.availableKernelModules = [
-    "nvme"
-    "xhci_pci"
-    "ahci"
-    "usbhid"
-    "usb_storage"
-    "sd_mod"
-  ];
+  # boot.kernelParams = ["libata.noacpi=1" "mem_sleep_default=s2idle"];
+
+  # boot.initrd.availableKernelModules = [
+  #   "nvme"
+  #   "xhci_pci"
+  #   "ahci"
+  #   "usbhid"
+  #   "usb_storage"
+  #   "sd_mod"
+  # ];
+  #
   # Did not work, fails entering suspend
   # boot.kernelParams = ["ahci.mobile_lpm_policy=0"];
 
