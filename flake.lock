@@ -892,11 +892,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1758545656,
-        "narHash": "sha256-ttGUpeKdSL7uE4Rr+VJmtSAWED7kHVsfkIgVBOQnqU4=",
+        "lastModified": 1758638065,
+        "narHash": "sha256-wfkFjhMTj3TAJiuEWLwxbwLx6Ll/KS1/iXWU8AMZa7Y=",
         "owner": "perstarkse",
         "repo": "minne",
-        "rev": "a876c22de8b744d15a45d8f587b3e1cce80678db",
+        "rev": "03266cddfbe48f85b5ee3bb0894e485c820fafbb",
         "type": "github"
       },
       "original": {
@@ -1161,11 +1161,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1756152621,
-        "narHash": "sha256-qGzhrvZjraO8NhJipYiRNOmv93mxwjUlEE3tdPpbcs8=",
+        "lastModified": 1758617845,
+        "narHash": "sha256-fLPQTWLBP6IZldLxImD4UUH/Tai3BcKnC21QyYbwlcU=",
         "ref": "refs/heads/main",
-        "rev": "8535ad1f2ea87627a3bab14db00b3eaa457db8fd",
-        "revCount": 35,
+        "rev": "013d87e28170c2303694327b76366e42df881e47",
+        "revCount": 36,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },

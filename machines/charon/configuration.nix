@@ -234,7 +234,6 @@
     localsend
     bluetuith
     codex
-    ripgrep
     discord
   ];
 

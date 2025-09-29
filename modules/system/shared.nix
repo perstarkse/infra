@@ -28,6 +28,8 @@
       wget
       ranger
       kitty
+      ripgrep
+      fd
     ];
 
     i18n.defaultLocale = "en_US.UTF-8";
@@ -47,12 +49,11 @@
     services.avahi.enable = true;
     users = {
       mutableUsers = false;
-
-      groups.secret-readers = {};
+      defaultUserShell = pkgs.fish;
 
       users.${mainUser} = {
         isNormalUser = true;
-        extraGroups = ["wheel" "networkmanager" "video" "input" "libvirtd" "kvm" "qemu-libvirtd" "secret-readers"];
+        extraGroups = ["wheel" "networkmanager" "video" "input" "libvirtd" "kvm" "qemu-libvirtd"];
         uid = 1000;
         shell = pkgs.fish;
         openssh.authorizedKeys.keys =
