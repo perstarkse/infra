@@ -3,7 +3,10 @@
     lib,
     config,
     ...
-  }: {
+  }: let
+    kvmfrGroup = "kvmfr";
+    mainUser = config.my.mainUser.name;
+  in {
     options.my.vfio = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -48,9 +51,12 @@
         '';
       };
 
-      services.udev.extraRules = ''
-        SUBSYSTEM=="kvmfr", OWNER="root", GROUP="kvm", MODE="0777"
+      services.udev.extraRules = lib.mkAfter ''
+        SUBSYSTEM=="kvmfr", OWNER="root", GROUP="${kvmfrGroup}", MODE="0660"
       '';
+
+      users.groups.${kvmfrGroup} = {};
+      users.users.${mainUser}.extraGroups = lib.mkAfter [kvmfrGroup];
 
       programs.virt-manager.enable = true;
 

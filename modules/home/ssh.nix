@@ -1,31 +1,27 @@
 {
-  config.flake.homeModules.ssh = {
+  config.flake.homeModules.ssh = {...}: {
     programs.ssh = {
       enable = true;
       # Silence HM deprecation warning about default config removal
       enableDefaultConfig = false;
     };
 
-    # programs.keychain = {
-    #   enable = true;
-    #   keys = ["~/.ssh/id_ed25519"];
-    #   extraFlags = ["--timeout" "180" "--quiet"];
-    #   enableFishIntegration = true;
-    # };
-
     home.file.".ssh/config" = {
       text = ''
         Host *
-          ForwardAgent yes
+          ForwardAgent no
           AddKeysToAgent yes
           Compression no
           ServerAliveInterval 0
           ServerAliveCountMax 3
-          HashKnownHosts no
+          HashKnownHosts yes
           UserKnownHostsFile ~/.ssh/known_hosts
           ControlMaster no
           ControlPath ~/.ssh/master-%r@%n:%p
           ControlPersist no
+
+        Match user root host localhost,127.0.0.1,::1
+          ForwardAgent yes
       '';
     };
 
