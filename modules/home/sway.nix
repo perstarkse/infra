@@ -69,7 +69,7 @@
           "XF86AudioLowerVolume" = "exec ${pkgs.wireplumber}/bin/wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-";
           "XF86AudioMute" = "exec ${pkgs.wireplumber}/bin/wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle";
           "${mod}+d" = "exec ${pkgs.wofi}/bin/wofi --show drun";
-          "${mod}+a" = "exec, rofi-rbw";
+          "${mod}+a" = "exec rofi-rbw";
           "${mod}+Shift+q" = "kill";
           "${mod}+z" = "exec ${pkgs.grim}/bin/grim -g \"$(${pkgs.slurp}/bin/slurp)\" - | ${pkgs.wl-clipboard}/bin/wl-copy -t image/png";
           "${mod}+Shift+z" = "exec ${pkgs.grim}/bin/grim - | ${pkgs.wl-clipboard}/bin/wl-copy -t image/png";
