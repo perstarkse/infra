@@ -3,10 +3,7 @@
     lib,
     config,
     ...
-  }: let
-    kvmfrGroup = "kvmfr";
-    mainUser = config.my.mainUser.name;
-  in {
+  }: {
     options.my.vfio = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -32,7 +29,7 @@
 
     config = lib.mkIf config.my.vfio.enable {
       boot = {
-        initrd.kernelModules = ["vfio-pci"];
+        initrd.kernelModules = lib.mkBefore ["vfio-pci" "vfio_pci"];
         kernelModules = ["kvm-amd" "kvmfr"];
         kernelParams = [
           "amd_iommu=on"
@@ -48,15 +45,16 @@
         extraModulePackages = [config.boot.kernelPackages.kvmfr];
         extraModprobeConfig = ''
           options kvmfr static_size_mb=${builtins.toString config.my.vfio.kvmfrStaticSizeMb}
+          softdep nvidia pre: vfio-pci
+          softdep nvidia_drm pre: vfio-pci
+          softdep nvidia_modeset pre: vfio-pci
+          softdep i2c_nvidia_gpu pre: vfio-pci
         '';
       };
 
       services.udev.extraRules = lib.mkAfter ''
-        SUBSYSTEM=="kvmfr", OWNER="root", GROUP="${kvmfrGroup}", MODE="0660"
+        SUBSYSTEM=="kvmfr", OWNER="root", GROUP="kvm", MODE="0777"
       '';
-
-      users.groups.${kvmfrGroup} = {};
-      users.users.${mainUser}.extraGroups = lib.mkAfter [kvmfrGroup];
 
       programs.virt-manager.enable = true;
 
