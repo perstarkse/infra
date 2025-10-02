@@ -57,6 +57,7 @@
         xdg-mimeapps
         xdg-userdirs
         firefox
+        chromium
         sway
       ]
       ++ (with vars-helper.homeModules; [default])
