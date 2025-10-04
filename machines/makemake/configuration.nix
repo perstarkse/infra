@@ -103,7 +103,7 @@
 
     openwebui = {
       enable = true;
-      port = 7909;
+      port = 8080;
       autoUpdate = true;
       updateSchedule = "weekly";
     };

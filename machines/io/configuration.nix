@@ -171,7 +171,7 @@
           {
             domain = "chat.stark.pub";
             target = "makemake";
-            port = 7909;
+            port = 8080;
             websockets = true;
             cloudflareOnly = true;
           }

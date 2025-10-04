@@ -60,7 +60,7 @@
           };
         };
         default = {
-          tcp = [7909];
+          tcp = [8080];
           udp = [];
         };
         description = "Firewall port configuration for OpenWebUI";
@@ -113,10 +113,15 @@
         image = "ghcr.io/open-webui/open-webui:main";
         environment = {
           TZ = cfg.timezone;
+          HOST = "0.0.0.0";
+          # PORT = toString cfg.port;
         };
-        ports = ["${toString cfg.port}:8080"];
+        # ports = ["0.0.0.0:${toString cfg.port}:8080"];
         volumes = ["${cfg.dataDir}:/app/backend/data"];
         autoStart = true;
+        extraOptions = [
+          "--network=host"
+        ];
         # autoUpdate = cfg.autoUpdate;
       };
     };
