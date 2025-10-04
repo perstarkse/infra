@@ -77,7 +77,7 @@
           withRbw = true;
         };
         helix = {
-          languages = ["nix" "markdown" "rust" "jinja" "spellchecking"];
+          languages = ["nix" "typst" "markdown" "rust" "jinja" "spellchecking"];
         };
       };
 
