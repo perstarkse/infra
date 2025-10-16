@@ -55,6 +55,12 @@
             publicKey = "NWwGu+pFOMhV6r6mlE7efbe1qSEU8cPHKljl+j1Wxxo=";
             persistentKeepalive = 25;
           }
+          {
+            name = "bro";
+            ip = 3;
+            publicKey = "4MwZDpSFIPIs4ihfHjNJVPofc8Bjn5okCU2Kz6CUDh4=";
+            persistentKeepalive = 25;
+          }
         ];
       };
 

@@ -323,6 +323,11 @@
 
         # Allow bridges for qemu-bridge-helper
         libvirtd.allowedBridges = ["virbr0" "virbr1" "virbr2" "virbr3" "virbr4" "virbr5"];
+
+        # libvirtd.nss = {
+        #   enable = true;
+        #   enableGuest = true;
+        # };
       };
 
       environment.systemPackages = with pkgs; [

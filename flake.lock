@@ -892,15 +892,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1758638065,
-        "narHash": "sha256-wfkFjhMTj3TAJiuEWLwxbwLx6Ll/KS1/iXWU8AMZa7Y=",
+        "lastModified": 1760606647,
+        "narHash": "sha256-ojQcRraqDlNgZuiZMDBNd1Nwl6yunYcdJlCgeNp3JG0=",
         "owner": "perstarkse",
         "repo": "minne",
-        "rev": "03266cddfbe48f85b5ee3bb0894e485c820fafbb",
+        "rev": "199186e5a39d2e0766e16c817011735f46d638ea",
         "type": "github"
       },
       "original": {
         "owner": "perstarkse",
+        "ref": "development",
         "repo": "minne",
         "type": "github"
       }
@@ -1070,11 +1071,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1757347588,
-        "narHash": "sha256-tLdkkC6XnsY9EOZW9TlpesTclELy8W7lL2ClL+nma8o=",
+        "lastModified": 1759036355,
+        "narHash": "sha256-0m27AKv6ka+q270dw48KflE0LwQYrO7Fm4/2//KCVWg=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "b599843bad24621dcaa5ab60dac98f9b0eb1cabe",
+        "rev": "e9f00bd893984bc8ce46c895c3bf7cac95331127",
         "type": "github"
       },
       "original": {
@@ -1161,11 +1162,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1758617845,
-        "narHash": "sha256-fLPQTWLBP6IZldLxImD4UUH/Tai3BcKnC21QyYbwlcU=",
+        "lastModified": 1758873257,
+        "narHash": "sha256-wnXAcjxqM0d7LSgvFukzPyUONZ+KItJPacnfLFuE5MA=",
         "ref": "refs/heads/main",
-        "rev": "013d87e28170c2303694327b76366e42df881e47",
-        "revCount": 36,
+        "rev": "74f4e18058dea47765628c7394a4f635b0987e99",
+        "revCount": 37,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },
