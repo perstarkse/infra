@@ -15,7 +15,7 @@
       interception-tools
       blinkstick
       system-stylix
-      sway
+      niri
       terminal
       greetd
       ledger
@@ -58,7 +58,7 @@
         xdg-userdirs
         firefox
         chromium
-        sway
+        niri
       ]
       ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
@@ -82,7 +82,7 @@
       };
 
       waybar = {
-        windowManager = "sway";
+        windowManager = "niri";
       };
 
       secrets.wrappedHomeBinaries = [
@@ -218,7 +218,7 @@
 
     gui = {
       enable = true;
-      session = "sway";
+      session = "niri";
       terminal = "kitty";
     };
   };

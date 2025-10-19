@@ -26,7 +26,7 @@
         gui = {
           enable = lib.mkEnableOption "Enable GUI session management";
           session = lib.mkOption {
-            type = lib.types.enum ["hyprland" "sway"];
+            type = lib.types.enum ["hyprland" "sway" "niri"];
             default = "sway";
             description = "The Wayland session type to use";
           };

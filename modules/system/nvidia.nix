@@ -1,5 +1,29 @@
 {
-  config.flake.nixosModules.nvidia = {pkgs, ...}: {
+  config.flake.nixosModules.nvidia = {
+    pkgs,
+    lib,
+    config,
+    ...
+  }: let
+    cfg = config.my.gui;
+    bufferProfileName = "Limit Free Buffer Pool On Wayland Compositors";
+    bufferRules = [
+      {
+        pattern = {feature = "cmdline"; matches = "Hyprland";};
+        profile = bufferProfileName;
+      }
+      {
+        pattern = {feature = "cmdline"; matches = "niri-session";};
+        profile = bufferProfileName;
+      }
+    ];
+    bufferProfiles = [
+      {
+        name = bufferProfileName;
+        settings = [{key = "GLVidHeapReuseRatio"; value = 1;}];
+      }
+    ];
+  in {
     config = {
       hardware.graphics = {
         enable = true;
@@ -23,33 +47,22 @@
         forceFullCompositionPipeline = false;
         nvidiaSettings = true;
       };
-      environment = {
-        systemPackages = [pkgs.nvidia-vaapi-driver];
+      environment.systemPackages = [pkgs.nvidia-vaapi-driver];
 
-        sessionVariables = {
-          GBM_BACKEND = "nvidia-drm";
-          __GLX_VENDOR_LIBRARY_NAME = "nvidia";
-          LIBVA_DRIVER_NAME = "nvidia";
-          __NV_DISABLE_EXPLICIT_SYNC = "1"; # needed for looking glass https://github.com/gnif/LookingGlass/issues/1151
-          NVD_BACKEND = "direct";
-        };
+      environment.sessionVariables = lib.mkIf cfg.enable {
+        GBM_BACKEND = "nvidia-drm";
+        __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+        LIBVA_DRIVER_NAME = "nvidia";
+        __NV_DISABLE_EXPLICIT_SYNC = "1"; # needed for looking glass https://github.com/gnif/LookingGlass/issues/1151
+        NVD_BACKEND = "direct";
+      };
 
-        etc."nvidia/nvidia-application-profiles-rc.d/50-limit-free-buffer-pool.json".text = ''
-          {
-            "rules": [
-              {
-                "pattern": { "feature": "cmdline", "matches": "Hyprland" },
-                "profile": "Limit Free Buffer Pool On Wayland Compositors"
-              }
-            ],
-            "profiles": [
-              {
-                "name": "Limit Free Buffer Pool On Wayland Compositors",
-                "settings": [ { "key": "GLVidHeapReuseRatio", "value": 1 } ]
-              }
-            ]
-          }
-        '';
+      environment.etc = lib.mkIf cfg.enable {
+        "nvidia/nvidia-application-profiles-rc.d/50-limit-free-buffer-pool.json".text =
+          builtins.toJSON {
+            rules = bufferRules;
+            profiles = bufferProfiles;
+          };
       };
     };
   };

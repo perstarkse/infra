@@ -114,27 +114,54 @@
       };
     };
 
+    niriModules = {
+      "niri/workspaces" = {
+        "format" = "{icon}";
+        "on-scroll-up" = "niri msg action focus-workspace-up";
+        "on-scroll-down" = "niri msg action focus-workspace-down";
+      };
+      "niri/window" = {
+        "format" = "{}";
+        "rewrite" = {
+          "(.*) — qutebrowser " = "🌎 $1";
+          "(.*) - fish" = "> [$1]";
+        };
+        "separate-outputs" = true;
+      };
+      "niri/language" = {
+        "format" = "xkb: {}";
+      };
+    };
+
     wmModules =
       if cfg.windowManager == "hyprland"
       then hyprlandModules
-      else swayModules;
+      else if cfg.windowManager == "sway"
+      then swayModules
+      else niriModules;
     wmWorkspaces =
       if cfg.windowManager == "hyprland"
       then "hyprland/workspaces"
-      else "sway/workspaces";
+      else if cfg.windowManager == "sway"
+      then "sway/workspaces"
+      else "niri/workspaces";
     wmWindow =
       if cfg.windowManager == "hyprland"
       then "hyprland/window"
-      else "sway/window";
+      else if cfg.windowManager == "sway"
+      then "sway/window"
+      else "niri/window";
     wmLanguage =
       if cfg.windowManager == "hyprland"
       then "hyprland/language"
-      else "sway/language";
+      else if cfg.windowManager == "sway"
+      then "sway/language"
+      else "niri/language";
   in {
     options = {
       my.waybar = {
         windowManager = lib.mkOption {
-          type = lib.types.enum ["hyprland" "sway"];
+          type = lib.types.enum ["hyprland" "sway" "niri"];
           default = "hyprland";
           description = "The window manager to configure Waybar for";
         };
