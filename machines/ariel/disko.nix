@@ -13,7 +13,7 @@
   disko.devices = {
     disk = {
       main = {
-        name = "main-46eb98d12aef4a199121d642bd9dcc3e";
+        name = "main-c6ea0f2c7af6444e994e4fee0b606e2d";
         device = "/dev/disk/by-id/ata-Samsung_SSD_840_EVO_120GB_S1BUNSADB03918R";
         type = "disk";
         content = {
