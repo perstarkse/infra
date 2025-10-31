@@ -1608,7 +1608,7 @@
         "resources": [
           {
             "type": "hwaddr",
-            "address": 52
+            "address": 54
           },
           {
             "type": "phwaddr",
@@ -1805,6 +1805,47 @@
     "network_interface": [
       {
         "index": 36,
+        "attached_to": 12,
+        "class_list": [
+          "network_interface"
+        ],
+        "base_class": {
+          "hex": "0107",
+          "name": "Network Interface",
+          "value": 263
+        },
+        "sub_class": {
+          "hex": "000a",
+          "name": "WLAN",
+          "value": 10
+        },
+        "model": "WLAN network interface",
+        "sysfs_id": "/class/net/wlan0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:1c.2/0000:02:00.0",
+        "unix_device_names": [
+          "wlan0"
+        ],
+        "resources": [
+          {
+            "type": "hwaddr",
+            "address": 54
+          },
+          {
+            "type": "phwaddr",
+            "address": 97
+          }
+        ],
+        "driver": "iwlwifi",
+        "driver_module": "iwlwifi",
+        "drivers": [
+          "iwlwifi"
+        ],
+        "driver_modules": [
+          "iwlwifi"
+        ]
+      },
+      {
+        "index": 37,
         "attached_to": 0,
         "class_list": [
           "network_interface"
@@ -1826,7 +1867,7 @@
         ]
       },
       {
-        "index": 37,
+        "index": 38,
         "attached_to": 16,
         "class_list": [
           "network_interface"
@@ -1864,47 +1905,6 @@
         ],
         "driver_modules": [
           "r8169"
-        ]
-      },
-      {
-        "index": 38,
-        "attached_to": 12,
-        "class_list": [
-          "network_interface"
-        ],
-        "base_class": {
-          "hex": "0107",
-          "name": "Network Interface",
-          "value": 263
-        },
-        "sub_class": {
-          "hex": "000a",
-          "name": "WLAN",
-          "value": 10
-        },
-        "model": "WLAN network interface",
-        "sysfs_id": "/class/net/wlan0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:1c.2/0000:02:00.0",
-        "unix_device_names": [
-          "wlan0"
-        ],
-        "resources": [
-          {
-            "type": "hwaddr",
-            "address": 52
-          },
-          {
-            "type": "phwaddr",
-            "address": 97
-          }
-        ],
-        "driver": "iwlwifi",
-        "driver_module": "iwlwifi",
-        "drivers": [
-          "iwlwifi"
-        ],
-        "driver_modules": [
-          "iwlwifi"
         ]
       }
     ],

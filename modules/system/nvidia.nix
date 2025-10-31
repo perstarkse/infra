@@ -9,18 +9,29 @@
     bufferProfileName = "Limit Free Buffer Pool On Wayland Compositors";
     bufferRules = [
       {
-        pattern = {feature = "cmdline"; matches = "Hyprland";};
+        pattern = {
+          feature = "cmdline";
+          matches = "Hyprland";
+        };
         profile = bufferProfileName;
       }
       {
-        pattern = {feature = "cmdline"; matches = "niri-session";};
+        pattern = {
+          feature = "procname";
+          matches = "niri";
+        };
         profile = bufferProfileName;
       }
     ];
     bufferProfiles = [
       {
         name = bufferProfileName;
-        settings = [{key = "GLVidHeapReuseRatio"; value = 1;}];
+        settings = [
+          {
+            key = "GLVidHeapReuseRatio";
+            value = 1;
+          }
+        ];
       }
     ];
   in {
@@ -58,11 +69,10 @@
       };
 
       environment.etc = lib.mkIf cfg.enable {
-        "nvidia/nvidia-application-profiles-rc.d/50-limit-free-buffer-pool.json".text =
-          builtins.toJSON {
-            rules = bufferRules;
-            profiles = bufferProfiles;
-          };
+        "nvidia/nvidia-application-profiles-rc.d/50-limit-free-buffer-pool.json".text = builtins.toJSON {
+          rules = bufferRules;
+          profiles = bufferProfiles;
+        };
       };
     };
   };

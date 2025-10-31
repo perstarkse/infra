@@ -108,7 +108,16 @@
         '';
         gui = ''
           if test (count $argv) -gt 0
-            swaymsg exec -- $argv
+            if type -q niri
+              niri msg action spawn -- $argv
+            else if type -q swaymsg
+              swaymsg exec -- $argv
+            else if type -q hyprctl
+              hyprctl dispatch exec $argv
+            else
+              echo "No supported compositor control command found."
+              return 1
+            end
           else
             echo "Usage: gui <command>"
             return 1

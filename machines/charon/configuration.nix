@@ -59,6 +59,7 @@
         firefox
         chromium
         niri
+        node
       ]
       ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
@@ -95,6 +96,14 @@
           secretPath = config.my.secrets.getPath "api-key-openai" "api_key";
           useSystemdRun = true;
         }
+        {
+          name = "z-claude";
+          title = "z-claude";
+          setTerminalTitle = true;
+          command = "/home/p/.npm-global/bin/claude";
+          environmentFile = config.my.secrets.getPath "z-ai-env" "env";
+          useSystemdRun = false;
+        }
       ];
     };
 
@@ -105,7 +114,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "openai" "openrouter" "user" "b2"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2"];
       };
 
       exposeUserSecrets = [
@@ -141,6 +150,10 @@
         {
           readers = [config.my.mainUser.name];
           path = config.my.secrets.getPath "api-key-aws-secret" "aws_secret_access_key";
+        }
+        {
+          readers = [config.my.mainUser.name];
+          path = config.my.secrets.getPath "z-ai-env" "env";
         }
       ];
 
@@ -262,66 +275,4 @@
   hardware.cpu.amd.updateMicrocode = true;
 
   powerManagement.enable = true;
-
-  # boot.kernelParams = ["libata.noacpi=1" "mem_sleep_default=s2idle"];
-
-  # boot.initrd.availableKernelModules = [
-  #   "nvme"
-  #   "xhci_pci"
-  #   "ahci"
-  #   "usbhid"
-  #   "usb_storage"
-  #   "sd_mod"
-  # ];
-  #
-  # Did not work, fails entering suspend
-  # boot.kernelParams = ["ahci.mobile_lpm_policy=0"];
-
-  # Disable START STOP UNIT for the two Intel enterprise SSDs
-  # services.udev.extraRules = ''
-  #   ACTION=="add|change", SUBSYSTEM=="scsi_disk", KERNEL=="5:0:0:0|6:0:0:0", \
-  #     ATTR{manage_start_stop}="0"
-  # '';
-
-  # services.udev.extraRules = ''
-  #   # Intel enterprise SATA SSDs occasionally choke on STANDBY IMMEDIATE during suspend.
-  #   ACTION=="add|change", SUBSYSTEM=="scsi_disk", \
-  #     ATTRS{vendor}=="INTEL", ATTRS{model}=="SSDSC2KB03*", \
-  #     ATTR{manage_start_stop}="0"
-  # '';
-
-  # Did not work
-  # services.udev.extraRules = ''
-  #   ACTION=="add", SUBSYSTEM=="scsi_host", KERNEL=="host*", ATTR{link_power_management_policy}="max_performance"
-  # '';
-
-  # Suspend hook — flip SATA LPM and (optionally) standby the Intel SSDs
-  # systemd.services.pre-sleep-sata-lpm = {
-  #   description = "Pre-Sleep (SATA LPM relax + SSD standby)";
-  #   wantedBy = ["sleep.target"];
-  #   before = ["sleep.target" "systemd-suspend.service"];
-  #   serviceConfig.Type = "oneshot";
-  #   # Ensure logger/hdparm are in PATH
-  #   path = [pkgs.util-linux pkgs.hdparm];
-  #   script = ''
-  #     for pol in /sys/class/scsi_host/host*/link_power_management_policy; do
-  #       echo max_performance > "$pol" || true
-  #     done
-  #   '';
-  # };
-
-  # # Resume hook — restore preferred LPM
-  # systemd.services.resume-sata-lpm = {
-  #   description = "Post-Resume (restore SATA LPM)";
-  #   wantedBy = ["suspend.target" "hibernate.target" "hybrid-sleep.target"];
-  #   after = ["suspend.target" "hibernate.target" "hybrid-sleep.target"];
-  #   serviceConfig.Type = "oneshot";
-  #   path = [pkgs.util-linux];
-  #   script = ''
-  #     for pol in /sys/class/scsi_host/host*/link_power_management_policy; do
-  #       echo med_power_with_dipm > "$pol" || true
-  #     done
-  #     logger -t resume-sata-lpm "Restored LPM=med_power_with_dipm"
-  #   '';
-  # };
 }

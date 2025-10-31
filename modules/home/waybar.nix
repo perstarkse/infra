@@ -5,6 +5,45 @@
     ...
   }: let
     cfg = config.my.waybar;
+    niriCfg = lib.attrByPath ["my" "niri"] {} config;
+    niriWorkspaceNames = niriCfg.workspaceNames or [];
+    defaultWorkspaceIconsByName = {
+      "1:main" = "";
+      "2:web" = "";
+      "3:code" = "";
+      "4:chat" = "";
+      "5:media" = "";
+      "6:games" = "";
+      "7:build" = "";
+      "8:vm" = "";
+      "9:misc" = "";
+      "10:scratch" = "";
+    };
+    generatedWorkspaceIcons =
+      lib.listToAttrs
+      (map
+        (name: let
+          fallbackParts = lib.splitString ":" name;
+          fallback =
+            if fallbackParts == []
+            then name
+            else lib.head fallbackParts;
+        in {
+          inherit name;
+          value =
+            lib.attrByPath [name] fallback defaultWorkspaceIconsByName;
+        })
+        niriWorkspaceNames);
+    customWorkspaceIcons = niriCfg.workspaceIcons or {};
+    niriFormatIcons =
+      generatedWorkspaceIcons
+      // defaultWorkspaceIconsByName
+      // customWorkspaceIcons
+      // {
+        default = "";
+        active = "";
+        urgent = "";
+      };
 
     commonModules = {
       "network" = {
@@ -117,8 +156,13 @@
     niriModules = {
       "niri/workspaces" = {
         "format" = "{icon}";
+        "tooltip" = true;
+        "tooltip-format" = "{name}";
+        "on-click" = "niri msg action focus-workspace {name}";
+        "on-click-right" = "niri msg action move-column-to-workspace {name}";
         "on-scroll-up" = "niri msg action focus-workspace-up";
         "on-scroll-down" = "niri msg action focus-workspace-down";
+        "format-icons" = niriFormatIcons;
       };
       "niri/window" = {
         "format" = "{}";
@@ -176,28 +220,40 @@
           target = "graphical-session.target";
         };
         style = ''
-          #workspaces button {
-            padding: 0;
-            margin: 0;
-            min-height: 0;
-            border: none;
-            border-radius: 0;
-          }
-
-          #workspaces button.active {
-            border-bottom: 1px solid @base05;
-          }
-
           #workspaces {
             padding: 0;
             margin: 0;
+          }
+
+          #workspaces button {
+            padding: 0 10px;
+            margin: 0 2px;
+            min-height: 0;
+            min-width: 0;
+            border: none;
+            border-radius: 0;
+            background: transparent;
+          }
+
+          #workspaces button:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+          }
+
+          #workspaces button.focused,
+          #workspaces button.active {
+            border: none;
+            box-shadow: none;
+          }
+
+          #workspaces button.urgent {
+            box-shadow: inset 0 -1px 0 0 #ff6c6b;
           }
         '';
         settings = {
           mainBar =
             {
               layer = "top";
-              position = "bottom";
+              position = "top";
               height = 20;
               modules-left = [wmWorkspaces];
               modules-center = [wmWindow];

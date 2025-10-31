@@ -10,11 +10,13 @@
     config = lib.mkIf (cfg.enable && cfg.session == "niri") {
       programs.niri = {
         enable = true;
+        # package = inputs.niri-focus-flash.packages.${pkgs.system}.niri;
       };
 
       environment.systemPackages = [
         pkgs.wl-clipboard
         pkgs.wireplumber
+        pkgs.xwayland-satellite
       ];
 
       environment.sessionVariables = {

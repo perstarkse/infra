@@ -14,9 +14,9 @@
       shared
       interception-tools
       system-stylix
-      sway
       greetd
       fonts
+      niri
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [hello-service]);
@@ -41,9 +41,9 @@
         bitwarden-client
         mail-clients-setup
         ssh
+        niri
         xdg-mimeapps
         firefox
-        sway
       ]
       ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
@@ -67,7 +67,7 @@
       };
 
       waybar = {
-        windowManager = "sway";
+        windowManager = "niri";
       };
     };
 
@@ -158,7 +158,7 @@
 
     gui = {
       enable = true;
-      session = "sway";
+      session = "niri";
       terminal = "kitty";
     };
   };
@@ -168,6 +168,9 @@
 
     wireless.enable = true;
     wireless.networks = {
+      "gärdestorp-2" = {
+        psk = "denna-kod-for-wifi";
+      };
     };
   };
 }
