@@ -5,6 +5,7 @@
     config,
     ...
   }: let
+    rustAnalyzerTargetDir = "${config.xdg.cacheHome}/rust-analyzer/target";
     langDefs = {
       nix = {
         packages = [pkgs.nil pkgs.alejandra];
@@ -26,6 +27,22 @@
             language-servers = ["rust-analyzer"];
           }
         ];
+        language-server.rust-analyzer = {
+          command = "${pkgs.runtimeShell}";
+          args = [
+            "-c"
+            ''
+              exec ${pkgs.util-linux}/bin/ionice -c2 -n7 ${pkgs.coreutils}/bin/nice -n10 ${pkgs.rust-analyzer}/bin/rust-analyzer 2>/dev/null \
+                || exec ${pkgs.coreutils}/bin/nice -n10 ${pkgs.rust-analyzer}/bin/rust-analyzer
+            ''
+          ];
+          config = {
+            cargo = {
+              allFeatures = true;
+              targetDir = rustAnalyzerTargetDir;
+            };
+          };
+        };
       };
       python = {
         packages = [pkgs.python3-lsp-server];
@@ -111,6 +128,7 @@
     allPackages = lib.flatten (lib.mapAttrsToList (_: def: def.packages or []) enabledDefs);
     allLanguages = lib.flatten (lib.mapAttrsToList (_: def: def.language or []) enabledDefs);
     allLanguageServers = lib.foldl' lib.recursiveUpdate {} (lib.mapAttrsToList (_: def: def.language-server or {}) enabledDefs);
+    rustLanguageEnabled = lib.lists.elem "rust" config.my.programs.helix.languages;
   in {
     options.my.programs.helix.languages = lib.mkOption {
       type = with lib.types; listOf (enum (builtins.attrNames langDefs));
@@ -121,6 +139,10 @@
 
     config = {
       home.packages = [pkgs.lazygit] ++ allPackages;
+      home.activation.ensureRustAnalyzerTargetDir =
+        lib.mkIf rustLanguageEnabled (lib.hm.dag.entryAfter ["writeBoundary"] ''
+          mkdir -p ${lib.escapeShellArg rustAnalyzerTargetDir}
+        '');
       programs.helix = {
         enable = true;
         defaultEditor = true;

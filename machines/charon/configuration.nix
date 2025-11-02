@@ -4,6 +4,7 @@
   config,
   pkgs,
   vars-helper,
+  lib,
   ...
 }: {
   imports = with modules.nixosModules;
@@ -19,8 +20,8 @@
       terminal
       greetd
       ledger
-      libvirt
       vfio
+      libvirt
       fonts
       nvidia
       docker
@@ -211,7 +212,7 @@
     };
 
     vfio = {
-      enable = true;
+      enable = false;
       gpuIds = "10de:1b81,10de:10f0";
       hugepages = 20;
       kvmfrStaticSizeMb = 128;
@@ -249,11 +250,14 @@
     bluetuith
     codex
     discord
+    prismlauncher
+    virt-manager
   ];
 
   # Allow localsend receive port
   networking.firewall.allowedTCPPorts = [53317];
 
+  # services.blueman.enable = true;
   hardware.bluetooth = {
     enable = true;
     powerOnBoot = true;
@@ -268,11 +272,15 @@
     };
   };
 
-  # services.blueman.enable = true;
-
   security.polkit.enable = true;
 
   hardware.cpu.amd.updateMicrocode = true;
 
   powerManagement.enable = true;
+
+  systemd.services.nix-daemon.serviceConfig = {
+    Nice = lib.mkForce 15;
+    IOSchedulingClass = lib.mkForce "idle";
+    IOSchedulingPriority = lib.mkForce 7;
+  };
 }

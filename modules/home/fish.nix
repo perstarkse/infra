@@ -19,6 +19,23 @@
         "wlc" = "${pkgs.wl-clipboard}/bin/wl-copy";
       };
       functions = {
+        cargo = {
+          wraps = "cargo";
+          description = "Run cargo with reduced CPU/IO priority.";
+          body = ''
+            set -l cargo_path (command --search cargo)
+            or begin
+              echo "cargo function: cargo executable not found" >&2
+              return 127
+            end
+
+            if type -q ionice
+              nice -n 5 ionice -c2 -n7 $cargo_path $argv
+            else
+              nice -n 5 $cargo_path $argv
+            end
+          '';
+        };
         ns = ''
           if test (count $argv) -eq 0
             echo "Usage: ns pkg1 [pkg2 ...]"
