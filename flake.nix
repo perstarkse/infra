@@ -51,7 +51,7 @@
     };
 
     minne = {
-      url = "github:perstarkse/minne?ref=development";
+      url = "github:perstarkse/minne";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

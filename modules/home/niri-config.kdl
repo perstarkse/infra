@@ -20,7 +20,7 @@ input {
   workspace-auto-back-and-forth
 }
 
-output "DP-1" {
+output "DP-3" {
   mode "3440x1440@143.855"
   scale 1.0
 }
