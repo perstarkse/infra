@@ -17,8 +17,35 @@
         "ls-dirs" = "${pkgs.eza}/bin/eza -D --icons=auto";
         "ls-files" = "${pkgs.eza}/bin/eza -f --icons=auto";
         "wlc" = "${pkgs.wl-clipboard}/bin/wl-copy";
+        "sccache-stats" = "${pkgs.sccache}/bin/sccache --show-stats";
       };
       functions = {
+        sccache-flush = ''
+          set -l dir $SCCACHE_DIR
+          if test -z "$dir"
+            echo "sccache-flush: SCCACHE_DIR is not set" >&2
+            return 1
+          end
+
+          read -P "Clear sccache directory at $dir? [y/N] " confirmation
+          if not test (string lower -- $confirmation) = "y"
+            echo "sccache-flush: aborted"
+            return 1
+          end
+
+          ${pkgs.sccache}/bin/sccache --stop-server >/dev/null 2>&1
+          if test -d "$dir"
+            command find $dir -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+          end
+          echo "sccache-flush: cleared $dir"
+        '';
+        watch-sccache = ''
+          if not type -q watch
+            echo "watch-sccache: the 'watch' command is unavailable" >&2
+            return 1
+          end
+          watch -n 2 ${pkgs.sccache}/bin/sccache --show-stats
+        '';
         cargo = {
           wraps = "cargo";
           description = "Run cargo with reduced CPU/IO priority.";

@@ -44,6 +44,7 @@
         direnv
         zoxide
         fish
+        sccache
         kitty
         dunst
         ncspot
