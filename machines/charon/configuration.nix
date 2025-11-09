@@ -28,6 +28,8 @@
       steam
       k3s
       backups
+      sunshine
+      # steam-gamescope
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [hello-service]);
@@ -253,6 +255,7 @@
     discord
     prismlauncher
     virt-manager
+    gamescope
   ];
 
   # Allow localsend receive port

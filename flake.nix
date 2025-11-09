@@ -51,7 +51,7 @@
     };
 
     minne = {
-      url = "github:perstarkse/minne";
+      url = "github:perstarkse/minne?ref=development";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -126,7 +126,7 @@
               tags = ["client"];
             };
             ariel = {
-              deploy.targetHost = "root@10.0.0.110";
+              deploy.targetHost = "root@10.0.0.184";
               deploy.buildHost = "root@localhost";
               tags = ["client"];
             };

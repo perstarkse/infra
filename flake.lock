@@ -908,15 +908,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1761914291,
-        "narHash": "sha256-4KLOFEapDUwYGrGUzgFRLJPndZGXSNNTty+fW5jE2j8=",
+        "lastModified": 1762285344,
+        "narHash": "sha256-fNQkaMJcUf79uHxbgW8AqmbLrxw+Mk3iMujX9BS+Xl4=",
         "owner": "perstarkse",
         "repo": "minne",
-        "rev": "b0deabaf3f541d986500dedcd8498ca9b15471dd",
+        "rev": "04ee2257320b1ce68ec658471789a893152369ea",
         "type": "github"
       },
       "original": {
         "owner": "perstarkse",
+        "ref": "development",
         "repo": "minne",
         "type": "github"
       }

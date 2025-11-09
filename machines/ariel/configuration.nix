@@ -4,6 +4,7 @@
   config,
   pkgs,
   vars-helper,
+  lib,
   ...
 }: {
   imports = with modules.nixosModules;
@@ -15,8 +16,10 @@
       interception-tools
       system-stylix
       greetd
+      nvidia
       fonts
       niri
+      vfio
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [hello-service]);
@@ -96,6 +99,8 @@
     devenv
     localsend
     iwd
+    steam
+    moonlight-qt
   ];
 
   hardware.bluetooth.enable = true;
@@ -162,15 +167,32 @@
       terminal = "kitty";
     };
   };
+
+  users.users.p.extraGroups = ["networkmanager"];
+
   networking = {
     # Allow localsend receive port
     firewall.allowedTCPPorts = [53317];
+    networkmanager.enable = lib.mkForce true;
 
     wireless.enable = true;
     wireless.networks = {
       "gärdestorp-2" = {
         psk = "denna-kod-for-wifi";
+        priority = 5;
+      };
+      "gärdestorp" = {
+        psk = "denna-kod-for-wifi";
+        priority = 10;
       };
     };
+  };
+
+  hardware.nvidia.package = lib.mkForce config.boot.kernelPackages.nvidiaPackages.legacy_470;
+  nixpkgs.config.nvidia.acceptLicense = true;
+
+  hardware.nvidia.prime = {
+    intelBusId = "PCI:0:2:0";
+    nvidiaBusId = "PCI:0:4:0";
   };
 }
