@@ -244,7 +244,7 @@
 
   time.timeZone = "Europe/Stockholm";
 
-  clan.core.networking.zerotier.controller.enable = true;
+  # clan.core.networking.zerotier.controller.enable = true;
 
   environment.systemPackages = with pkgs; [
     code-cursor-fhs

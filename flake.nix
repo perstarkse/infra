@@ -107,32 +107,48 @@
         inventory = {
           machines = {
             oumuamua = {
-              deploy.targetHost = "root@192.168.101.48";
-              deploy.buildHost = "root@localhost";
+              # deploy.targetHost = "root@192.168.101.48";
+              deploy.buildHost = "root@charon.lan";
               tags = ["server"];
             };
             io = {
-              deploy.targetHost = "root@io.lan";
-              deploy.buildHost = "root@localhost";
+              # deploy.targetHost = "root@io.lan";
+              deploy.buildHost = "root@charon.lan";
               tags = ["server"];
             };
             makemake = {
-              deploy.targetHost = "root@makemake.lan";
-              deploy.buildHost = "root@localhost";
+              # deploy.targetHost = "root@makemake.lan";
+              deploy.buildHost = "root@charon.lan";
               tags = ["server"];
             };
             charon = {
-              deploy.targetHost = "root@localhost";
+              # deploy.targetHost = "root@localhost";
               tags = ["client"];
             };
             ariel = {
-              deploy.targetHost = "root@10.0.0.184";
-              deploy.buildHost = "root@localhost";
+              # deploy.targetHost = "root@10.0.0.185";
+              deploy.targetHost = "root@localhost";
+              # deploy.buildHost = "root@charon.lan";
               tags = ["client"];
             };
           };
 
           instances = {
+            internet = {
+              roles.default.machines.io = {
+                settings.host = "io.lan";
+              };
+              roles.default.machines.charon = {
+                settings.host = "charon.lan";
+              };
+              roles.default.machines.makemake = {
+                settings.host = "makemake.lan";
+              };
+            };
+            zerotier = {
+              roles.controller.machines."io" = {};
+              roles.peer.tags."all" = {};
+            };
             clan-cache = {
               module = {
                 name = "trusted-nix-caches";

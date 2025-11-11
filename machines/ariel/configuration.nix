@@ -47,6 +47,7 @@
         niri
         xdg-mimeapps
         firefox
+        node
       ]
       ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
@@ -65,7 +66,7 @@
           withRbw = true;
         };
         helix = {
-          languages = ["nix" "markdown"];
+          languages = ["nix" "markdown" "spellchecking"];
         };
       };
 
@@ -84,6 +85,14 @@
         secretPath = config.my.secrets.getPath "api-key-openai" "api_key";
         useSystemdRun = true;
       }
+      {
+        name = "z-claude";
+        title = "z-claude";
+        setTerminalTitle = true;
+        command = "/home/p/.npm-global/bin/claude";
+        environmentFile = config.my.secrets.getPath "z-ai-env" "env";
+        useSystemdRun = false;
+      }
     ];
 
     home.stateVersion = "25.11";
@@ -93,7 +102,7 @@
 
   time.timeZone = "Europe/Stockholm";
 
-  clan.core.networking.zerotier.controller.enable = true;
+  # clan.core.networking.zerotier.controller.enable = true;
 
   environment.systemPackages = with pkgs; [
     devenv
@@ -195,4 +204,7 @@
     intelBusId = "PCI:0:2:0";
     nvidiaBusId = "PCI:0:4:0";
   };
+  services.libinput.enable = true;
+
+  services.libinput.touchpad.disableWhileTyping = true;
 }
