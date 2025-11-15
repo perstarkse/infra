@@ -86,6 +86,7 @@
                 type filter hook input priority 0; policy drop;
                 iifname "lo" accept
                 iifname "br-lan" accept
+                iifname "zt*" accept
                 ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" accept"}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" icmpv6 type {
@@ -100,6 +101,8 @@
                 type filter hook forward priority 0; policy drop;
                 iifname "br-lan" oifname "${wan}" accept
                 iifname "${wan}" oifname "br-lan" ct state established,related accept
+                iifname "zt*" oifname "br-lan" accept
+                iifname "br-lan" oifname "zt*" accept
               }
             '';
           };
