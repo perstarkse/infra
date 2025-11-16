@@ -107,28 +107,22 @@
         inventory = {
           machines = {
             oumuamua = {
-              # deploy.targetHost = "root@192.168.101.48";
               deploy.buildHost = "root@charon.lan";
               tags = ["server"];
             };
             io = {
-              # deploy.targetHost = "root@io.lan";
               deploy.buildHost = "root@charon.lan";
               tags = ["server"];
             };
             makemake = {
-              # deploy.targetHost = "root@makemake.lan";
               deploy.buildHost = "root@charon.lan";
               tags = ["server"];
             };
             charon = {
-              # deploy.targetHost = "root@localhost";
               tags = ["client"];
             };
             ariel = {
-              # deploy.targetHost = "root@10.0.0.185";
-              deploy.targetHost = "root@localhost";
-              # deploy.buildHost = "root@charon.lan";
+              deploy.buildHost = "root@charon.lan";
               tags = ["client"];
             };
           };

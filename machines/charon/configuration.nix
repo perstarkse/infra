@@ -64,6 +64,8 @@
         chromium
         niri
         node
+        wtp
+        sandboxed-binaries
       ]
       ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
@@ -71,6 +73,32 @@
         rbw
       ]);
     my = {
+      sandboxedHomeBinaries = [
+        {
+          name = "sb-codex";
+          program = "/home/p/.npm-global/bin/codex";
+          defaultArgs = [
+            "--sandbox"
+            "danger-full-access"
+            "--ask-for-approval"
+            "never"
+          ];
+
+          bindCwd = true;
+          enableRustCache = true;
+          allowNetwork = true;
+
+          extraWritableDirs = [
+            "/home/p/.npm-global"
+            "/home/p/.npm"
+            "/home/p/.cache"
+            "/home/p/.config"
+            "/home/p/.codex"
+            "/home/p/.nix-profile/bin"
+          ];
+        }
+      ];
+
       programs = {
         mail = {
           clients = ["aerc" "thunderbird"];
@@ -83,6 +111,11 @@
         };
         helix = {
           languages = ["nix" "typst" "markdown" "rust" "jinja" "spellchecking"];
+        };
+        wtp = {
+          enable = true;
+          enableFishIntegration = true;
+          enableFishCdWrapper = true;
         };
       };
 
