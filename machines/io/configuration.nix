@@ -15,10 +15,13 @@
       router
       home-assistant
       k3s
+      unifi-controller
     ]
     ++ (with vars-helper.nixosModules; [default]);
 
   time.timeZone = "Europe/Stockholm";
+  nixpkgs.config.allowUnfree = true;
+
   my = {
     mainUser = {
       name = "p";
@@ -69,6 +72,12 @@
           name = "charon";
           ip = "15";
           mac = "f0:2f:74:de:91:0a";
+          portForwards = [];
+        }
+        {
+          name = "unifi-switch";
+          ip = "20";
+          mac = "84:78:48:6a:f9:f0";
           portForwards = [];
         }
         {
