@@ -4,6 +4,7 @@
     config,
     ...
   }: let
+    inherit (lib) imap0;
     cfg = config.my.router;
     dhcpCfg = cfg.dhcp;
     helpers = config.routerHelpers or {};
@@ -12,6 +13,7 @@
     routerIp = helpers.routerIp or "${lanSubnet}.1";
     dhcpStart = helpers.dhcpStart or "${lanSubnet}.${toString cfg.lan.dhcpRange.start}";
     dhcpEnd = helpers.dhcpEnd or "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
+    vlans = helpers.vlans or [];
     inherit (cfg) machines;
     enabled = cfg.enable && dhcpCfg.enable;
   in {
@@ -40,34 +42,62 @@
             "valid-lifetime" = dhcpCfg.validLifetime;
             "renew-timer" = dhcpCfg.renewTimer;
             "rebind-timer" = dhcpCfg.rebindTimer;
-            subnet4 = [
-              {
-                id = 1;
-                subnet = lanCidr;
-                pools = [{pool = "${dhcpStart} - ${dhcpEnd}";}];
+            subnet4 =
+              [
+                {
+                  id = 1;
+                  subnet = lanCidr;
+                  pools = [{pool = "${dhcpStart} - ${dhcpEnd}";}];
+                  reservations =
+                    map (machine: {
+                      "hw-address" = machine.mac;
+                      "ip-address" = "${lanSubnet}.${machine.ip}";
+                      hostname = machine.name;
+                    })
+                    machines;
+                  "option-data" = [
+                    {
+                      name = "routers";
+                      data = routerIp;
+                    }
+                    {
+                      name = "domain-name-servers";
+                      data = routerIp;
+                    }
+                    {
+                      name = "domain-name";
+                      data = dhcpCfg.domainName;
+                    }
+                  ];
+                }
+              ]
+              ++ imap0 (index: vlan: {
+                id = 100 + index;
+                subnet = vlan.subnetCidr;
+                pools = [{pool = "${vlan.dhcpStart} - ${vlan.dhcpEnd}";}];
                 reservations =
-                  map (machine: {
-                    "hw-address" = machine.mac;
-                    "ip-address" = "${lanSubnet}.${machine.ip}";
-                    hostname = machine.name;
+                  map (reservation: {
+                    "hw-address" = reservation.mac;
+                    "ip-address" = "${vlan.subnet}.${reservation.ip}";
+                    hostname = reservation.name;
                   })
-                  machines;
+                  vlan.reservations;
                 "option-data" = [
                   {
                     name = "routers";
-                    data = routerIp;
+                    data = vlan.routerVlanIp;
                   }
                   {
                     name = "domain-name-servers";
-                    data = routerIp;
+                    data = vlan.routerVlanIp;
                   }
                   {
                     name = "domain-name";
                     data = dhcpCfg.domainName;
                   }
                 ];
-              }
-            ];
+              })
+              vlans;
           };
         };
       };

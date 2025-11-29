@@ -8,6 +8,7 @@
     helpers = config.routerHelpers or {};
     lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
     wan = helpers.wanInterface or cfg.wan.interface;
+    vlans = helpers.vlans or [];
 
     machinesByName = lib.listToAttrs (map (m: lib.nameValuePair m.name m) cfg.machines);
     forwardRules = lib.concatStringsSep "\n" (lib.mapAttrsToList (
@@ -30,6 +31,12 @@
     wgEnabled = cfg.wireguard.enable or false;
     wgInterface = cfg.wireguard.interfaceName or "wg0";
     wgPort = toString (cfg.wireguard.listenPort or 51820);
+
+    vlanInputRules = lib.concatStringsSep "\n" (map (vlan: "iifname \"${vlan.interface}\" accept") vlans);
+    vlanWanForwardRules = lib.concatStringsSep "\n" (map (vlan:
+        if vlan.wanEgress then "iifname \"${vlan.interface}\" oifname \"${wan}\" accept" else ""
+      )
+      vlans);
   in {
     config = lib.mkIf cfg.enable {
       networking.nftables = {
@@ -43,6 +50,7 @@
                 iifname "lo" accept
                 iifname "br-lan" accept
                 iifname "cni0" accept
+                ${vlanInputRules}
                 ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" accept"}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" ip protocol icmp accept
@@ -57,6 +65,7 @@
                 iifname "cni0" oifname "br-lan" accept
                 iifname "${wan}" oifname "br-lan" ct state established,related accept
                 iifname "${wan}" oifname "cni0" ct state established,related accept
+                ${vlanWanForwardRules}
                 ${forwardRules}
                 ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" oifname \"br-lan\" accept"}
                 ${lib.optionalString wgEnabled "iifname \"br-lan\" oifname \"${wgInterface}\" accept"}

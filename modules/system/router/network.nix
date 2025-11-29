@@ -11,6 +11,7 @@
     ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
     routerIp = helpers.routerIp or "${lanSubnet}.1";
+    vlans = helpers.vlans or [];
   in {
     config = lib.mkIf cfg.enable {
       boot.kernel.sysctl = {
@@ -41,12 +42,28 @@
       systemd.network = {
         enable = true;
 
-        netdevs."20-br-lan" = {
-          netdevConfig = {
-            Kind = "bridge";
-            Name = "br-lan";
-          };
-        };
+        netdevs =
+          {
+            "20-br-lan" = {
+              netdevConfig = {
+                Kind = "bridge";
+                Name = "br-lan";
+              };
+            };
+          }
+          // lib.listToAttrs (map (
+              vlan:
+                lib.nameValuePair "30-${vlan.interface}" {
+                  netdevConfig = {
+                    Name = vlan.interface;
+                    Kind = "vlan";
+                  };
+                  vlanConfig = {
+                    Id = vlan.id;
+                  };
+                }
+            )
+            vlans);
 
         networks =
           {
@@ -73,6 +90,7 @@
                 DHCPPrefixDelegation = true;
                 IPv6SendRA = true;
                 IPv6AcceptRA = false;
+                VLAN = map (vlan: vlan.interface) vlans;
               };
               bridgeConfig = {};
               ipv6Prefixes = [
@@ -95,7 +113,21 @@
                   };
                 }
             )
-            lanIfaces);
+            lanIfaces)
+          // lib.listToAttrs (map (
+              vlan:
+                lib.nameValuePair "40-${vlan.interface}" {
+                  matchConfig.Name = vlan.interface;
+                  address = [
+                    "${vlan.routerVlanIp}/${toString vlan.cidrPrefix}"
+                  ];
+                  networkConfig = {
+                    ConfigureWithoutCarrier = true;
+                  };
+                  linkConfig.RequiredForOnline = "no";
+                }
+            )
+            vlans);
       };
 
       systemd.services.nftables = {

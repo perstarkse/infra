@@ -46,6 +46,20 @@
         };
         interfaces = ["enp2s0" "enp3s0" "enp4s0"];
       };
+      vlans = [
+        {
+          name = "cameras";
+          id = 30;
+          subnet = "10.0.30";
+          cidrPrefix = 24;
+          dhcpRange = {
+            start = 10;
+            end = 50;
+          };
+          wanEgress = false;
+          reservations = [];
+        }
+      ];
       wan.interface = "enp1s0";
       ipv6.ulaPrefix = "fd00:711a:edcd:7e75";
 
