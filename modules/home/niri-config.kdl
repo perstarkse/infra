@@ -17,6 +17,7 @@ input {
     dwt
   }
 
+  warp-mouse-to-focus
   focus-follows-mouse max-scroll-amount="0%"
   workspace-auto-back-and-forth
 }
@@ -24,6 +25,8 @@ input {
 output "DP-3" {
   mode "3440x1440@143.855"
   scale 1.0
+  // variable-refresh-rate
+  backdrop-color "#1e1e2e"
 }
 
 // layer-rule {

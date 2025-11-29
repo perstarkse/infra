@@ -90,9 +90,9 @@
 
           extraWritableDirs = [
             "/home/p/.npm-global"
-            "/home/p/.npm"
-            "/home/p/.cache"
-            "/home/p/.config"
+            # "/home/p/.npm"
+            "/home/p/.cache/sccache"
+            # "/home/p/.config"
             "/home/p/.codex"
             "/home/p/.nix-profile/bin"
           ];

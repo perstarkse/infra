@@ -84,6 +84,7 @@
           slurp
           wl-clipboard
           dunst
+          nautilus
         ])
         ++ [setupWorkspaces];
 
