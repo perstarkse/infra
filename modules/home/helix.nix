@@ -139,10 +139,9 @@
 
     config = {
       home.packages = [pkgs.lazygit] ++ allPackages;
-      home.activation.ensureRustAnalyzerTargetDir =
-        lib.mkIf rustLanguageEnabled (lib.hm.dag.entryAfter ["writeBoundary"] ''
-          mkdir -p ${lib.escapeShellArg rustAnalyzerTargetDir}
-        '');
+      home.activation.ensureRustAnalyzerTargetDir = lib.mkIf rustLanguageEnabled (lib.hm.dag.entryAfter ["writeBoundary"] ''
+        mkdir -p ${lib.escapeShellArg rustAnalyzerTargetDir}
+      '');
       programs.helix = {
         enable = true;
         defaultEditor = true;

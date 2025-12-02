@@ -4,18 +4,12 @@
     config,
     ...
   }: let
-    inherit (lib) imap0;
+    inherit (lib) filter imap0;
     cfg = config.my.router;
-    dhcpCfg = cfg.dhcp;
     helpers = config.routerHelpers or {};
-    lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
-    lanCidr = helpers.lanCidr or "${lanSubnet}.0/24";
-    routerIp = helpers.routerIp or "${lanSubnet}.1";
-    dhcpStart = helpers.dhcpStart or "${lanSubnet}.${toString cfg.lan.dhcpRange.start}";
-    dhcpEnd = helpers.dhcpEnd or "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
-    vlans = helpers.vlans or [];
-    inherit (cfg) machines;
-    enabled = cfg.enable && dhcpCfg.enable;
+    zones = helpers.zones or [];
+    enabledZones = filter (z: (z.dhcp.enable or false)) zones;
+    enabled = cfg.enable && (enabledZones != []);
   in {
     config = lib.mkIf enabled {
       services.kea = {
@@ -30,81 +24,65 @@
           enable = true;
           settings = {
             interfaces-config = {
-              interfaces = ["br-lan"];
+              interfaces = map (z: z.interface) enabledZones;
               re-detect = true;
             };
             "lease-database" = {
-              name = dhcpCfg.leaseDatabase;
+              name = cfg.dhcp.leaseDatabase;
               type = "memfile";
               persist = true;
               "lfc-interval" = 3600;
             };
-            "valid-lifetime" = dhcpCfg.validLifetime;
-            "renew-timer" = dhcpCfg.renewTimer;
-            "rebind-timer" = dhcpCfg.rebindTimer;
+            "valid-lifetime" = cfg.dhcp.validLifetime;
+            "renew-timer" = cfg.dhcp.renewTimer;
+            "rebind-timer" = cfg.dhcp.rebindTimer;
             subnet4 =
-              [
-                {
-                  id = 1;
-                  subnet = lanCidr;
-                  pools = [{pool = "${dhcpStart} - ${dhcpEnd}";}];
-                  reservations =
-                    map (machine: {
-                      "hw-address" = machine.mac;
-                      "ip-address" = "${lanSubnet}.${machine.ip}";
-                      hostname = machine.name;
-                    })
-                    machines;
-                  "option-data" = [
-                    {
-                      name = "routers";
-                      data = routerIp;
-                    }
-                    {
-                      name = "domain-name-servers";
-                      data = routerIp;
-                    }
-                    {
-                      name = "domain-name";
-                      data = dhcpCfg.domainName;
-                    }
-                  ];
-                }
-              ]
-              ++ imap0 (index: vlan: {
-                id = 100 + index;
-                subnet = vlan.subnetCidr;
-                pools = [{pool = "${vlan.dhcpStart} - ${vlan.dhcpEnd}";}];
+              imap0
+              (index: zone: {
+                id = 1 + index;
+                subnet = lib.head zone.subnets;
+                pools = [
+                  {pool = "${zone.dhcp.poolStart} - ${zone.dhcp.poolEnd}";}
+                ];
                 reservations =
-                  map (reservation: {
-                    "hw-address" = reservation.mac;
-                    "ip-address" = "${vlan.subnet}.${reservation.ip}";
-                    hostname = reservation.name;
-                  })
-                  vlan.reservations;
+                  map (
+                    reservation: {
+                      "hw-address" = reservation.mac;
+                      "ip-address" = reservation.ip;
+                      hostname = reservation.name;
+                    }
+                  )
+                  (zone.dhcp.reservations or []);
                 "option-data" = [
                   {
                     name = "routers";
-                    data = vlan.routerVlanIp;
+                    data = zone.routerIp;
                   }
                   {
                     name = "domain-name-servers";
-                    data = vlan.routerVlanIp;
+                    data = zone.routerIp;
                   }
                   {
                     name = "domain-name";
-                    data = dhcpCfg.domainName;
+                    data = zone.dhcp.domainName or cfg.dhcp.domainName;
                   }
                 ];
               })
-              vlans;
+              enabledZones;
           };
         };
       };
 
       systemd.services.kea-dhcp4-server = {
-        wants = ["network-online.target"];
-        after = ["systemd-networkd.service" "network-online.target"];
+        wants = [
+          "network-online.target"
+          "systemd-networkd-wait-online.service"
+        ];
+        after = [
+          "systemd-networkd.service"
+          "network-online.target"
+          "systemd-networkd-wait-online.service"
+        ];
         serviceConfig = {
           Restart = "on-failure";
           RestartSec = "5s";

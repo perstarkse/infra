@@ -1,5 +1,5 @@
 {
-  config.flake.homeModules.ssh = {...}: {
+  config.flake.homeModules.ssh = _: {
     programs.ssh = {
       enable = true;
       # Silence HM deprecation warning about default config removal

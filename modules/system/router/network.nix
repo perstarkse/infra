@@ -12,6 +12,16 @@
     lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
     routerIp = helpers.routerIp or "${lanSubnet}.1";
     vlans = helpers.vlans or [];
+    # VLAN 1 untagged as default LAN; all configured VLANs tagged
+    bridgeVlanEntries =
+      [
+        {
+          VLAN = 1;
+          EgressUntagged = true;
+          PVID = 1;
+        }
+      ]
+      ++ (map (vlan: {VLAN = vlan.id;}) vlans);
   in {
     config = lib.mkIf cfg.enable {
       boot.kernel.sysctl = {
@@ -41,6 +51,11 @@
 
       systemd.network = {
         enable = true;
+        wait-online = {
+          enable = lib.mkForce true;
+          extraArgs = ["--interface=br-lan"] ++ (map (v: "--interface=${v.interface}") vlans);
+          timeout = 30;
+        };
 
         netdevs =
           {
@@ -48,6 +63,9 @@
               netdevConfig = {
                 Kind = "bridge";
                 Name = "br-lan";
+              };
+              bridgeConfig = {
+                VLANFiltering = true;
               };
             };
           }
@@ -92,7 +110,8 @@
                 IPv6AcceptRA = false;
                 VLAN = map (vlan: vlan.interface) vlans;
               };
-              bridgeConfig = {};
+              bridgeVLANs = bridgeVlanEntries;
+              # bridgeVLANs = bridgeVlanEntriesFor "br-lan";
               ipv6Prefixes = [
                 {
                   AddressAutoconfiguration = true;
@@ -111,6 +130,7 @@
                     Bridge = "br-lan";
                     ConfigureWithoutCarrier = true;
                   };
+                  bridgeVLANs = bridgeVlanEntries;
                 }
             )
             lanIfaces)

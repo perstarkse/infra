@@ -7,117 +7,113 @@
     cfg = config.my.router;
     inherit (lib) mkEnableOption mkOption types;
 
-    machineSubmodule =
-      types.submodule {
-        options = {
-          name = mkOption {
-            type = types.str;
-            description = "Machine hostname";
-          };
-          ip = mkOption {
-            type = types.str;
-            description = "Static IP address (last octet)";
-          };
-          mac = mkOption {
-            type = types.str;
-            description = "MAC address for DHCP reservation";
-          };
-          portForwards = mkOption {
-            type = types.listOf (types.submodule {
-              options = {
-                port = mkOption {
-                  type = types.int;
-                  description = "Port to forward";
-                };
-                protocol = mkOption {
-                  type = types.enum ["tcp" "udp" "tcp udp"];
-                  default = "tcp";
-                  description = "Protocol to forward";
-                };
+    machineSubmodule = types.submodule {
+      options = {
+        name = mkOption {
+          type = types.str;
+          description = "Machine hostname";
+        };
+        ip = mkOption {
+          type = types.str;
+          description = "Static IP address (last octet)";
+        };
+        mac = mkOption {
+          type = types.str;
+          description = "MAC address for DHCP reservation";
+        };
+        portForwards = mkOption {
+          type = types.listOf (types.submodule {
+            options = {
+              port = mkOption {
+                type = types.int;
+                description = "Port to forward";
               };
-            });
-            default = [];
-            description = "Port forwarding rules for this machine";
-          };
-        };
-      };
-
-    serviceSubmodule =
-      types.submodule {
-        options = {
-          name = mkOption {
-            type = types.str;
-            description = "Service name";
-          };
-          target = mkOption {
-            type = types.str;
-            description = "Target IP or hostname";
-          };
-        };
-      };
-
-    vlanReservationSubmodule =
-      types.submodule {
-        options = {
-          name = mkOption {
-            type = types.str;
-            description = "Device label";
-          };
-          ip = mkOption {
-            type = types.str;
-            description = "Static IP address (last octet)";
-          };
-          mac = mkOption {
-            type = types.str;
-            description = "MAC address for DHCP reservation";
-          };
-        };
-      };
-
-    vlanSubmodule =
-      types.submodule {
-        options = {
-          name = mkOption {
-            type = types.str;
-            description = "VLAN label (e.g., camera)";
-          };
-          id = mkOption {
-            type = types.int;
-            description = "802.1Q VLAN ID";
-          };
-          subnet = mkOption {
-            type = types.str;
-            description = "IPv4 subnet base without CIDR (e.g., 10.0.30)";
-          };
-          cidrPrefix = mkOption {
-            type = types.int;
-            default = 24;
-            description = "CIDR prefix length for subnet";
-          };
-          dhcpRange = {
-            start = mkOption {
-              type = types.int;
-              default = 10;
-              description = "DHCP start range (last octet)";
+              protocol = mkOption {
+                type = types.enum ["tcp" "udp" "tcp udp"];
+                default = "tcp";
+                description = "Protocol to forward";
+              };
             };
-            end = mkOption {
-              type = types.int;
-              default = 200;
-              description = "DHCP end range (last octet)";
-            };
-          };
-          wanEgress = mkOption {
-            type = types.bool;
-            default = true;
-            description = "Allow this VLAN to reach WAN";
-          };
-          reservations = mkOption {
-            type = types.listOf vlanReservationSubmodule;
-            default = [];
-            description = "DHCP reservations within this VLAN";
-          };
+          });
+          default = [];
+          description = "Port forwarding rules for this machine";
         };
       };
+    };
+
+    serviceSubmodule = types.submodule {
+      options = {
+        name = mkOption {
+          type = types.str;
+          description = "Service name";
+        };
+        target = mkOption {
+          type = types.str;
+          description = "Target IP or hostname";
+        };
+      };
+    };
+
+    vlanReservationSubmodule = types.submodule {
+      options = {
+        name = mkOption {
+          type = types.str;
+          description = "Device label";
+        };
+        ip = mkOption {
+          type = types.str;
+          description = "Static IP address (last octet)";
+        };
+        mac = mkOption {
+          type = types.str;
+          description = "MAC address for DHCP reservation";
+        };
+      };
+    };
+
+    vlanSubmodule = types.submodule {
+      options = {
+        name = mkOption {
+          type = types.str;
+          description = "VLAN label (e.g., camera)";
+        };
+        id = mkOption {
+          type = types.int;
+          description = "802.1Q VLAN ID";
+        };
+        subnet = mkOption {
+          type = types.str;
+          description = "IPv4 subnet base without CIDR (e.g., 10.0.30)";
+        };
+        cidrPrefix = mkOption {
+          type = types.int;
+          default = 24;
+          description = "CIDR prefix length for subnet";
+        };
+        dhcpRange = {
+          start = mkOption {
+            type = types.int;
+            default = 10;
+            description = "DHCP start range (last octet)";
+          };
+          end = mkOption {
+            type = types.int;
+            default = 200;
+            description = "DHCP end range (last octet)";
+          };
+        };
+        wanEgress = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Allow this VLAN to reach WAN";
+        };
+        reservations = mkOption {
+          type = types.listOf vlanReservationSubmodule;
+          default = [];
+          description = "DHCP reservations within this VLAN";
+        };
+      };
+    };
   in {
     options = {
       my.router = {
@@ -503,29 +499,114 @@
         routerIp = "${lanSubnet}.1";
         dhcpStart = "${lanSubnet}.${toString cfg.lan.dhcpRange.start}";
         dhcpEnd = "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
+        wgCfg = cfg.wireguard or {};
+        wgSubnet = wgCfg.subnet or "10.6.0";
+        wgCidr = "${wgSubnet}.0/${toString (wgCfg.cidrPrefix or 24)}";
         vlanHelpers =
           map (v: let
             subnetCidr = "${v.subnet}.0/${toString v.cidrPrefix}";
             routerVlanIp = "${v.subnet}.1";
           in {
             inherit subnetCidr routerVlanIp;
-            name = v.name;
-            id = v.id;
-            subnet = v.subnet;
+            inherit (v) name;
+            inherit (v) id;
+            inherit (v) subnet;
             interface = "vlan${toString v.id}";
             dhcpStart = "${v.subnet}.${toString v.dhcpRange.start}";
             dhcpEnd = "${v.subnet}.${toString v.dhcpRange.end}";
-            wanEgress = v.wanEgress;
-            reservations = v.reservations;
-            cidrPrefix = v.cidrPrefix;
+            inherit (v) wanEgress;
+            inherit (v) reservations;
+            inherit (v) cidrPrefix;
           })
           cfg.vlans;
+
+        lanZone = {
+          name = "lan";
+          kind = "lan";
+          interface = "br-lan";
+          subnets = [lanCidr];
+          inherit routerIp;
+          wanEgress = true;
+          nat = true;
+          allowTo = ["wireguard"];
+          dhcp = {
+            inherit (cfg.dhcp) enable domainName;
+            poolStart = dhcpStart;
+            poolEnd = dhcpEnd;
+            reservations =
+              map (machine: {
+                inherit (machine) name mac;
+                ip = "${lanSubnet}.${machine.ip}";
+              })
+              cfg.machines;
+          };
+        };
+
+        vlanZones =
+          map (v: {
+            inherit (v) name interface wanEgress;
+            kind = "vlan";
+            subnets = [v.subnetCidr];
+            routerIp = v.routerVlanIp;
+            nat = v.wanEgress;
+            allowTo = [];
+            dhcp = {
+              enable = true;
+              inherit (cfg.dhcp) domainName;
+              poolStart = v.dhcpStart;
+              poolEnd = v.dhcpEnd;
+              reservations =
+                map (r: {
+                  inherit (r) name mac;
+                  ip = "${v.subnet}.${r.ip}";
+                })
+                v.reservations;
+            };
+          })
+          vlanHelpers;
+
+        wgZone = lib.optional (wgCfg.enable or false) {
+          name = "wireguard";
+          kind = "wireguard";
+          interface = wgCfg.interfaceName or "wg0";
+          subnets = [wgCidr];
+          routerIp = "${wgSubnet}.1";
+          wanEgress = true;
+          nat = true;
+          allowTo = ["lan" "cni"];
+          dhcp.enable = false;
+        };
+
+        cniZone = lib.optional (config.systemd.network.enable or false) {
+          name = "cni";
+          kind = "cni";
+          interface = "cni0";
+          subnets = [];
+          routerIp = null;
+          wanEgress = true;
+          nat = true;
+          allowTo = ["lan" "wireguard"];
+          dhcp.enable = false;
+        };
+
+        wanZone = {
+          name = "wan";
+          kind = "wan";
+          inherit (cfg.wan) interface;
+          subnets = [];
+          routerIp = null;
+          wanEgress = false;
+          nat = false;
+          allowTo = [];
+          dhcp.enable = false;
+        };
       in {
         inherit lanSubnet lanCidr routerIp dhcpStart dhcpEnd;
         inherit (cfg.ipv6) ulaPrefix;
         wanInterface = cfg.wan.interface;
         lanInterfaces = cfg.lan.interfaces;
         vlans = vlanHelpers;
+        zones = [lanZone] ++ vlanZones ++ wgZone ++ cniZone ++ [wanZone];
       };
     };
   };

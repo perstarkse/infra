@@ -17,10 +17,9 @@
         SCCACHE_CACHE_SIZE = "50G";
         CARGO_INCREMENTAL = "0";
       };
-      home.activation.ensureSccacheDir =
-        lib.hm.dag.entryAfter ["writeBoundary"] ''
-          mkdir -p ${lib.escapeShellArg sccacheDir}
-        '';
+      home.activation.ensureSccacheDir = lib.hm.dag.entryAfter ["writeBoundary"] ''
+        mkdir -p ${lib.escapeShellArg sccacheDir}
+      '';
       programs.fish.interactiveShellInit =
         lib.mkIf (config.programs.fish.enable or false)
         (lib.mkAfter ''

@@ -18,7 +18,7 @@
       src = pkgs.fetchFromGitHub {
         owner = "satococoa";
         repo = "wtp";
-        rev = rev;
+        inherit rev;
         hash = srcHash;
       };
       subPackages = ["cmd/wtp"];

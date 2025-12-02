@@ -123,8 +123,6 @@
 
   time.timeZone = "Europe/Stockholm";
 
-  clan.core.networking.zerotier.controller.enable = true;
-
   nixpkgs.config.allowUnfree = true;
 
   environment.systemPackages = [

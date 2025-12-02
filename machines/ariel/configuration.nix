@@ -102,8 +102,6 @@
 
   time.timeZone = "Europe/Stockholm";
 
-  # clan.core.networking.zerotier.controller.enable = true;
-
   environment.systemPackages = with pkgs; [
     devenv
     localsend

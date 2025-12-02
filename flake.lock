@@ -922,6 +922,27 @@
         "type": "github"
       }
     },
+    "niri": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rust-overlay": "rust-overlay"
+      },
+      "locked": {
+        "lastModified": 1764420861,
+        "narHash": "sha256-zfX15mqL3bl46RchLPWyWhfEx4MSDd13JYvFUi312kE=",
+        "owner": "perstarkse",
+        "repo": "niri",
+        "rev": "378e50da80ef6c40ec13ff8c7f61072be0941722",
+        "type": "github"
+      },
+      "original": {
+        "owner": "perstarkse",
+        "repo": "niri",
+        "type": "github"
+      }
+    },
     "nix-darwin": {
       "inputs": {
         "nixpkgs": [
@@ -1203,6 +1224,7 @@
         "hyprnstack": "hyprnstack",
         "import-tree": "import-tree",
         "minne": "minne",
+        "niri": "niri",
         "nix-minecraft": "nix-minecraft",
         "nixpkgs": "nixpkgs_3",
         "private-infra": "private-infra",
@@ -1211,6 +1233,27 @@
         "sway-focus-flash": "sway-focus-flash",
         "treefmt-nix": "treefmt-nix_2",
         "vars-helper": "vars-helper"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "niri",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1757989933,
+        "narHash": "sha256-9cpKYWWPCFhgwQTww8S94rTXgg8Q8ydFv9fXM6I8xQM=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "8249aa3442fb9b45e615a35f39eca2fe5510d7c3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
       }
     },
     "simple-nixos-mailserver": {

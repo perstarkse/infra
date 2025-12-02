@@ -18,13 +18,13 @@
     cfg = config.my.sandboxedHomeBinaries or [];
 
     mkSandboxWrapper = entry: let
-      name = entry.name;
-      program = entry.program;
-      defaultArgs = entry.defaultArgs;
-      enableRustCache = entry.enableRustCache;
-      extraWritableDirs = entry.extraWritableDirs;
-      allowNetwork = entry.allowNetwork;
-      bindCwd = entry.bindCwd;
+      inherit (entry) name;
+      inherit (entry) program;
+      inherit (entry) defaultArgs;
+      inherit (entry) enableRustCache;
+      inherit (entry) extraWritableDirs;
+      inherit (entry) allowNetwork;
+      inherit (entry) bindCwd;
     in
       pkgs.writeShellScriptBin name ''
         set -euo pipefail

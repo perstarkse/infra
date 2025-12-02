@@ -45,6 +45,11 @@
       inputs.hyprland.follows = "hyprland";
     };
 
+    niri = {
+      url = "github:perstarkse/niri";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     private-infra = {
       url = "git+ssh://git@github.com/perstarkse/private-infra.git";
       inputs.nixpkgs.follows = "nixpkgs";

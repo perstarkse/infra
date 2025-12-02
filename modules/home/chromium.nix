@@ -1,5 +1,5 @@
 {
-  config.flake.homeModules.chromium = {pkgs, ...}: {
+  config.flake.homeModules.chromium = _: {
     config = {
       programs.chromium = {
         enable = true;

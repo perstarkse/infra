@@ -34,6 +34,12 @@
     };
 
     secrets.generateManifest = false;
+    secrets.allowReadAccess = [
+      {
+        readers = ["systemd-network"];
+        path = config.my.secrets.getPath "wireguard-server" "private-key";
+      }
+    ];
 
     router = {
       enable = true;

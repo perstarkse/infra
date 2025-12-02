@@ -46,6 +46,16 @@ layout {
   border {
     off
   }
+
+  opacity-transition {
+     on                 
+     duration-ms 350    
+     flash {
+       on               
+       flash-opacity 0.8
+       disable-on-solo  
+     }
+  }
 }
 
 prefer-no-csd

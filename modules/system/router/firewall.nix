@@ -7,8 +7,13 @@
     cfg = config.my.router;
     helpers = config.routerHelpers or {};
     lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
-    wan = helpers.wanInterface or cfg.wan.interface;
-    vlans = helpers.vlans or [];
+    zones = helpers.zones or [];
+    wanZone = lib.findFirst (z: z.kind == "wan") null zones;
+    wan =
+      if wanZone != null
+      then wanZone.interface
+      else (helpers.wanInterface or cfg.wan.interface);
+    internalZones = lib.filter (z: z.kind != "wan") zones;
 
     machinesByName = lib.listToAttrs (map (m: lib.nameValuePair m.name m) cfg.machines);
     forwardRules = lib.concatStringsSep "\n" (lib.mapAttrsToList (
@@ -32,11 +37,32 @@
     wgInterface = cfg.wireguard.interfaceName or "wg0";
     wgPort = toString (cfg.wireguard.listenPort or 51820);
 
-    vlanInputRules = lib.concatStringsSep "\n" (map (vlan: "iifname \"${vlan.interface}\" accept") vlans);
-    vlanWanForwardRules = lib.concatStringsSep "\n" (map (vlan:
-        if vlan.wanEgress then "iifname \"${vlan.interface}\" oifname \"${wan}\" accept" else ""
+    inputInternalRules = lib.concatStringsSep "\n" (map (zone: "iifname \"${zone.interface}\" accept") internalZones);
+
+    forwardSameZoneRules = lib.concatStringsSep "\n" (map (zone: "iifname \"${zone.interface}\" oifname \"${zone.interface}\" accept") internalZones);
+
+    forwardWanEgressRules = lib.concatStringsSep "\n" (map (
+        zone: lib.optionalString (zone.wanEgress or false) "iifname \"${zone.interface}\" oifname \"${wan}\" accept"
       )
-      vlans);
+      internalZones);
+
+    forwardWanReturnRules = lib.concatStringsSep "\n" (map (
+        zone: "iifname \"${wan}\" oifname \"${zone.interface}\" ct state established,related accept"
+      )
+      internalZones);
+
+    zoneMap = lib.listToAttrs (map (z: lib.nameValuePair z.name z) internalZones);
+    forwardZoneAllowRules = lib.concatStringsSep "\n" (lib.concatMap (zone:
+      map (
+        targetName: let
+          target = lib.attrByPath [targetName] null zoneMap;
+        in
+          if target == null
+          then ""
+          else "iifname \"${zone.interface}\" oifname \"${target.interface}\" accept"
+      )
+      (zone.allowTo or []))
+    internalZones);
   in {
     config = lib.mkIf cfg.enable {
       networking.nftables = {
@@ -48,10 +74,7 @@
               chain input {
                 type filter hook input priority 0; policy drop;
                 iifname "lo" accept
-                iifname "br-lan" accept
-                iifname "cni0" accept
-                ${vlanInputRules}
-                ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" accept"}
+                ${inputInternalRules}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" ip protocol icmp accept
                 iifname "${wan}" tcp dport { 80, 443 } accept
@@ -59,19 +82,11 @@
               }
               chain forward {
                 type filter hook forward priority 0; policy drop;
-                iifname "br-lan" oifname "${wan}" accept
-                iifname "br-lan" oifname "br-lan" accept
-                iifname "cni0" oifname "${wan}" accept
-                iifname "cni0" oifname "br-lan" accept
-                iifname "${wan}" oifname "br-lan" ct state established,related accept
-                iifname "${wan}" oifname "cni0" ct state established,related accept
-                ${vlanWanForwardRules}
+                ${forwardSameZoneRules}
+                ${forwardWanEgressRules}
+                ${forwardWanReturnRules}
+                ${forwardZoneAllowRules}
                 ${forwardRules}
-                ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" oifname \"br-lan\" accept"}
-                ${lib.optionalString wgEnabled "iifname \"br-lan\" oifname \"${wgInterface}\" accept"}
-                ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" oifname \"${wan}\" accept"}
-                ${lib.optionalString wgEnabled "iifname \"cni0\" oifname \"${wgInterface}\" accept"}
-                ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" oifname \"cni0\" accept"}
               }
             '';
           };
