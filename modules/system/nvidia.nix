@@ -8,13 +8,13 @@
     cfg = config.my.gui;
     bufferProfileName = "Limit Free Buffer Pool On Wayland Compositors";
     bufferRules = [
-      {
-        pattern = {
-          feature = "cmdline";
-          matches = "Hyprland";
-        };
-        profile = bufferProfileName;
-      }
+      # {
+      #   pattern = {
+      #     feature = "cmdline";
+      #     matches = "Hyprland";
+      #   };
+      #   profile = bufferProfileName;
+      # }
       {
         pattern = {
           feature = "procname";
@@ -29,7 +29,7 @@
         settings = [
           {
             key = "GLVidHeapReuseRatio";
-            value = 1;
+            value = 0;
           }
         ];
       }
