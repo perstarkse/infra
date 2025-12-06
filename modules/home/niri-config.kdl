@@ -36,7 +36,7 @@ output "DP-3" {
 
 layout {
   gaps 0
-  // background-color "transparent"
+  background-color "#000000"
 
   focus-ring {
     off
@@ -49,10 +49,10 @@ layout {
 
   opacity-transition {
      on                 
-     duration-ms 350    
+     duration-ms 250
      flash {
        on               
-       flash-opacity 0.8
+       flash-opacity 0.80
        disable-on-solo  
      }
   }
