@@ -222,10 +222,10 @@
             ];
             description = "Upstream DNS servers with TLS";
           };
-          localZone = mkOption {
-            type = types.str;
-            default = "lan.";
-            description = "Local DNS zone name";
+          localZones = mkOption {
+            type = types.listOf types.str;
+            default = ["lan."];
+            description = "Local DNS zones this router should be authoritative for (include trailing dot).";
           };
         };
 
