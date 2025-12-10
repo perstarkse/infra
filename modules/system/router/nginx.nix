@@ -45,6 +45,7 @@
           "request.stark.pub"
           "encke.stark.pub"
           "minne-demo.stark.pub"
+          "mail.stark.pub"
         ];
 
         ssl = true;

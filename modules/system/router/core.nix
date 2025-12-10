@@ -467,18 +467,49 @@
                   description = "Peer IP last octet within the WireGuard subnet";
                 };
                 publicKey = mkOption {
-                  type = types.str;
-                  description = "Peer public key";
+                  type = types.nullOr types.str;
+                  description = "Peer public key (omit when autoGenerate = true)";
+                  default = null;
                 };
                 persistentKeepalive = mkOption {
                   type = types.nullOr types.int;
                   default = 25;
                   description = "Peer PersistentKeepalive seconds (null to disable)";
                 };
+                autoGenerate = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = "Generate peer keypair + client config/QR via secrets and apply peer at runtime (no publicKey needed).";
+                };
+                endpoint = mkOption {
+                  type = types.nullOr types.str;
+                  default = null;
+                  description = "Endpoint host:port for generated peer config; defaults to wireguard.defaultEndpoint.";
+                };
+                dns = mkOption {
+                  type = types.nullOr types.str;
+                  default = null;
+                  description = "DNS server to place in generated peer config; defaults to router LAN IP.";
+                };
+                clientAllowedIPs = mkOption {
+                  type = types.listOf types.str;
+                  default = ["0.0.0.0/0"];
+                  description = "AllowedIPs to place in generated peer config.";
+                };
               };
             });
             default = [];
             description = "List of WireGuard peers";
+          };
+          defaultEndpoint = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Default endpoint host:port for generated peers (overridable per peer).";
+          };
+          defaultDns = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Default DNS for generated peer configs; defaults to router LAN IP.";
           };
         };
       };

@@ -68,16 +68,16 @@
         };
       };
 
-      ssd-intel-b = {
-        device = "/dev/disk/by-id/wwn-0x55cd2e415638bd82";
-        type = "disk";
-        content = {
-          type = "filesystem";
-          format = "ext4";
-          mountpoint = "/mnt/sdc";
-          # mountOptions = ["noatime"];
-        };
-      };
+      # ssd-intel-b = {
+      #   device = "/dev/disk/by-id/wwn-0x55cd2e415638bd82";
+      #   type = "disk";
+      #   content = {
+      #     type = "filesystem";
+      #     format = "ext4";
+      #     mountpoint = "/mnt/sdc";
+      #     # mountOptions = ["noatime"];
+      #   };
+      # };
 
       # Windows disk (declared but completely untouched - no content specification)
       #kingston-win = {

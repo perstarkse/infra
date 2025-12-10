@@ -1,6 +1,7 @@
 {
   modules,
   config,
+  lib,
   vars-helper,
   ...
 }: {
@@ -16,6 +17,8 @@
       home-assistant
       k3s
       unifi-controller
+      frigate
+      # go2rtc
     ]
     ++ (with vars-helper.nixosModules; [default]);
 
@@ -71,17 +74,18 @@
 
       wireguard = {
         enable = true;
+        defaultEndpoint = "mail.stark.pub:51820";
         peers = [
           {
             name = "phone";
             ip = 2;
-            publicKey = "NWwGu+pFOMhV6r6mlE7efbe1qSEU8cPHKljl+j1Wxxo=";
+            autoGenerate = true;
             persistentKeepalive = 25;
           }
           {
             name = "bro";
             ip = 3;
-            publicKey = "4MwZDpSFIPIs4ihfHjNJVPofc8Bjn5okCU2Kz6CUDh4=";
+            autoGenerate = true;
             persistentKeepalive = 25;
           }
         ];
@@ -126,6 +130,10 @@
       ];
 
       services = [
+        {
+          name = "frigate.io.lan";
+          target = "10.0.0.1";
+        }
         {
           name = "mail.stark.pub";
           target = "10.0.0.10";
