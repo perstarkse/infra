@@ -131,10 +131,6 @@
 
       services = [
         {
-          name = "frigate.io.lan";
-          target = "10.0.0.1";
-        }
-        {
           name = "mail.stark.pub";
           target = "10.0.0.10";
         }
@@ -158,6 +154,10 @@
           name = "kube-test.lan.stark.pub";
           target = "10.0.0.1";
         }
+        {
+          name = "frigate.lan.stark.pub";
+          target = "10.0.0.1";
+        }
       ];
 
       dhcp = {
@@ -165,18 +165,18 @@
         validLifetime = 86400;
         renewTimer = 43200;
         rebindTimer = 75600;
-        domainName = "lan";
+        domainName = "lan.stark.pub";
       };
 
       dns = {
         enable = true;
+        localZones = ["lan." "lan.stark.pub."];
         upstreamServers = [
           "1.1.1.1@853#cloudflare-dns.com"
           "1.0.0.1@853#cloudflare-dns.com"
           "2606:4700:4700::1111@853#cloudflare-dns.com"
           "2606:4700:4700::1001@853#cloudflare-dns.com"
         ];
-        localZone = "lan.";
       };
 
       nginx = {
@@ -193,6 +193,13 @@
           }
         ];
         virtualHosts = [
+          {
+            domain = "frigate.lan.stark.pub";
+            target = "10.0.0.1";
+            port = 5000;
+            websockets = false;
+            useWildcard = "lanstark";
+          }
           {
             domain = "kube-test.lan.stark.pub";
             target = "10.0.0.10";
