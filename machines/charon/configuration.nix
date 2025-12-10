@@ -313,6 +313,8 @@
 
   powerManagement.enable = true;
 
+  programs.virt-manager.enable = true;
+
   systemd.services.nix-daemon.serviceConfig = {
     Nice = lib.mkForce 15;
     IOSchedulingClass = lib.mkForce "idle";
