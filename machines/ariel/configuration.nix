@@ -180,6 +180,7 @@
   networking = {
     # Allow localsend receive port
     firewall.allowedTCPPorts = [53317];
+    firewall.trustedInterfaces = ["zt+"];
     networkmanager.enable = lib.mkForce true;
 
     wireless.enable = true;

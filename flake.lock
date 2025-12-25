@@ -908,11 +908,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1762285344,
-        "narHash": "sha256-fNQkaMJcUf79uHxbgW8AqmbLrxw+Mk3iMujX9BS+Xl4=",
+        "lastModified": 1766440617,
+        "narHash": "sha256-o4HXQXmp1Cxg2otBZAMahcFJoJiWu2te4O84N+ki3Fk=",
         "owner": "perstarkse",
         "repo": "minne",
-        "rev": "04ee2257320b1ce68ec658471789a893152369ea",
+        "rev": "654add98bcecf44aad4b607542ed42b4cc8729b0",
         "type": "github"
       },
       "original": {
@@ -1163,6 +1163,22 @@
         "type": "github"
       }
     },
+    "playwright-mcp-latest": {
+      "locked": {
+        "lastModified": 1765288272,
+        "narHash": "sha256-vyeLzoECFlYTKAYqs6sWmnRf6yBl2HIvJLZcz8asoK0=",
+        "owner": "theodorton",
+        "repo": "nixpkgs",
+        "rev": "45e0a68ef8b9404392f9fa727d76a30dc40b312a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "theodorton",
+        "ref": "playwright-1.55.0",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "pre-commit-hooks": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -1227,6 +1243,7 @@
         "niri": "niri",
         "nix-minecraft": "nix-minecraft",
         "nixpkgs": "nixpkgs_3",
+        "playwright-mcp-latest": "playwright-mcp-latest",
         "private-infra": "private-infra",
         "sops-nix": "sops-nix_2",
         "stylix": "stylix",

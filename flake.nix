@@ -82,6 +82,9 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    playwright-mcp-latest = {
+      url = "github:theodorton/nixpkgs?ref=playwright-1.55.0";
+    };
   };
 
   outputs = {
@@ -107,6 +110,7 @@
           modules = config.flake;
           inherit private-infra;
           inherit vars-helper;
+          playwrightMcpLatest = inputs."playwright-mcp-latest";
         };
 
         inventory = {
@@ -142,6 +146,9 @@
               };
               roles.default.machines.makemake = {
                 settings.host = "makemake.lan";
+              };
+              roles.default.machines.ariel = {
+                settings.host = "ariel.lan";
               };
             };
             zerotier = {
