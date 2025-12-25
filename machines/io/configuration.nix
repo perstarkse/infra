@@ -88,6 +88,12 @@
             autoGenerate = true;
             persistentKeepalive = 25;
           }
+          {
+            name = "ariel";
+            ip = 4;
+            autoGenerate = true;
+            persistentKeepalive = 25;
+          }
         ];
       };
 
@@ -102,6 +108,12 @@
           name = "unifi-switch";
           ip = "20";
           mac = "84:78:48:6a:f9:f0";
+          portForwards = [];
+        }
+        {
+          name = "ariel";
+          ip = "25";
+          mac = "a0:88:69:af:a7:f3";
           portForwards = [];
         }
         {

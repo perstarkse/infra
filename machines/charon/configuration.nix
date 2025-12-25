@@ -5,6 +5,7 @@
   pkgs,
   vars-helper,
   lib,
+  playwrightMcpLatest,
   ...
 }: {
   imports = with modules.nixosModules;
@@ -287,10 +288,15 @@
     prismlauncher
     virt-manager
     gamescope
+    playwrightMcpLatest.legacyPackages.${pkgs.system}.playwright-mcp
+    bun
   ];
 
-  # Allow localsend receive port
-  networking.firewall.allowedTCPPorts = [53317];
+  networking = {
+    interfaces.enp4s0.wakeOnLan.enable = true;
+    # Allow localsend receive port
+    firewall.allowedTCPPorts = [53317];
+  };
 
   # services.blueman.enable = true;
   hardware.bluetooth = {
