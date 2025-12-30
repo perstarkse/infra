@@ -5,7 +5,7 @@
     config,
     ...
   }: let
-    cfg = config.my.programs.wtp;
+    cfg = config.programs.wtp;
 
     version = "unstable-2025-01-27";
     rev = "7678ba7378236bb5457c1526cef9b2011280af2b";
@@ -39,7 +39,7 @@
     fishIntegrationEnabled =
       cfg.enableFishIntegration && (config.programs.fish.enable or false);
   in {
-    options.my.programs.wtp = {
+    options.programs.wtp = {
       enable = lib.mkEnableOption "Install the wtp CLI and optional shell helpers.";
 
       package = lib.mkOption {
