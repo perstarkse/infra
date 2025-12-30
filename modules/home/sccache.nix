@@ -14,7 +14,7 @@
       home.sessionVariables = {
         RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
         SCCACHE_DIR = sccacheDir;
-        SCCACHE_CACHE_SIZE = "50G";
+        SCCACHE_CACHE_SIZE = "150G";
         CARGO_INCREMENTAL = "0";
       };
       home.activation.ensureSccacheDir = lib.hm.dag.entryAfter ["writeBoundary"] ''
@@ -25,7 +25,7 @@
         (lib.mkAfter ''
           set -gx RUSTC_WRAPPER ${pkgs.sccache}/bin/sccache
           set -gx SCCACHE_DIR ${lib.escapeShellArg sccacheDir}
-          set -gx SCCACHE_CACHE_SIZE 50G
+          set -gx SCCACHE_CACHE_SIZE 150G
           set -gx CARGO_INCREMENTAL 0
         '');
     };

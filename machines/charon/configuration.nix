@@ -113,11 +113,6 @@
         helix = {
           languages = ["nix" "typst" "markdown" "rust" "jinja" "spellchecking"];
         };
-        wtp = {
-          enable = true;
-          enableFishIntegration = true;
-          enableFishCdWrapper = true;
-        };
       };
 
       waybar = {
@@ -143,6 +138,12 @@
           useSystemdRun = false;
         }
       ];
+    };
+
+    programs.wtp = {
+      enable = true;
+      enableFishIntegration = true;
+      enableFishCdWrapper = true;
     };
 
     home.stateVersion = "25.11";
@@ -295,7 +296,8 @@
   networking = {
     interfaces.enp4s0.wakeOnLan.enable = true;
     # Allow localsend receive port
-    firewall.allowedTCPPorts = [53317];
+    # Allow 3000 for dev work
+    firewall.allowedTCPPorts = [53317 3000];
   };
 
   # services.blueman.enable = true;
