@@ -74,6 +74,7 @@ binds {
   Mod+Return { spawn "kitty"; }
   Mod+D { spawn "wofi" "--show" "drun"; }
   Mod+A { spawn "rofi-rbw"; }
+  Mod+V repeat=false { spawn "voxtype" "record" "toggle"; }
   Mod+Shift+Q { close-window; }
   Mod+O repeat=false { toggle-overview; }
   Mod+Z {
