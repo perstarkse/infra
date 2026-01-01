@@ -113,6 +113,13 @@
         "format" = "{specific_free:0.2f}/{specific_total:0.2f} GB";
         "unit" = "GB";
       };
+      "custom/voxtype" = {
+        "exec" = "voxtype status --follow --format json";
+        "return-type" = "json";
+        "format" = "{}";
+        "tooltip" =
+          true;
+      };
     };
 
     hyprlandModules = {

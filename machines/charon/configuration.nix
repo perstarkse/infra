@@ -65,6 +65,7 @@
         chromium
         niri
         node
+        voxtype
         wtp
         sandboxed-binaries
       ]
@@ -144,6 +145,14 @@
       enable = true;
       enableFishIntegration = true;
       enableFishCdWrapper = true;
+    };
+
+    programs.voxtype = {
+      enable = true;
+      model = "base.en";
+      # modelHash = "sha256-kh5M+Ghv3Zk9zQgaXaW2w2W/3hFi5ysI11rHUomSCx8=";
+      enableService = true;
+      enableVulkan = true;
     };
 
     home.stateVersion = "25.11";
