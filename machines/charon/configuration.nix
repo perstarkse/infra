@@ -149,7 +149,7 @@
 
     programs.voxtype = {
       enable = true;
-      model = "base.en";
+      model = "large-v3-turbo";
       # modelHash = "sha256-kh5M+Ghv3Zk9zQgaXaW2w2W/3hFi5ysI11rHUomSCx8=";
       enableService = true;
       enableVulkan = true;
