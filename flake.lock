@@ -908,11 +908,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1766440617,
-        "narHash": "sha256-o4HXQXmp1Cxg2otBZAMahcFJoJiWu2te4O84N+ki3Fk=",
+        "lastModified": 1768153027,
+        "narHash": "sha256-ubtoPyl4TZ8OzvZSOv7j8etq6/8aKzpEBBo2xR4ZaaA=",
         "owner": "perstarkse",
         "repo": "minne",
-        "rev": "654add98bcecf44aad4b607542ed42b4cc8729b0",
+        "rev": "8fe4ac9fec24a568ba03c13d68f359d8dbefb97c",
         "type": "github"
       },
       "original": {
