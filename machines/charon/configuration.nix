@@ -24,7 +24,8 @@
       vfio
       libvirt
       fonts
-      nvidia
+      intel-gpu
+      # nvidia
       docker
       steam
       k3s
@@ -265,7 +266,7 @@
 
     vfio = {
       enable = false;
-      gpuIds = "10de:1b81,10de:10f0";
+      # gpuIds = "10de:1b81,10de:10f0";
       hugepages = 20;
       kvmfrStaticSizeMb = 128;
     };
@@ -290,6 +291,9 @@
   };
 
   nixpkgs.config.allowUnfree = true;
+
+  # Intel Arc B580 requires a very recent kernel
+  boot.kernelPackages = pkgs.linuxPackages_latest;
 
   time.timeZone = "Europe/Stockholm";
 
