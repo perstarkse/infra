@@ -67,6 +67,7 @@
         node
         voxtype
         wtp
+        agent-browser
         sandboxed-binaries
       ]
       ++ (with vars-helper.homeModules; [default])
@@ -153,6 +154,10 @@
       # modelHash = "sha256-kh5M+Ghv3Zk9zQgaXaW2w2W/3hFi5ysI11rHUomSCx8=";
       enableService = true;
       enableVulkan = true;
+    };
+
+    programs.agent-browser = {
+      enable = true;
     };
 
     home.stateVersion = "25.11";
@@ -305,8 +310,8 @@
   networking = {
     interfaces.enp4s0.wakeOnLan.enable = true;
     # Allow localsend receive port
-    # Allow 3000 for dev work
-    firewall.allowedTCPPorts = [53317 3000];
+    # Allow 3000/1 and 5000/1 for dev server and tooling
+    firewall.allowedTCPPorts = [53317 3000 3001 5000 5001];
   };
 
   # services.blueman.enable = true;
