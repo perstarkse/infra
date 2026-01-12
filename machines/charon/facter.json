@@ -2670,14 +2670,6 @@
           "secondary_bus": 0,
           "prog_if": 0
         },
-        "driver": "nvidia",
-        "driver_module": "nvidia",
-        "drivers": [
-          "nvidia"
-        ],
-        "driver_modules": [
-          "nvidia"
-        ],
         "module_alias": "pci:v000010DEd00001F0Asv00001043sd0000879Dbc03sc00i00"
       }
     ],
