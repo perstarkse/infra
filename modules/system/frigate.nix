@@ -88,12 +88,7 @@
 #   };
 # }
 {
-  config.flake.nixosModules.frigate = {
-    config,
-    pkgs,
-    lib,
-    ...
-  }: let
+  config.flake.nixosModules.frigate = _: let
     frigateConfigYAML = builtins.toFile "frigate-config.yml" ''
       mqtt:
         enabled: false
