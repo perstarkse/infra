@@ -292,9 +292,6 @@
 
   nixpkgs.config.allowUnfree = true;
 
-  # Intel Arc B580 requires a very recent kernel
-  boot.kernelPackages = pkgs.linuxPackages_latest;
-
   time.timeZone = "Europe/Stockholm";
 
   environment.systemPackages = with pkgs; [
