@@ -11,6 +11,9 @@
         ];
       };
 
+      # Load xe driver early in initrd for Battlemage GPUs
+      boot.initrd.kernelModules = ["xe"];
+
       services.xserver.videoDrivers = ["modesetting"];
 
       environment.sessionVariables = {
