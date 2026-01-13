@@ -8,9 +8,9 @@
 
   defaultPackage = pkgs.callPackage ../voxtype {
     inherit (pkgs) pkg-config cmake git shaderc;
-    bindgenHook = pkgs.rustPlatform.bindgenHook;
+    inherit (pkgs.rustPlatform) bindgenHook;
     inherit (pkgs) alsa-lib vulkan-headers vulkan-loader;
-    enableVulkan = cfg.enableVulkan;
+    inherit (cfg) enableVulkan;
   };
 
   modelFilenames = {
@@ -58,7 +58,7 @@
         key = "SCROLLLOCK";
       };
       whisper = {
-        model = cfg.model;
+        inherit (cfg) model;
       };
       state_file = "auto";
     }

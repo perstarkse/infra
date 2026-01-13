@@ -1,5 +1,5 @@
 {
-  config.flake.nixosModules.go2rtc = {pkgs, ...}: {
+  config.flake.nixosModules.go2rtc = _: {
     # Standalone go2rtc service
     config = {
       services.go2rtc = {

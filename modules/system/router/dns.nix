@@ -14,12 +14,20 @@
     inherit (cfg) services;
     internalSubnets = lib.concatMap (z: z.subnets) (lib.filter (z: z.kind != "wan") zones);
     enabled = cfg.enable && dnsCfg.enable;
-    normalizeZone = z: let z' = if lib.hasSuffix "." z then z else "${z}."; in z';
+    normalizeZone = z: let
+      z' =
+        if lib.hasSuffix "." z
+        then z
+        else "${z}.";
+    in
+      z';
     rawLocalZones = dnsCfg.localZones or [];
-    localZones =
-      let lst = rawLocalZones;
-      in
-        if lst == [] then ["lan."] else lib.unique (map normalizeZone lst);
+    localZones = let
+      lst = rawLocalZones;
+    in
+      if lst == []
+      then ["lan."]
+      else lib.unique (map normalizeZone lst);
   in {
     config = lib.mkIf enabled {
       services.unbound = {
@@ -54,17 +62,18 @@
             "local-zone" = map (z: "\"${z}\" static") localZones;
             "local-data" =
               lib.concatMap
-              (lz:
-                [
-                  "\"${cfg.hostname}.${lz} IN A ${routerIp}\""
-                  "\"${cfg.hostname}.${lz} IN AAAA ${ulaPrefix}::1\""
-                ]
-                ++ lib.concatMap (
-                  zone:
-                    map (r: "\"${r.name}.${lz} IN A ${r.ip}\"")
-                    (zone.dhcp.reservations or [])
-                )
-                zones
+              (
+                lz:
+                  [
+                    "\"${cfg.hostname}.${lz} IN A ${routerIp}\""
+                    "\"${cfg.hostname}.${lz} IN AAAA ${ulaPrefix}::1\""
+                  ]
+                  ++ lib.concatMap (
+                    zone:
+                      map (r: "\"${r.name}.${lz} IN A ${r.ip}\"")
+                      (zone.dhcp.reservations or [])
+                  )
+                  zones
               )
               localZones
               ++ (map (service: "\"${service.name} IN A ${service.target}\"") services);

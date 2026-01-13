@@ -1,7 +1,6 @@
 {
   modules,
   config,
-  lib,
   vars-helper,
   ...
 }: {
