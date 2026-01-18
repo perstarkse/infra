@@ -70,6 +70,7 @@
         wtp
         agent-browser
         sandboxed-binaries
+        local-ai
       ]
       ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
@@ -123,15 +124,16 @@
       };
 
       secrets.wrappedHomeBinaries = [
-        {
-          name = "mods";
-          title = "Mods";
-          setTerminalTitle = true;
-          command = "${pkgs.mods}/bin/mods";
-          envVar = "OPENAI_API_KEY";
-          secretPath = config.my.secrets.getPath "api-key-openai" "api_key";
-          useSystemdRun = true;
-        }
+        # Removed existing mods wrapper to avoid conflict
+        # {
+        #   name = "mods";
+        #   title = "Mods";
+        #   setTerminalTitle = true;
+        #   command = "${pkgs.mods}/bin/mods";
+        #   envVar = "OPENAI_API_KEY";
+        #   secretPath = config.my.secrets.getPath "api-key-openai" "api_key";
+        #   useSystemdRun = true;
+        # }
         {
           name = "z-claude";
           title = "z-claude";
@@ -333,6 +335,13 @@
   security.polkit.enable = true;
 
   hardware.cpu.amd.updateMicrocode = true;
+
+  security.wrappers.intel_gpu_top = {
+    owner = "root";
+    group = "root";
+    capabilities = "cap_sys_admin+ep";
+    source = "${pkgs.intel-gpu-tools}/bin/intel_gpu_top";
+  };
 
   powerManagement.enable = true;
 
