@@ -46,6 +46,7 @@
           "encke.stark.pub"
           "minne-demo.stark.pub"
           "mail.stark.pub"
+          # nous.fyi is in a different Cloudflare zone - configure separately or use CNAME
         ];
 
         ssl = true;

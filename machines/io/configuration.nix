@@ -2,6 +2,7 @@
   modules,
   config,
   vars-helper,
+  lib,
   ...
 }: {
   imports = with modules.nixosModules;
@@ -169,6 +170,10 @@
           name = "frigate.lan.stark.pub";
           target = "10.0.0.1";
         }
+        {
+          name = "nous.fyi";
+          target = "10.0.0.1";
+        }
       ];
 
       dhcp = {
@@ -271,6 +276,16 @@
               proxy_cache off;
             '';
           }
+          {
+            domain = "nous.fyi";
+            target = "makemake";
+            port = 3002;
+            websockets = false;
+            cloudflareOnly = true;
+            extraConfig = ''
+              client_max_body_size 55M;
+            '';
+          }
         ];
       };
 
@@ -306,6 +321,19 @@
         netdata.enable = false;
         ntopng.enable = false;
       };
+    };
+  };
+
+  # Custom nginx location for nous.fyi /app/ -> /assets/app/ rewrite
+  # This merges with the router module's virtualHost config
+  services.nginx.virtualHosts."nous.fyi".locations = {
+    "/app/" = {
+      proxyPass = "http://10.0.0.10:3002/assets/app/";
+      recommendedProxySettings = true;
+      extraConfig = ''
+        client_max_body_size 55M;
+        if ($cf_access_ok = 0) { return 403; }
+      '';
     };
   };
 }

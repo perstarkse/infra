@@ -22,6 +22,8 @@
       minecraft
       backups
       k3s
+      garage
+      nous
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [media mailserver]);
@@ -48,6 +50,14 @@
         {
           readers = ["surrealdb"];
           path = config.my.secrets.getPath "surrealdb-credentials" "credentials";
+        }
+        {
+          readers = ["nous"];
+          path = config.my.secrets.getPath "nous-env" "env";
+        }
+        {
+          readers = ["garage"];
+          path = config.my.secrets.getPath "garage" "env";
         }
       ];
     };
@@ -77,6 +87,16 @@
       surrealdb = {
         enable = true;
         path = config.my.surrealdb.dataDir;
+        frequency = "daily";
+        backend = {
+          type = "b2";
+          bucket = null;
+          lifecycleKeepPriorVersionsDays = 30;
+        };
+      };
+      nous = {
+        enable = true;
+        path = config.my.nous.dataDir;
         frequency = "daily";
         backend = {
           type = "b2";
@@ -129,6 +149,36 @@
       };
 
       logLevel = "debug";
+    };
+
+    # Garage S3-compatible storage for Nous
+    garage = {
+      enable = true;
+      dataDir = "/var/lib/garage/data";
+      metaDir = "/var/lib/garage/meta";
+      s3Port = 3900;
+      region = "garage";
+    };
+
+    # Nous burnout prevention app
+    nous = {
+      enable = true;
+      port = 3002;
+      address = "10.0.0.10";
+      dataDir = "/var/lib/nous";
+      host = "https://nous.fyi";
+      logLevel = "info";
+
+      s3 = {
+        endpoint = "http://127.0.0.1:3900";
+        bucket = "nous-backups";
+        region = "garage";
+      };
+
+      smtp = {
+        host = "mail.smtp2go.com";
+        port = 587;
+      };
     };
 
     minecraft = {

@@ -85,6 +85,11 @@
     playwright-mcp-latest = {
       url = "github:theodorton/nixpkgs?ref=playwright-1.55.0";
     };
+
+    nous = {
+      url = "git+ssh://git@github.com/perstarkse/nous.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -111,6 +116,7 @@
           inherit private-infra;
           inherit vars-helper;
           playwrightMcpLatest = inputs."playwright-mcp-latest";
+          nous = inputs.nous;
         };
 
         inventory = {
