@@ -351,5 +351,15 @@
     Nice = lib.mkForce 15;
     IOSchedulingClass = lib.mkForce "idle";
     IOSchedulingPriority = lib.mkForce 7;
+    LimitNOFILE = "infinity";
   };
+  security.pam.loginLimits = [
+    {
+      domain = "*";
+      item = "nofile";
+      type = "-";
+      value = "524288";
+    }
+  ];
+  # systemd.settings.Manager.DefaultLimitNOFILE = "8192:524288";
 }
