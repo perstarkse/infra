@@ -19,6 +19,7 @@
       openwebui
       surrealdb
       minne
+      minne-saas
       minecraft
       backups
       k3s
@@ -37,7 +38,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas"];
       };
 
       generateManifest = false;
@@ -48,12 +49,8 @@
           path = config.my.secrets.getPath "minne-env" "env";
         }
         {
-          readers = ["surrealdb"];
-          path = config.my.secrets.getPath "surrealdb-credentials" "credentials";
-        }
-        {
           readers = ["nous"];
-          path = config.my.secrets.getPath "nous-env" "env";
+          path = config.my.secrets.getPath "nous" "env";
         }
         {
           readers = ["garage"];
@@ -67,6 +64,16 @@
       minne = {
         enable = true;
         path = config.my.minne.dataDir;
+        frequency = "daily";
+        backend = {
+          type = "b2";
+          bucket = null;
+          lifecycleKeepPriorVersionsDays = 30;
+        };
+      };
+      minne-saas = {
+        enable = true;
+        path = config.my.minne-saas.dataDir;
         frequency = "daily";
         backend = {
           type = "b2";
@@ -151,6 +158,26 @@
       logLevel = "debug";
     };
 
+    # Minne SaaS configuration
+    minne-saas = {
+      enable = true;
+      port = 3003;
+      address = "10.0.0.10";
+      dataDir = "/var/lib/minne-saas";
+
+      surrealdb = {
+        host = "127.0.0.1";
+        port = 8221;
+      };
+
+      logLevel = "info";
+
+      saasConfig = {
+        demo_mode = false;
+        demo_allowed_mutating_paths = ["/signin" "/gdpr/accept" "/gdpr/deny"];
+      };
+    };
+
     # Garage S3-compatible storage for Nous
     garage = {
       enable = true;
@@ -167,7 +194,12 @@
       address = "10.0.0.10";
       dataDir = "/var/lib/nous";
       host = "https://nous.fyi";
-      logLevel = "info";
+      logLevel = "debug"; # Temporarily debug to diagnose mail issues
+
+      database = {
+        name = "nous_prod";
+        user = "nous";
+      };
 
       s3 = {
         endpoint = "http://127.0.0.1:3900";
@@ -176,7 +208,7 @@
       };
 
       smtp = {
-        host = "mail.smtp2go.com";
+        host = "mail-eu.smtp2go.com";
         port = 587;
       };
     };
@@ -252,4 +284,31 @@
   programs.fuse.userAllowOther = true;
 
   nixpkgs.config.allowUnfree = true;
+
+  # SurrealDB SaaS Service (Managed separately from the module for now)
+  systemd.services.surrealdb-saas = {
+    description = "SurrealDB SaaS - Database Server";
+    wantedBy = ["multi-user.target"];
+    after = ["network.target"];
+
+    serviceConfig = {
+      Type = "simple";
+      User = "surrealdb";
+      Group = "surrealdb";
+      WorkingDirectory = "/var/lib/surrealdb-saas";
+      # Using the same package as the main surrealdb service
+      ExecStart = ''${pkgs.surrealdb}/bin/surreal start --bind 127.0.0.1:8221 rocksdb:/var/lib/surrealdb-saas/data.db'';
+      Restart = "always";
+      RestartSec = "10";
+
+      EnvironmentFile = [
+        (config.my.secrets.getPath "surrealdb-credentials" "credentials")
+      ];
+    };
+  };
+
+  # Ensure SaaS DB directory exists
+  systemd.tmpfiles.rules = [
+    "d /var/lib/surrealdb-saas 0755 surrealdb surrealdb -"
+  ];
 }

@@ -55,7 +55,7 @@
         };
         name = lib.mkOption {
           type = lib.types.str;
-          default = "nous_prod";
+          default = "nous";
           description = "Database name";
         };
         user = lib.mkOption {
@@ -164,6 +164,8 @@
             "S3_ENDPOINT=${cfg.s3.endpoint}"
             "SMTP_HOST=${cfg.smtp.host}"
             "SMTP_PORT=${toString cfg.smtp.port}"
+            # Use peer auth via Unix socket - no password needed
+            "DATABASE_URL=postgres:///${cfg.database.name}?host=/run/postgresql"
           ];
 
           # Secrets from environment file
