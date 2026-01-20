@@ -43,16 +43,6 @@
       };
 
       database = {
-        host = lib.mkOption {
-          type = lib.types.str;
-          default = "127.0.0.1";
-          description = "PostgreSQL host";
-        };
-        port = lib.mkOption {
-          type = lib.types.port;
-          default = 5432;
-          description = "PostgreSQL port";
-        };
         name = lib.mkOption {
           type = lib.types.str;
           default = "nous";
@@ -68,13 +58,13 @@
       smtp = {
         host = lib.mkOption {
           type = lib.types.str;
-          default = "mail.smtp2go.com";
+          default = "mail-eu.smtp2go.com";
           description = "SMTP server host";
         };
         port = lib.mkOption {
           type = lib.types.port;
           default = 587;
-          description = "SMTP server port";
+          description = "SMTP server port (587 for STARTTLS)";
         };
       };
 
@@ -131,9 +121,32 @@
         ensureUsers = [
           {
             name = cfg.database.user;
-            ensureDBOwnership = true;
+            # Cannot use ensureDBOwnership when db name != user name
+            ensureDBOwnership = false;
           }
         ];
+        # Allow local socket connections without password (peer auth)
+        authentication = pkgs.lib.mkOverride 10 ''
+          # TYPE  DATABASE        USER            ADDRESS                 METHOD
+          local   all             all                                     peer
+          host    all             all             127.0.0.1/32            scram-sha-256
+          host    all             all             ::1/128                 scram-sha-256
+        '';
+        # Grant ownership of the database to the user
+        initialScript = pkgs.writeText "nous-db-init" ''
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${cfg.database.user}') THEN
+              CREATE ROLE "${cfg.database.user}" WITH LOGIN;
+            END IF;
+          END
+          $$;
+          GRANT ALL PRIVILEGES ON DATABASE "${cfg.database.name}" TO "${cfg.database.user}";
+          ALTER DATABASE "${cfg.database.name}" OWNER TO "${cfg.database.user}";
+          \c "${cfg.database.name}"
+          GRANT ALL ON SCHEMA public TO "${cfg.database.user}";
+          ALTER SCHEMA public OWNER TO "${cfg.database.user}";
+        '';
       };
 
       # Nous systemd service
@@ -149,7 +162,7 @@
           User = "nous";
           Group = "nous";
           WorkingDirectory = "${nousPkg}/share/nous";
-          ExecStart = "${nousPkg}/bin/burnout_api start --server-and-worker";
+          ExecStart = "${nousPkg}/bin/nous_api start --server-and-worker";
           Restart = "always";
           RestartSec = "10";
 
@@ -158,13 +171,13 @@
             "LOCO_ENV=production"
             "PORT=${toString cfg.port}"
             "HOST=${cfg.host}"
-            "RUST_LOG=garage=${cfg.logLevel},burnout_api=${cfg.logLevel}"
+            "RUST_LOG=garage=${cfg.logLevel},nous_api=${cfg.logLevel},loco_rs=${cfg.logLevel}"
             "AWS_REGION=${cfg.s3.region}"
             "S3_BUCKET=${cfg.s3.bucket}"
             "S3_ENDPOINT=${cfg.s3.endpoint}"
             "SMTP_HOST=${cfg.smtp.host}"
             "SMTP_PORT=${toString cfg.smtp.port}"
-            # Use peer auth via Unix socket - no password needed
+            # Use peer auth via Unix socket (no password needed)
             "DATABASE_URL=postgres:///${cfg.database.name}?host=/run/postgresql"
           ];
 
