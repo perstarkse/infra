@@ -237,10 +237,26 @@
             description = "Email for ACME/Let's Encrypt certificates";
           };
           ddclient = {
-            enable = mkOption {
-              type = types.bool;
-              default = true;
-              description = "Enable ddclient for dynamic DNS";
+            enable = mkEnableOption "ddclient for dynamic DNS";
+            zones = mkOption {
+              type = types.listOf (types.submodule {
+                options = {
+                  zone = mkOption {
+                    type = types.str;
+                    description = "Cloudflare zone (e.g., stark.pub)";
+                  };
+                  domains = mkOption {
+                    type = types.listOf types.str;
+                    description = "Domains to update via ddclient";
+                  };
+                  passwordFile = mkOption {
+                    type = types.path;
+                    description = "Path to file containing Cloudflare API token";
+                  };
+                };
+              });
+              default = [];
+              description = "List of Cloudflare zones with their domains for dynamic DNS updates";
             };
           };
           wildcardCerts = mkOption {

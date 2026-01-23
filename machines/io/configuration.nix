@@ -18,6 +18,7 @@
       k3s
       unifi-controller
       frigate
+      garage
       # go2rtc
     ]
     ++ (with vars-helper.nixosModules; [default]);
@@ -26,8 +27,17 @@
   nixpkgs.config.allowUnfree = true;
 
   my = {
+    listenNetworkAddress = "10.0.0.1"; # Internal LAN IP
+
     mainUser = {
       name = "p";
+    };
+
+    garage = {
+      enable = true;
+      # replicationFactor = 3;
+      dataDir = "/storage/garage/data";
+      metaDir = "/storage/garage/meta";
     };
 
     secrets.discover = {
@@ -174,6 +184,10 @@
           name = "nous.fyi";
           target = "10.0.0.1";
         }
+        {
+          name = "politikerstod.stark.pub";
+          target = "10.0.0.1";
+        }
       ];
 
       dhcp = {
@@ -198,7 +212,30 @@
       nginx = {
         enable = true;
         acmeEmail = "services@stark.pub";
-        ddclient.enable = true;
+        ddclient = {
+          enable = true;
+          zones = [
+            {
+              zone = "stark.pub";
+              domains = [
+                "chat.stark.pub"
+                "minne.stark.pub"
+                "vault.stark.pub"
+                "request.stark.pub"
+                "encke.stark.pub"
+                "minne-demo.stark.pub"
+                "mail.stark.pub"
+                "politikerstod.stark.pub"
+              ];
+              passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
+            }
+            {
+              zone = "nous.fyi";
+              domains = ["nous.fyi"];
+              passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
+            }
+          ];
+        };
         wildcardCerts = [
           {
             name = "lanstark";
@@ -285,6 +322,13 @@
             extraConfig = ''
               client_max_body_size 55M;
             '';
+          }
+          {
+            domain = "politikerstod.stark.pub";
+            target = "makemake";
+            port = 5150;
+            websockets = false;
+            cloudflareOnly = true;
           }
         ];
       };

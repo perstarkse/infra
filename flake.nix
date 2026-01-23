@@ -95,6 +95,16 @@
       url = "git+ssh://git@github.com/perstarkse/nous.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    politikerstod = {
+      url = "git+ssh://git@github.com/perstarkse/politikerstod.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    nix-topology = {
+      url = "github:oddlama/nix-topology";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -103,6 +113,7 @@
     home-manager,
     private-infra,
     vars-helper,
+    nix-topology,
     ...
   } @ inputs:
     flake-parts.lib.mkFlake {inherit inputs;} ({config, ...}: {
@@ -110,6 +121,7 @@
         clan-core.flakeModules.default
         home-manager.flakeModules.home-manager
         inputs.treefmt-nix.flakeModule
+        inputs.nix-topology.flakeModule
         (inputs.import-tree ./modules)
       ];
 
@@ -122,6 +134,7 @@
           inherit vars-helper;
           playwrightMcpLatest = inputs."playwright-mcp-latest";
           nous = inputs.nous;
+          nix-topology = inputs.nix-topology;
         };
 
         inventory = {

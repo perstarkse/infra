@@ -8,7 +8,7 @@
     };
     prompts = {
       "ddclient.conf" = {
-        description = "ddclient configuration file contents";
+        description = "Cloudflare API token for stark.pub zone (ddclient)";
         persist = true;
         type = "hidden";
       };

@@ -94,26 +94,6 @@
     };
 
     config = lib.mkIf cfg.enable {
-      clan.core.vars.generators.nous = {
-        share = true;
-        files = {
-          env = {
-            mode = "0400";
-            neededFor = "users";
-          };
-        };
-        prompts = {
-          env = {
-            description = "Nous environment file content";
-            persist = true;
-            type = "hidden";
-          };
-        };
-        script = ''
-          cp "$prompts/env" "$out/env"
-        '';
-      };
-
       # PostgreSQL database
       services.postgresql = {
         enable = true;

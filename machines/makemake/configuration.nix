@@ -25,6 +25,7 @@
       k3s
       garage
       nous
+      politikerstod
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [media mailserver]);
@@ -38,8 +39,9 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage"];
       };
+
 
       generateManifest = false;
 
@@ -52,18 +54,22 @@
           readers = ["nous"];
           path = config.my.secrets.getPath "nous" "env";
         }
+        # {
+        #   readers = ["garage"];
+        #   path = config.my.secrets.getPath "garage" "env";
+        # }
         {
-          readers = ["garage"];
-          path = config.my.secrets.getPath "garage" "env";
+          readers = ["politikerstod"];
+          path = config.my.secrets.getPath "politikerstod" "env";
         }
       ];
     };
 
     # Backups configuration
-    backups = {
-      minne = {
+    backups = let
+      mkB2 = path: {
         enable = true;
-        path = config.my.minne.dataDir;
+        inherit path;
         frequency = "daily";
         backend = {
           type = "b2";
@@ -71,46 +77,13 @@
           lifecycleKeepPriorVersionsDays = 30;
         };
       };
-      minne-saas = {
-        enable = true;
-        path = config.my.minne-saas.dataDir;
-        frequency = "daily";
-        backend = {
-          type = "b2";
-          bucket = null;
-          lifecycleKeepPriorVersionsDays = 30;
-        };
-      };
-      vaultwarden = {
-        enable = true;
-        path = config.my.vaultwarden.backupDir;
-        frequency = "daily";
-        backend = {
-          type = "b2";
-          bucket = null;
-          lifecycleKeepPriorVersionsDays = 30;
-        };
-      };
-      surrealdb = {
-        enable = true;
-        path = config.my.surrealdb.dataDir;
-        frequency = "daily";
-        backend = {
-          type = "b2";
-          bucket = null;
-          lifecycleKeepPriorVersionsDays = 30;
-        };
-      };
-      nous = {
-        enable = true;
-        path = config.my.nous.dataDir;
-        frequency = "daily";
-        backend = {
-          type = "b2";
-          bucket = null;
-          lifecycleKeepPriorVersionsDays = 30;
-        };
-      };
+    in {
+      minne = mkB2 config.my.minne.dataDir;
+      minne-saas = mkB2 config.my.minne-saas.dataDir;
+      vaultwarden = mkB2 config.my.vaultwarden.backupDir;
+      surrealdb = mkB2 config.my.surrealdb.dataDir;
+      surrealdb-saas = mkB2 config.my.minne-saas.surrealdb.dataDir;
+      nous = mkB2 config.my.nous.dataDir;
     };
 
     k3s = {
@@ -168,14 +141,11 @@
       surrealdb = {
         host = "127.0.0.1";
         port = 8221;
+        dataDir = "/var/lib/surrealdb-saas";
       };
 
       logLevel = "info";
-
-      saasConfig = {
-        demo_mode = false;
-        demo_allowed_mutating_paths = ["/signin" "/gdpr/accept" "/gdpr/deny"];
-      };
+      demoMode = false;
     };
 
     # Garage S3-compatible storage for Nous
@@ -210,6 +180,41 @@
       smtp = {
         host = "mail-eu.smtp2go.com";
         port = 587;
+      };
+    };
+
+    # Politikerstöd Service
+    politikerstod = {
+      enable = true;
+      port = 5150;
+      host = "https://politikerstod.stark.pub";
+      openFirewall = true;
+
+      database = {
+        name = "politikerstod_prod";
+        user = "politikerstod";
+        host = "192.168.100.12"; # Container IP
+        port = 5432;
+        enableContainer = true;
+        container = {
+          hostAddress = "192.168.100.10";
+          localAddress = "192.168.100.12";
+        };
+      };
+
+      smtp = {
+        host = "mail-eu.smtp2go.com";
+        port = 587;
+        secure = false; # Upgrade via STARTTLS
+      };
+
+      settings = {
+        logLevel = "info";
+        prettyBacktrace = false;
+        numWorkers = 2;
+        pollingHistoricalMonths = 12;
+        openaiModel = "gpt-4.1-mini";
+        evaluationModel = "gpt-4.1-mini";
       };
     };
 
@@ -284,31 +289,4 @@
   programs.fuse.userAllowOther = true;
 
   nixpkgs.config.allowUnfree = true;
-
-  # SurrealDB SaaS Service (Managed separately from the module for now)
-  systemd.services.surrealdb-saas = {
-    description = "SurrealDB SaaS - Database Server";
-    wantedBy = ["multi-user.target"];
-    after = ["network.target"];
-
-    serviceConfig = {
-      Type = "simple";
-      User = "surrealdb";
-      Group = "surrealdb";
-      WorkingDirectory = "/var/lib/surrealdb-saas";
-      # Using the same package as the main surrealdb service
-      ExecStart = ''${pkgs.surrealdb}/bin/surreal start --bind 127.0.0.1:8221 rocksdb:/var/lib/surrealdb-saas/data.db'';
-      Restart = "always";
-      RestartSec = "10";
-
-      EnvironmentFile = [
-        (config.my.secrets.getPath "surrealdb-credentials" "credentials")
-      ];
-    };
-  };
-
-  # Ensure SaaS DB directory exists
-  systemd.tmpfiles.rules = [
-    "d /var/lib/surrealdb-saas 0755 surrealdb surrealdb -"
-  ];
 }
