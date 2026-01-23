@@ -49,6 +49,11 @@
     home.stateVersion = "25.11";
   };
   my = {
+    listenNetworkAddress = "10.0.0.x"; # TODO: Verify IP
+    # garage = {
+    #   enable = true;
+    #   replicationFactor = 3;
+    # };
     mainUser.name = "p";
     secrets = {
       # Auto-discover secrets generators for this machine

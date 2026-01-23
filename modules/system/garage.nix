@@ -1,152 +1,97 @@
-{
-  config.flake.nixosModules.garage = {
-    config,
-    lib,
-    pkgs,
-    ...
-  }: let
+{ ... }: {
+  config.flake.nixosModules.garage = { config, lib, pkgs, ... }: let
     cfg = config.my.garage;
   in {
     options.my.garage = {
-      enable = lib.mkEnableOption "Enable Garage S3-compatible storage";
-
+      enable = lib.mkEnableOption "Enable Garage S3 Service";
+      
       dataDir = lib.mkOption {
         type = lib.types.path;
         default = "/var/lib/garage/data";
-        description = "Directory to store Garage data blocks";
+        description = "Data directory for Garage";
       };
 
       metaDir = lib.mkOption {
         type = lib.types.path;
         default = "/var/lib/garage/meta";
-        description = "Directory to store Garage metadata (use SSD if possible)";
+        description = "Metadata directory for Garage";
       };
 
       s3Port = lib.mkOption {
-        type = lib.types.port;
+        type = lib.types.int;
         default = 3900;
-        description = "Port for S3 API";
-      };
-
-      rpcPort = lib.mkOption {
-        type = lib.types.port;
-        default = 3901;
-        description = "Port for inter-node RPC";
-      };
-
-      adminPort = lib.mkOption {
-        type = lib.types.port;
-        default = 3903;
-        description = "Port for admin API (localhost only)";
+        description = "S3 API port";
       };
 
       region = lib.mkOption {
         type = lib.types.str;
         default = "garage";
-        description = "S3 region name";
-      };
-
-      replicationFactor = lib.mkOption {
-        type = lib.types.int;
-        default = 1;
-        description = "Replication factor (1 for single-node)";
-      };
-
-      dbEngine = lib.mkOption {
-        type = lib.types.enum ["sqlite" "lmdb"];
-        default = "sqlite";
-        description = "Database engine for metadata storage";
-      };
-
-      openFirewall = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Open firewall for S3 API port";
+        description = "S3 region";
       };
     };
 
-    config = lib.mkIf cfg.enable {
-      clan.core.vars.generators.garage = {
-        share = true;
-        files = {
-          env = {
-            mode = "0400";
-            neededFor = "users";
-          };
-          "nous-access-key" = {
-            mode = "0400";
-            neededFor = "users";
-          };
-          "nous-secret-key" = {
-            mode = "0400";
-            neededFor = "users";
-          };
+  config = lib.mkIf cfg.enable {
+    services.garage = {
+      enable = true;
+      package = pkgs.garage;
+      settings = {
+        metadata_dir = cfg.metaDir;
+        data_dir = cfg.dataDir;
+        rpc_secret_file = config.my.secrets.getPath "garage" "rpc_secret";
+        replication_mode = "none";
+        
+        s3_api = {
+          s3_region = cfg.region;
+          api_bind_addr = "[::]:${toString cfg.s3Port}";
+          root_domain = ".s3.garage";
         };
-        prompts = {
-          env = {
-            description = "Garage environment file content";
-            persist = true;
-            type = "hidden";
-          };
-          "nous-access-key" = {
-            description = "Nous access key content";
-            persist = true;
-            type = "hidden";
-          };
-          "nous-secret-key" = {
-            description = "Nous secret key content";
-            persist = true;
-            type = "hidden";
-          };
+
+        s3_web = {
+          bind_addr = "[::]:3902";
+          root_domain = ".web.garage";
+          enabled = true;
         };
-        script = ''
-          cp "$prompts/env" "$out/env"
-          cp "$prompts/nous-access-key" "$out/nous-access-key"
-          cp "$prompts/nous-secret-key" "$out/nous-secret-key"
-        '';
 
-      };
-
-      # Use the built-in NixOS Garage module
-
-      services.garage = {
-        enable = true;
-        package = pkgs.garage;
-
-        # Environment file with RPC_SECRET and ADMIN_TOKEN
-        environmentFile = config.my.secrets.getPath "garage" "env";
-
-        settings = {
-          metadata_dir = cfg.metaDir;
-          data_dir = cfg.dataDir;
-          db_engine = cfg.dbEngine;
-          replication_factor = cfg.replicationFactor;
-
-          rpc_bind_addr = "[::]:${toString cfg.rpcPort}";
-          rpc_public_addr = "${config.my.listenNetworkAddress}:${toString cfg.rpcPort}";
-          # rpc_secret is loaded from environmentFile as GARAGE_RPC_SECRET
-
-          s3_api = {
-            s3_region = cfg.region;
-            api_bind_addr = "[::]:${toString cfg.s3Port}";
-            root_domain = ".s3.garage.localhost";
-          };
-
-          admin = {
-            api_bind_addr = "127.0.0.1:${toString cfg.adminPort}";
-            # admin_token is loaded from environmentFile as GARAGE_ADMIN_TOKEN
-          };
+        rpc_bind_addr = "[::]:3901";
+        admin = {
+          api_bind_addr = "127.0.0.1:3903";
         };
       };
-
-      # Ensure directories exist
-      systemd.tmpfiles.rules = [
-        "d ${cfg.dataDir} 0755 root root -"
-        "d ${cfg.metaDir} 0755 root root -"
-      ];
-
-      # Firewall
-      networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [cfg.s3Port];
     };
+
+    my.secrets.allowReadAccess = [
+      {
+        readers = [ "garage" ];
+        path = config.my.secrets.getPath "garage" "rpc_secret";
+      }
+    ];
+
+    # Disable DynamicUser to ensure we use the static 'garage' user
+    systemd.services.garage.serviceConfig.DynamicUser = lib.mkForce false;
+    
+    # Allow group-readable secrets (required because sops/vars-helper sets 0440)
+    systemd.services.garage.environment.GARAGE_ALLOW_WORLD_READABLE_SECRETS = "true";
+
+    # Ensure directories exist and have correct permissions
+    systemd.tmpfiles.rules = [
+      "d /var/lib/garage 0700 garage garage -"
+      "d ${cfg.dataDir} 0700 garage garage -"
+      "d ${cfg.metaDir} 0700 garage garage -"
+      "Z /var/lib/garage 0700 garage garage -"
+      "Z ${cfg.dataDir} 0700 garage garage -"
+      "Z ${cfg.metaDir} 0700 garage garage -"
+    ];
+
+    # Open Firewall
+    networking.firewall.allowedTCPPorts = [ cfg.s3Port 3901 3902 ];
+
+    users.users.garage = {
+      isSystemUser = true;
+      group = "garage";
+      home = cfg.dataDir;
+      createHome = true;
+    };
+    users.groups.garage = {};
   };
+};
 }

@@ -27,37 +27,24 @@
         defaults.email = nginxCfg.acmeEmail;
       };
 
-      services.ddclient = lib.mkIf nginxCfg.ddclient.enable {
-        enable = true;
-        protocol = "cloudflare";
-        username = "token";
-        passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
-        zone = "stark.pub";
-
-        use = "";
-        usev4 = "webv4, webv4=ipify-ipv4";
-        usev6 = ""; # disable IPv6 detection
-
-        domains = [
-          "chat.stark.pub"
-          "minne.stark.pub"
-          "vault.stark.pub"
-          "request.stark.pub"
-          "encke.stark.pub"
-          "minne-demo.stark.pub"
-          "mail.stark.pub"
-          # nous.fyi is in a different Cloudflare zone - configure separately or use CNAME
-        ];
-
-        ssl = true;
-        interval = "10min";
-        quiet = true; # optional
-
-        # Optional: TTL=auto (1) on Cloudflare
-        extraConfig = ''
-          ttl=1
-        '';
-      };
+      # Multi-zone ddclient support via custom systemd services
+      # Each zone gets its own config file, service, and timer
+      environment.etc = lib.mkIf nginxCfg.ddclient.enable (
+        lib.listToAttrs (map (zone: lib.nameValuePair "ddclient-${zone.zone}.conf" {
+          mode = "0600";
+          text = ''
+            daemon=0
+            protocol=cloudflare
+            use=web, web=https://api.ipify.org
+            ssl=yes
+            ttl=1
+            login=token
+            password='@PASSWORD@'
+            zone=${zone.zone}
+            ${lib.concatStringsSep "\n" zone.domains}
+          '';
+        }) nginxCfg.ddclient.zones)
+      );
 
       services.nginx = {
         enable = true;
@@ -217,75 +204,115 @@
           })
           nginxCfg.wildcardCerts)
       );
-      systemd = {
-        tmpfiles.rules = lib.mkIf cfNeeded [
-          "d ${cfDir} 0755 root root - -"
-          "f ${cfAllow} 0644 root root - -"
-          "f ${cfRealip} 0644 root root - -"
-          "f ${cfGeo} 0644 root root - -"
-        ];
 
-        services.cloudflare-ips-update = lib.mkIf cfNeeded {
-          description = "Update Cloudflare IP snippets for nginx";
-          wants = ["network-online.target"];
-          after = ["network-online.target"];
-          serviceConfig = {
-            Type = "oneshot";
-            ExecStart = "${pkgs.writeShellScript "cloudflare-ips-update" ''
-              set -euo pipefail
-              dir="${cfDir}"
-              ${pkgs.coreutils}/bin/mkdir -p "$dir"
-              tmp="$(${pkgs.coreutils}/bin/mktemp -d)"
-              trap '${pkgs.coreutils}/bin/rm -rf "$tmp"' EXIT
+      systemd.tmpfiles.rules = lib.mkIf cfNeeded [
+        "d ${cfDir} 0755 root root - -"
+        "f ${cfAllow} 0644 root root - -"
+        "f ${cfRealip} 0644 root root - -"
+        "f ${cfGeo} 0644 root root - -"
+      ];
 
-              ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v4 > "$tmp/ips-v4"
-              ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v6 > "$tmp/ips-v6"
+      systemd.services = lib.mkMerge [
+        # ddclient services for each zone
+        (lib.mkIf nginxCfg.ddclient.enable (
+          lib.listToAttrs (map (zone: lib.nameValuePair "ddclient-${zone.zone}" {
+            description = "Dynamic DNS update for ${zone.zone}";
+            wants = ["network-online.target"];
+            after = ["network-online.target"];
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStartPre = pkgs.writeShellScript "ddclient-${zone.zone}-prepare" ''
+                ${pkgs.coreutils}/bin/install -m 0600 /etc/ddclient-${zone.zone}.conf /run/ddclient-${zone.zone}.conf
+                ${pkgs.gnused}/bin/sed -i "s|@PASSWORD@|$(${pkgs.coreutils}/bin/cat ${zone.passwordFile})|" /run/ddclient-${zone.zone}.conf
+              '';
+              ExecStart = "${pkgs.ddclient}/bin/ddclient -verbose -noquiet -file /run/ddclient-${zone.zone}.conf";
+              ExecStartPost = "${pkgs.coreutils}/bin/rm -f /run/ddclient-${zone.zone}.conf";
+            };
+          }) nginxCfg.ddclient.zones)
+        ))
 
-              # Access module style allow list (kept for reference)
-              {
-                while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v4"
-                while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v6"
-              } > "$tmp/allow.conf"
+        # Cloudflare IPs update service
+        (lib.mkIf cfNeeded {
+          cloudflare-ips-update = {
+            description = "Update Cloudflare IP snippets for nginx";
+            wants = ["network-online.target"];
+            after = ["network-online.target"];
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = "${pkgs.writeShellScript "cloudflare-ips-update" ''
+                set -euo pipefail
+                dir="${cfDir}"
+                ${pkgs.coreutils}/bin/mkdir -p "$dir"
+                tmp="$(${pkgs.coreutils}/bin/mktemp -d)"
+                trap '${pkgs.coreutils}/bin/rm -rf "$tmp"' EXIT
 
-              # Real IP trust
-              {
-                while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v4"
-                while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v6"
-                printf 'real_ip_header CF-Connecting-IP;\n'
-                printf 'real_ip_recursive on;\n'
-              } > "$tmp/realip.conf"
+                ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v4 > "$tmp/ips-v4"
+                ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v6 > "$tmp/ips-v6"
 
-              # Geo include for CF edges
-              {
-                while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v4"
-                while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v6"
-              } > "$tmp/edge-geo.conf"
+                # Access module style allow list (kept for reference)
+                {
+                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v4"
+                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v6"
+                } > "$tmp/allow.conf"
 
-              changed=0
-              for f in allow.conf realip.conf edge-geo.conf; do
-                if ! ${pkgs.diffutils}/bin/cmp -s "$tmp/$f" "$dir/$f"; then
-                  ${pkgs.coreutils}/bin/install -m 0644 -D "$tmp/$f" "$dir/$f"
-                  changed=1
+                # Real IP trust
+                {
+                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v4"
+                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v6"
+                  printf 'real_ip_header CF-Connecting-IP;\n'
+                  printf 'real_ip_recursive on;\n'
+                } > "$tmp/realip.conf"
+
+                # Geo include for CF edges
+                {
+                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v4"
+                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v6"
+                } > "$tmp/edge-geo.conf"
+
+                changed=0
+                for f in allow.conf realip.conf edge-geo.conf; do
+                  if ! ${pkgs.diffutils}/bin/cmp -s "$tmp/$f" "$dir/$f"; then
+                    ${pkgs.coreutils}/bin/install -m 0644 -D "$tmp/$f" "$dir/$f"
+                    changed=1
+                  fi
+                done
+
+                if [ "$changed" -eq 1 ]; then
+                  ${pkgs.nginx}/bin/nginx -t && ${pkgs.systemd}/bin/systemctl reload nginx || true
                 fi
-              done
-
-              if [ "$changed" -eq 1 ]; then
-                ${pkgs.nginx}/bin/nginx -t && ${pkgs.systemd}/bin/systemctl reload nginx || true
-              fi
-            ''}";
+              ''}";
+            };
+            wantedBy = ["multi-user.target"];
           };
-          wantedBy = ["multi-user.target"];
-        };
+        })
+      ];
 
-        timers.cloudflare-ips-update = lib.mkIf cfNeeded {
-          wantedBy = ["timers.target"];
-          timerConfig = {
-            OnBootSec = "5m";
-            OnUnitActiveSec = "12h";
-            RandomizedDelaySec = "10m";
+      systemd.timers = lib.mkMerge [
+        # ddclient timers for each zone
+        (lib.mkIf nginxCfg.ddclient.enable (
+          lib.listToAttrs (map (zone: lib.nameValuePair "ddclient-${zone.zone}" {
+            description = "Timer for dynamic DNS update of ${zone.zone}";
+            wantedBy = ["timers.target"];
+            timerConfig = {
+              OnBootSec = "2min";
+              OnUnitActiveSec = "10min";
+              RandomizedDelaySec = "30s";
+            };
+          }) nginxCfg.ddclient.zones)
+        ))
+
+        # Cloudflare IPs update timer
+        (lib.mkIf cfNeeded {
+          cloudflare-ips-update = {
+            wantedBy = ["timers.target"];
+            timerConfig = {
+              OnBootSec = "5m";
+              OnUnitActiveSec = "12h";
+              RandomizedDelaySec = "10m";
+            };
           };
-        };
-      };
+        })
+      ];
     };
   };
 }

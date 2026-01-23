@@ -6,8 +6,6 @@
     ...
   }: let
     cfg = config.my.minne-saas;
-    saasConfigFormat = pkgs.formats.yaml {};
-    saasConfigFile = saasConfigFormat.generate "saas-config.yaml" cfg.saasConfig;
   in {
     options.my.minne-saas = {
       enable = lib.mkEnableOption "Enable Minne SaaS service";
@@ -42,6 +40,12 @@
           default = 8221;
           description = "SurrealDB port";
         };
+
+        dataDir = lib.mkOption {
+          type = lib.types.path;
+          default = "/var/lib/surrealdb-saas";
+          description = "Directory to store SurrealDB SaaS data";
+        };
       };
 
       logLevel = lib.mkOption {
@@ -50,12 +54,10 @@
         description = "Log level for Minne SaaS";
       };
 
-      saasConfig = lib.mkOption {
-        type = lib.types.submodule {
-          freeformType = saasConfigFormat.type;
-        };
-        default = {};
-        description = "Content of saas-config.yaml";
+      demoMode = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Enable demo mode (blocks mutating requests)";
       };
 
       firewallPorts = lib.mkOption {
@@ -82,6 +84,27 @@
     };
 
     config = lib.mkIf cfg.enable {
+      # SurrealDB SaaS service
+      systemd.services.surrealdb-saas = {
+        description = "SurrealDB SaaS - Database Server";
+        wantedBy = ["multi-user.target"];
+        after = ["network.target"];
+
+        serviceConfig = {
+          Type = "simple";
+          User = "surrealdb";
+          Group = "surrealdb";
+          WorkingDirectory = cfg.surrealdb.dataDir;
+          ExecStart = ''${pkgs.surrealdb}/bin/surreal start --bind ${cfg.surrealdb.host}:${toString cfg.surrealdb.port} rocksdb:${cfg.surrealdb.dataDir}/data.db'';
+          Restart = "always";
+          RestartSec = "10";
+
+          EnvironmentFile = [
+            (config.my.secrets.getPath "surrealdb-credentials" "credentials")
+          ];
+        };
+      };
+
       # Minne SaaS Server service
       systemd.services.minne-saas-server = {
         description = "Minne SaaS - Server";
@@ -109,14 +132,13 @@
           Restart = "always";
           RestartSec = "10";
 
-
-
           # Basic environment variables
           Environment = [
             "SURREALDB_ADDRESS=ws://${cfg.surrealdb.host}:${toString cfg.surrealdb.port}"
             "HTTP_PORT=${toString cfg.port}"
             "RUST_LOG=${cfg.logLevel}"
             "DATA_DIR=${cfg.dataDir}"
+            "DEMO_MODE=${lib.boolToString cfg.demoMode}"
           ];
 
           # Load environment file for all secrets
@@ -159,6 +181,7 @@
             "HTTP_PORT=${toString cfg.port}"
             "RUST_LOG=${cfg.logLevel}"
             "DATA_DIR=${cfg.dataDir}"
+            "DEMO_MODE=${lib.boolToString cfg.demoMode}"
           ];
 
           # Load environment file for all secrets
@@ -182,10 +205,10 @@
       networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;
       networking.firewall.allowedUDPPorts = cfg.firewallPorts.udp;
 
-      # Ensure data directory and config exist
+      # Ensure data directories exist
       systemd.tmpfiles.rules = [
         "d ${cfg.dataDir} 0755 minne-saas minne-saas -"
-        "L+ ${cfg.dataDir}/saas-config.yaml - - - - ${saasConfigFile}"
+        "d ${cfg.surrealdb.dataDir} 0755 surrealdb surrealdb -"
       ];
     };
   };

@@ -15,7 +15,19 @@
       };
     };
     script = ''
-      cp "$prompts/credentials" "$out/credentials"
+      _prompts_dir="''${prompts:-}"
+      if [ -z "$_prompts_dir" ] || [ ! -d "$_prompts_dir" ]; then
+         _prompts_dir=""
+      fi
+
+      if [ -n "$_prompts_dir" ] && [ -s "$_prompts_dir/credentials" ]; then
+        cp "$_prompts_dir/credentials" "$out/credentials"
+      else
+        user="root"
+        pass=$(head -c 32 /dev/urandom | base64 -w0)
+        echo "SURREALDB_USER=$user" > "$out/credentials"
+        echo "SURREALDB_PASS=$pass" >> "$out/credentials"
+      fi
     '';
     meta = {
       tags = ["oumuamua" "service" "surrealdb"];

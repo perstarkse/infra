@@ -170,7 +170,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug"];
       };
 
       exposeUserSecrets = [
