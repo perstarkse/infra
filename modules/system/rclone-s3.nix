@@ -69,11 +69,11 @@ _: {
 
       my.secrets.allowReadAccess = [
         {
-          readers = [cfg.user];
+          readers = ["root"];
           path = config.my.secrets.getPath "garage-s3" "access_key_id";
         }
         {
-          readers = [cfg.user];
+          readers = ["root"];
           path = config.my.secrets.getPath "garage-s3" "secret_access_key";
         }
       ];
@@ -82,7 +82,32 @@ _: {
         "d ${cfg.mountPoint} 0755 ${cfg.user} ${cfg.group} -"
       ];
 
-      systemd.services.rclone-s3-mount = {
+      systemd.services.rclone-s3-mount = let
+        accessKeyPath = config.my.secrets.getPath "garage-s3" "access_key_id";
+        secretKeyPath = config.my.secrets.getPath "garage-s3" "secret_access_key";
+        extraArgsStr = lib.concatStringsSep " " cfg.extraArgs;
+        uid = toString config.users.users.${cfg.user}.uid;
+        gid = toString config.users.groups.${cfg.group}.gid;
+        mountScript = pkgs.writeShellScript "rclone-s3-mount" ''
+          set -euo pipefail
+          export RCLONE_S3_ACCESS_KEY_ID="$(cat ${accessKeyPath})"
+          export RCLONE_S3_SECRET_ACCESS_KEY="$(cat ${secretKeyPath})"
+          exec ${pkgs.rclone}/bin/rclone mount \
+            --config /dev/null \
+            --s3-provider Other \
+            --s3-endpoint ${cfg.endpoint} \
+            --s3-region ${cfg.region} \
+            --vfs-cache-mode ${cfg.cacheMode} \
+            --vfs-cache-max-size ${cfg.cacheMaxSize} \
+            --allow-other \
+            --uid ${uid} \
+            --gid ${gid} \
+            --dir-cache-time 5m \
+            --poll-interval 10s \
+            ${extraArgsStr} \
+            :s3:${cfg.bucket} ${cfg.mountPoint}
+        '';
+      in {
         description = "Rclone S3 Mount for ${cfg.bucket}";
         after = ["network-online.target"];
         wants = ["network-online.target"];
@@ -90,29 +115,8 @@ _: {
 
         serviceConfig = {
           Type = "notify";
-          User = cfg.user;
-          Group = cfg.group;
           ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${cfg.mountPoint}";
-          ExecStart = let
-            accessKeyPath = config.my.secrets.getPath "garage-s3" "access_key_id";
-            secretKeyPath = config.my.secrets.getPath "garage-s3" "secret_access_key";
-            extraArgsStr = lib.concatStringsSep " " cfg.extraArgs;
-          in ''
-            ${pkgs.rclone}/bin/rclone mount \
-              --config /dev/null \
-              --s3-provider Other \
-              --s3-endpoint ${cfg.endpoint} \
-              --s3-region ${cfg.region} \
-              --s3-access-key-id "$(cat ${accessKeyPath})" \
-              --s3-secret-access-key "$(cat ${secretKeyPath})" \
-              --vfs-cache-mode ${cfg.cacheMode} \
-              --vfs-cache-max-size ${cfg.cacheMaxSize} \
-              --allow-other \
-              --dir-cache-time 5m \
-              --poll-interval 10s \
-              ${extraArgsStr} \
-              :s3:${cfg.bucket} ${cfg.mountPoint}
-          '';
+          ExecStart = mountScript;
           ExecStop = "${pkgs.fuse}/bin/fusermount -u ${cfg.mountPoint}";
           Restart = "on-failure";
           RestartSec = "10s";
