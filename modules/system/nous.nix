@@ -1,4 +1,4 @@
-{...}: {
+_: {
   config.flake.nixosModules.nous = {
     config,
     lib,

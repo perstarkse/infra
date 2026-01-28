@@ -126,7 +126,7 @@
             if [ -z "$SURREALDB_PASSWORD" ] && [ -n "$SURREALDB_PASS" ]; then
               export SURREALDB_PASSWORD="$SURREALDB_PASS"
             fi
-            
+
             exec ${inputs.saas-minne.packages.${pkgs.system}.default}/bin/saas-server
           '';
           Restart = "always";

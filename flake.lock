@@ -1271,11 +1271,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1769119544,
-        "narHash": "sha256-T8whnNYfN/RYDw5aXpxzv/JLHSxt+CFg4IwAvnxTzYQ=",
+        "lastModified": 1769547138,
+        "narHash": "sha256-xYYZKEilSM/CmSZZ+QYqNUGoZbR6B6q4lLv80TZb0QU=",
         "ref": "refs/heads/main",
-        "rev": "51a730118155b01e6a57a72a931c80211bd47e38",
-        "revCount": 242,
+        "rev": "ba6b283078cba8536e3a94ba4b61b3738eccded9",
+        "revCount": 247,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/nous.git"
       },
@@ -1334,11 +1334,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1769188538,
-        "narHash": "sha256-mR4r+UMk26QKJ7QakHdQm98TvG4MAhRTOxH+f0/wIfg=",
+        "lastModified": 1769608992,
+        "narHash": "sha256-M2U9LXcigX0OCRV9SamcoGwJ7qRQWilath9yOfOQUyk=",
         "ref": "refs/heads/main",
-        "rev": "45caa7e0d44bca63dc3ba5912207c13e4dbd4198",
-        "revCount": 487,
+        "rev": "720526e7628b4661a62dc9294c0bb7b7c879ccec",
+        "revCount": 606,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/politikerstod.git"
       },
@@ -1383,11 +1383,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1768806506,
-        "narHash": "sha256-QPix5W1ICougD+SkhaHx9t+audLssqq66npf9R1LKwA=",
+        "lastModified": 1769629224,
+        "narHash": "sha256-kknXakJOfv8YwNQfuJ7KYoHzWRl8QgwSr2xMBfukADA=",
         "ref": "refs/heads/main",
-        "rev": "299bb7a8d5a45a71d930582aedae25c8cc247b91",
-        "revCount": 42,
+        "rev": "45dddd7f620f4e9bc7ae71ea288b1af181fc2232",
+        "revCount": 43,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },

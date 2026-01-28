@@ -2,7 +2,6 @@
   modules,
   config,
   vars-helper,
-  lib,
   ...
 }: {
   imports = with modules.nixosModules;
@@ -19,6 +18,7 @@
       unifi-controller
       frigate
       garage
+      atuin
       # go2rtc
     ]
     ++ (with vars-helper.nixosModules; [default]);
@@ -33,17 +33,25 @@
       name = "p";
     };
 
+    # Garage S3-compatible storage (clustered with makemake)
     garage = {
       enable = true;
-      # replicationFactor = 3;
       dataDir = "/storage/garage/data";
       metaDir = "/storage/garage/meta";
+      replicationMode = 2;
+      rpcPublicAddr = "10.0.0.1:3901";
+      zone = "io";
+    };
+
+    atuin = {
+      enable = true;
+      syncAddress = "http://10.0.0.10:8888";
     };
 
     secrets.discover = {
       enable = true;
       dir = ../../vars/generators;
-      includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router"];
+      includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage"];
     };
 
     secrets.generateManifest = false;
@@ -182,6 +190,10 @@
         }
         {
           name = "nous.fyi";
+          target = "10.0.0.1";
+        }
+        {
+          name = "atuin.lan.stark.pub";
           target = "10.0.0.1";
         }
         {
@@ -324,6 +336,13 @@
             '';
           }
           {
+            domain = "atuin.lan.stark.pub";
+            target = "makemake";
+            port = 8888;
+            websockets = true;
+            useWildcard = "lanstark";
+          }
+          {
             domain = "politikerstod.stark.pub";
             target = "makemake";
             port = 5150;
@@ -364,6 +383,25 @@
         };
         netdata.enable = false;
         ntopng.enable = false;
+      };
+
+      security = {
+        enable = true;
+        fail2ban = {
+          enable = false;
+          jails = {
+            sshd.enable = true;
+            nginx = {
+              urlProbe.enable = true;
+              botsearch.enable = true;
+            };
+            mail = {
+              postfix.enable = true;
+              dovecot.enable = true;
+            };
+          };
+        };
+        journalReceiver.enable = true;
       };
     };
   };

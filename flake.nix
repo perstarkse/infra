@@ -113,7 +113,6 @@
     home-manager,
     private-infra,
     vars-helper,
-    nix-topology,
     ...
   } @ inputs:
     flake-parts.lib.mkFlake {inherit inputs;} ({config, ...}: {
@@ -133,8 +132,8 @@
           inherit private-infra;
           inherit vars-helper;
           playwrightMcpLatest = inputs."playwright-mcp-latest";
-          nous = inputs.nous;
-          nix-topology = inputs.nix-topology;
+          inherit (inputs) nous;
+          inherit (inputs) nix-topology;
         };
 
         inventory = {

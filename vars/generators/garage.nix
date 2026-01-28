@@ -27,6 +27,6 @@
         head -c 32 /dev/urandom | od -v -An -tx1 | tr -d ' \n' > "$out/rpc_secret"
       fi
     '';
-    meta.tags = ["service" "garage" "makemake"];
+    meta.tags = ["service" "garage" "makemake" "io"];
   };
 }
