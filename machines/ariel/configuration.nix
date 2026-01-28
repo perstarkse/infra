@@ -36,6 +36,7 @@
         direnv
         zoxide
         fish
+        atuin
         dunst
         ncspot
         zellij

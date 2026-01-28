@@ -31,6 +31,8 @@
       k3s
       backups
       sunshine
+      atuin
+      rclone-s3
       # steam-gamescope
     ]
     ++ (with vars-helper.nixosModules; [default])
@@ -170,7 +172,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3"];
       };
 
       exposeUserSecrets = [
@@ -214,6 +216,15 @@
       ];
 
       generateManifest = true;
+    };
+
+    rclone-s3 = {
+      enable = true;
+      mountPoint = "/s3";
+      bucket = "shared";
+      endpoint = "http://10.0.0.1:3900";
+      region = "garage";
+      user = config.my.mainUser.name;
     };
 
     backups = {
@@ -290,6 +301,8 @@
       session = "niri";
       terminal = "kitty";
     };
+
+    atuin.enable = true;
   };
 
   nixpkgs.config.allowUnfree = true;
@@ -308,6 +321,7 @@
     gamescope
     playwrightMcpLatest.legacyPackages.${pkgs.system}.playwright-mcp
     bun
+    google-cloud-sdk
   ];
 
   networking = {

@@ -26,6 +26,8 @@
       garage
       nous
       politikerstod
+      atuin-server
+      atuin
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [media mailserver]);
@@ -41,7 +43,6 @@
         dir = ../../vars/generators;
         includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage"];
       };
-
 
       generateManifest = false;
 
@@ -148,13 +149,16 @@
       demoMode = false;
     };
 
-    # Garage S3-compatible storage for Nous
+    # Garage S3-compatible storage (clustered with io)
     garage = {
       enable = true;
       dataDir = "/var/lib/garage/data";
       metaDir = "/var/lib/garage/meta";
       s3Port = 3900;
       region = "garage";
+      replicationMode = 2;
+      rpcPublicAddr = "10.0.0.10:3901";
+      zone = "makemake";
     };
 
     # Nous burnout prevention app
@@ -164,7 +168,7 @@
       address = "10.0.0.10";
       dataDir = "/var/lib/nous";
       host = "https://nous.fyi";
-      logLevel = "debug"; # Temporarily debug to diagnose mail issues
+      logLevel = "info"; # Temporarily debug to diagnose mail issues
 
       database = {
         name = "nous_prod";
@@ -210,13 +214,23 @@
 
       settings = {
         logLevel = "info";
-        prettyBacktrace = false;
-        numWorkers = 2;
+        prettyBacktrace = true;
+        numWorkers = 4;
         pollingHistoricalMonths = 12;
         openaiModel = "gpt-4.1-mini";
         evaluationModel = "gpt-4.1-mini";
       };
     };
+
+    # Atuin Sync Server
+    atuin-server = {
+      enable = true;
+      port = 8888;
+      openFirewall = true;
+    };
+
+    # Atuin client
+    atuin.enable = true;
 
     minecraft = {
       enable = true;
@@ -289,4 +303,14 @@
   programs.fuse.userAllowOther = true;
 
   nixpkgs.config.allowUnfree = true;
+
+  # Centralized logging to router for fail2ban
+  services.journald.upload = {
+    enable = true;
+    settings = {
+      Upload = {
+        URL = "http://10.0.0.1:19532";
+      };
+    };
+  };
 }

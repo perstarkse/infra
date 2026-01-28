@@ -30,20 +30,22 @@
       # Multi-zone ddclient support via custom systemd services
       # Each zone gets its own config file, service, and timer
       environment.etc = lib.mkIf nginxCfg.ddclient.enable (
-        lib.listToAttrs (map (zone: lib.nameValuePair "ddclient-${zone.zone}.conf" {
-          mode = "0600";
-          text = ''
-            daemon=0
-            protocol=cloudflare
-            use=web, web=https://api.ipify.org
-            ssl=yes
-            ttl=1
-            login=token
-            password='@PASSWORD@'
-            zone=${zone.zone}
-            ${lib.concatStringsSep "\n" zone.domains}
-          '';
-        }) nginxCfg.ddclient.zones)
+        lib.listToAttrs (map (zone:
+          lib.nameValuePair "ddclient-${zone.zone}.conf" {
+            mode = "0600";
+            text = ''
+              daemon=0
+              protocol=cloudflare
+              use=web, web=https://api.ipify.org
+              ssl=yes
+              ttl=1
+              login=token
+              password='@PASSWORD@'
+              zone=${zone.zone}
+              ${lib.concatStringsSep "\n" zone.domains}
+            '';
+          })
+        nginxCfg.ddclient.zones)
       );
 
       services.nginx = {
@@ -215,20 +217,22 @@
       systemd.services = lib.mkMerge [
         # ddclient services for each zone
         (lib.mkIf nginxCfg.ddclient.enable (
-          lib.listToAttrs (map (zone: lib.nameValuePair "ddclient-${zone.zone}" {
-            description = "Dynamic DNS update for ${zone.zone}";
-            wants = ["network-online.target"];
-            after = ["network-online.target"];
-            serviceConfig = {
-              Type = "oneshot";
-              ExecStartPre = pkgs.writeShellScript "ddclient-${zone.zone}-prepare" ''
-                ${pkgs.coreutils}/bin/install -m 0600 /etc/ddclient-${zone.zone}.conf /run/ddclient-${zone.zone}.conf
-                ${pkgs.gnused}/bin/sed -i "s|@PASSWORD@|$(${pkgs.coreutils}/bin/cat ${zone.passwordFile})|" /run/ddclient-${zone.zone}.conf
-              '';
-              ExecStart = "${pkgs.ddclient}/bin/ddclient -verbose -noquiet -file /run/ddclient-${zone.zone}.conf";
-              ExecStartPost = "${pkgs.coreutils}/bin/rm -f /run/ddclient-${zone.zone}.conf";
-            };
-          }) nginxCfg.ddclient.zones)
+          lib.listToAttrs (map (zone:
+            lib.nameValuePair "ddclient-${zone.zone}" {
+              description = "Dynamic DNS update for ${zone.zone}";
+              wants = ["network-online.target"];
+              after = ["network-online.target"];
+              serviceConfig = {
+                Type = "oneshot";
+                ExecStartPre = pkgs.writeShellScript "ddclient-${zone.zone}-prepare" ''
+                  ${pkgs.coreutils}/bin/install -m 0600 /etc/ddclient-${zone.zone}.conf /run/ddclient-${zone.zone}.conf
+                  ${pkgs.gnused}/bin/sed -i "s|@PASSWORD@|$(${pkgs.coreutils}/bin/cat ${zone.passwordFile})|" /run/ddclient-${zone.zone}.conf
+                '';
+                ExecStart = "${pkgs.ddclient}/bin/ddclient -verbose -noquiet -file /run/ddclient-${zone.zone}.conf";
+                ExecStartPost = "${pkgs.coreutils}/bin/rm -f /run/ddclient-${zone.zone}.conf";
+              };
+            })
+          nginxCfg.ddclient.zones)
         ))
 
         # Cloudflare IPs update service
@@ -290,15 +294,17 @@
       systemd.timers = lib.mkMerge [
         # ddclient timers for each zone
         (lib.mkIf nginxCfg.ddclient.enable (
-          lib.listToAttrs (map (zone: lib.nameValuePair "ddclient-${zone.zone}" {
-            description = "Timer for dynamic DNS update of ${zone.zone}";
-            wantedBy = ["timers.target"];
-            timerConfig = {
-              OnBootSec = "2min";
-              OnUnitActiveSec = "10min";
-              RandomizedDelaySec = "30s";
-            };
-          }) nginxCfg.ddclient.zones)
+          lib.listToAttrs (map (zone:
+            lib.nameValuePair "ddclient-${zone.zone}" {
+              description = "Timer for dynamic DNS update of ${zone.zone}";
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnBootSec = "2min";
+                OnUnitActiveSec = "10min";
+                RandomizedDelaySec = "30s";
+              };
+            })
+          nginxCfg.ddclient.zones)
         ))
 
         # Cloudflare IPs update timer

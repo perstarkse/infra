@@ -80,10 +80,10 @@
           for (p in res) {
             r = res[p]
             s = shr[p] + 0 # ensure numeric
-            
+
             # Private = Resident - Shared
             if (s > r) s = r
-            
+
             priv += (r - s)
             if (s > max_shr) max_shr = s
           }
@@ -306,7 +306,7 @@
 
     config = {
       home.packages = [pkgs.ncdu];
-      
+
       # Fix for multiple Waybar instances after monitor sleep
       # The Tray module often causes Waybar to hang on output disconnect.
       # These settings ensure Systemd aggressively cleans up the old hung process

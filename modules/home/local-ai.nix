@@ -1,10 +1,5 @@
 {
-  config.flake.homeModules.local-ai = {
-    pkgs,
-    config,
-    lib,
-    ...
-  }: let
+  config.flake.homeModules.local-ai = {pkgs, ...}: let
     vllm-manager = pkgs.writeScriptBin "vllm-manager" ''
       #!/usr/bin/env bash
       set -e
@@ -71,7 +66,7 @@
         fi
 
         echo "Starting vLLM with model: $model_key ($model_id)..."
-        
+
         # Save active model state
         mkdir -p $HOME/.cache/vllm
         echo "$model_key" > $HOME/.cache/vllm/active_model
@@ -146,7 +141,7 @@
       if [ -f $HOME/.cache/vllm/active_model ]; then
         active_model=$(cat $HOME/.cache/vllm/active_model)
       fi
-      
+
       exec ${pkgs.mods}/bin/mods --api vllm --topp 0.9 --role "$active_model" "$@"
     '';
   in {

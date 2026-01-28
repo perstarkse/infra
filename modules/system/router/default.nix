@@ -9,6 +9,7 @@
       router-nginx
       router-monitoring
       router-wireguard
+      router-security
     ];
   };
 }

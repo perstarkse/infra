@@ -21,7 +21,7 @@
           };
         };
         whisper = {
-          language = "en";
+          language = "auto";
         };
         text = {
           spoken_punctuation = true;

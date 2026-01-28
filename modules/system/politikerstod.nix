@@ -1,17 +1,30 @@
-{ inputs, ... }: {
-  config.flake.nixosModules.politikerstod = { config, lib, pkgs, ... }: let
+{inputs, ...}: {
+  config.flake.nixosModules.politikerstod = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
     cfg = config.my.politikerstod;
     # Access the package from inputs
     appPkg = inputs.politikerstod.packages.${pkgs.system}.default;
 
-    authAllowedRegex = "(?i)(" + (builtins.concatStringsSep "|" (
-      map (d: "@" + (lib.strings.escapeRegex d) + "$") cfg.settings.authAllowedEmailDomains
-    )) + ")";
-
+    authAllowedRegex = let
+      # Escape characters for systemd's double-quoted Environment value:
+      # \  -> \\
+      # $  -> $$
+      # "  -> \"
+      escapeForSystemd = s: builtins.replaceStrings ["\\" "$" "\""] ["\\\\" "$$" "\\\""] s;
+    in
+      "(?i)("
+      + (builtins.concatStringsSep "|" (
+        map (d: "@" + (escapeForSystemd (lib.strings.escapeRegex d)) + "$$") cfg.settings.authAllowedEmailDomains
+      ))
+      + ")";
   in {
     options.my.politikerstod = {
       enable = lib.mkEnableOption "Enable Politikerstöd Service";
-      
+
       port = lib.mkOption {
         type = lib.types.port;
         default = 5150;
@@ -29,7 +42,7 @@
         default = "http://localhost:5150";
         description = "Public URL of the application";
       };
-      
+
       openFirewall = lib.mkOption {
         type = lib.types.bool;
         default = true;
@@ -150,7 +163,7 @@
         };
         authAllowedEmailDomains = lib.mkOption {
           type = lib.types.listOf lib.types.str;
-          default = [ "gmail.com" "hotmail.com" "lekeberg.se" "stark.pub" ];
+          default = ["gmail.com" "hotmail.com" "lekeberg.se" "stark.pub"];
           description = "Allowed email domains for authentication";
         };
       };
@@ -214,29 +227,32 @@
       };
       users.groups.politikerstod = {};
 
-
       # 4. Persistence / Data Dir Permissions
       systemd.tmpfiles.rules = [
         "d ${cfg.dataDir} 0755 politikerstod politikerstod -"
       ];
 
       # 5. Firewall
-      networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ cfg.port ];
+      networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [cfg.port];
 
       containers.politikerstod-db = lib.mkIf cfg.database.enableContainer {
         autoStart = true;
         privateNetwork = true;
-        hostAddress = cfg.database.container.hostAddress;
-        localAddress = cfg.database.container.localAddress;
-        
-        config = { config, pkgs, lib, ... }: {
+        inherit (cfg.database.container) hostAddress;
+        inherit (cfg.database.container) localAddress;
+
+        config = {
+          pkgs,
+          lib,
+          ...
+        }: {
           services.postgresql = {
             enable = true;
-            extensions = ps: [ ps.pgvector ];
+            extensions = ps: [ps.pgvector];
             enableTCPIP = true;
             # Listen on all interfaces (internal container IP)
             settings.listen_addresses = lib.mkForce "*";
-            
+
             # Allow host to connect
             authentication = pkgs.lib.mkOverride 10 ''
               # TYPE  DATABASE        USER            ADDRESS                 METHOD
@@ -245,11 +261,13 @@
               local   all             all                                     peer
             '';
 
-            ensureDatabases = [ cfg.database.name ];
-            ensureUsers = [{
-              name = cfg.database.user;
-              ensureDBOwnership = false;
-            }];
+            ensureDatabases = [cfg.database.name];
+            ensureUsers = [
+              {
+                name = cfg.database.user;
+                ensureDBOwnership = false;
+              }
+            ];
 
             initialScript = pkgs.writeText "init-politikerstod-db" ''
               CREATE EXTENSION IF NOT EXISTS vector;
@@ -261,9 +279,9 @@
 
           systemd.services.fix-db-permissions = {
             description = "Fix DB permissions for politikerstod";
-            after = [ "postgresql.service" ];
-            requires = [ "postgresql.service" ];
-            wantedBy = [ "multi-user.target" ];
+            after = ["postgresql.service"];
+            requires = ["postgresql.service"];
+            wantedBy = ["multi-user.target"];
             serviceConfig = {
               Type = "oneshot";
               User = "postgres";
@@ -272,8 +290,8 @@
           };
 
           system.stateVersion = "24.05";
-          
-          networking.firewall.allowedTCPPorts = [ 5432 ];
+
+          networking.firewall.allowedTCPPorts = [5432];
         };
       };
     };

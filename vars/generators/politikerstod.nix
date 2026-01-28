@@ -26,11 +26,11 @@
       else
         # Auto-generate placeholders and random secrets
         echo "# Auto-generated secrets for Politikerstöd" > "$out/env"
-        
+
         # JWT Secret
         jwt=$(head -c 32 /dev/urandom | base64 -w0)
         echo "JWT_SECRET=$jwt" >> "$out/env"
-        
+
         # OpenAI API Key (Placeholder - needs manual update)
         echo "OPENAI_API_KEY=sk-placeholder-change-me" >> "$out/env"
 
