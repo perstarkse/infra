@@ -1,0 +1,53 @@
+{
+  "derivation": {
+    "dependencies": [
+      "b2-service"
+    ],
+    "generatedAt": "2026-01-29T10:57:46Z",
+    "hostname": "charon"
+  },
+  "files": [
+    {
+      "description": null,
+      "group": "root",
+      "mode": "0400",
+      "name": "env",
+      "neededFor": "services",
+      "owner": "root",
+      "path": "/run/secrets/vars/restic-documents-b2/env",
+      "secret": true
+    },
+    {
+      "description": null,
+      "group": "root",
+      "mode": "0400",
+      "name": "password",
+      "neededFor": "services",
+      "owner": "root",
+      "path": "/run/secrets/vars/restic-documents-b2/password",
+      "secret": true
+    },
+    {
+      "description": null,
+      "group": "root",
+      "mode": "0400",
+      "name": "repo",
+      "neededFor": "services",
+      "owner": "root",
+      "path": "/run/secrets/vars/restic-documents-b2/repo",
+      "secret": true
+    }
+  ],
+  "meta": {},
+  "name": "restic-documents-b2",
+  "neededFor": "services",
+  "scope": "machine",
+  "share": false,
+  "store": {
+    "publicStore": "in_repo",
+    "secretStore": "sops"
+  },
+  "validation": {
+    "hostname": "charon"
+  }
+}
