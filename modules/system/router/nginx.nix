@@ -115,9 +115,17 @@
                 ''
                 else "";
 
+              basicAuthConfig =
+                if vhost.basicAuth != null
+                then ''
+                  auth_basic "${vhost.basicAuth.realm}";
+                  auth_basic_user_file ${vhost.basicAuth.htpasswdFile};
+                ''
+                else "";
+
               mergedExtra =
                 lib.concatStringsSep "\n"
-                (lib.filter (s: s != "") [(vhost.extraConfig or "") acl]);
+                (lib.filter (s: s != "") [(vhost.extraConfig or "") acl basicAuthConfig]);
 
               # common part
               baseCfg = {
