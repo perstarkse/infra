@@ -1334,11 +1334,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1769634045,
-        "narHash": "sha256-7sgtUFd77Ow64FRkzV6WnOpfE2ZMYOKTco1GhGfMcFc=",
+        "lastModified": 1769707810,
+        "narHash": "sha256-uuSAxbk3fx76abrUadXHvoYLMIeCW3eY/yX348qQ8mo=",
         "ref": "refs/heads/main",
-        "rev": "c6c460eddf69c432f38782f578fb33b10167fade",
-        "revCount": 608,
+        "rev": "9f46b5080721153ed63cfe440847d0e9a4b04e95",
+        "revCount": 610,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/politikerstod.git"
       },

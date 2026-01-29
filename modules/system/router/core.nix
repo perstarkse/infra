@@ -354,6 +354,23 @@
                   default = null;
                   description = "Per-vhost DNS-01 ACME settings";
                 };
+                basicAuth = mkOption {
+                  type = types.nullOr (types.submodule {
+                    options = {
+                      realm = mkOption {
+                        type = types.str;
+                        default = "Restricted";
+                        description = "Authentication realm shown to users";
+                      };
+                      htpasswdFile = mkOption {
+                        type = types.path;
+                        description = "Path to htpasswd file for basic authentication";
+                      };
+                    };
+                  });
+                  default = null;
+                  description = "Enable HTTP Basic Authentication for this vhost";
+                };
               };
             });
             default = [];

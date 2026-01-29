@@ -28,6 +28,7 @@
       politikerstod
       atuin-server
       atuin
+      webdav-garage
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [media mailserver]);
@@ -41,7 +42,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage" "garage-s3"];
       };
 
       generateManifest = false;
@@ -161,6 +162,16 @@
       zone = "makemake";
     };
 
+    # WebDAV access to Garage S3 for iPhone
+    webdav-garage = {
+      enable = true;
+      bucket = "shared";
+      endpoint = "http://127.0.0.1:3900";
+      bindAddress = "0.0.0.0";
+      port = 8081;
+      htpasswdFile = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
+    };
+
     # Nous burnout prevention app
     nous = {
       enable = true;
@@ -216,7 +227,7 @@
         logLevel = "info";
         prettyBacktrace = true;
         numWorkers = 4;
-        pollingHistoricalMonths = 12;
+        pollingHistoricalMonths = 36;
         openaiModel = "gpt-4.1-mini";
         evaluationModel = "gpt-4.1-mini";
       };
@@ -303,6 +314,12 @@
   programs.fuse.userAllowOther = true;
 
   nixpkgs.config.allowUnfree = true;
+
+  # Restrict WebDAV port to router only (auth handled by nginx on io)
+  networking.firewall.extraInputRules = ''
+    ip saddr 10.0.0.1 tcp dport 8081 accept
+    tcp dport 8081 drop
+  '';
 
   # Centralized logging to router for fail2ban
   services.journald.upload = {

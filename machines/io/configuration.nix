@@ -2,6 +2,7 @@
   modules,
   config,
   vars-helper,
+  pkgs,
   ...
 }: {
   imports = with modules.nixosModules;
@@ -60,6 +61,28 @@
         readers = ["systemd-network"];
         path = config.my.secrets.getPath "wireguard-server" "private-key";
       }
+      {
+        readers = ["nginx"];
+        path = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
+      }
+    ];
+
+    secrets.declarations = [
+      (config.my.secrets.mkMachineSecret {
+        name = "webdav-htpasswd";
+        share = true;
+        runtimeInputs = [pkgs.apacheHttpd];
+        files = {
+          htpasswd = {mode = "0400";};
+          password = {mode = "0400";};
+        };
+        script = ''
+          username="webdav"
+          password=$(head -c 24 /dev/urandom | base64 -w0 | tr -d '/+=')
+          htpasswd -nbB "$username" "$password" > "$out/htpasswd"
+          echo "$password" > "$out/password"
+        '';
+      })
     ];
 
     router = {
@@ -197,6 +220,10 @@
           target = "10.0.0.1";
         }
         {
+          name = "webdav.lan.stark.pub";
+          target = "10.0.0.1";
+        }
+        {
           name = "politikerstod.stark.pub";
           target = "10.0.0.1";
         }
@@ -264,6 +291,27 @@
             port = 5000;
             websockets = false;
             useWildcard = "lanstark";
+          }
+          {
+            domain = "webdav.lan.stark.pub";
+            target = "makemake";
+            port = 8081;
+            websockets = false;
+            lanOnly = true;
+            useWildcard = "lanstark";
+            basicAuth = {
+              realm = "WebDAV";
+              htpasswdFile = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
+            };
+            extraConfig = ''
+              # iOS WebDAV compatibility
+              client_max_body_size 0;
+              proxy_buffering off;
+              proxy_request_buffering off;
+              proxy_http_version 1.1;
+              proxy_read_timeout 300s;
+              proxy_send_timeout 300s;
+            '';
           }
           {
             domain = "kube-test.lan.stark.pub";

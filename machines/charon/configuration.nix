@@ -232,11 +232,16 @@
         enable = true;
         path = "/home/${config.my.mainUser.name}/documents";
         frequency = "daily";
-        backend = {
-          type = "b2";
-          bucket = null;
-          lifecycleKeepPriorVersionsDays = 5;
+        backends = {
+          b2 = {
+            type = "b2";
+            lifecycleKeepPriorVersionsDays = 5;
+          };
+          garage = {
+            type = "garage-s3";
+          };
         };
+        restore.backend = "garage";
       };
     };
 
@@ -322,6 +327,7 @@
     playwrightMcpLatest.legacyPackages.${pkgs.system}.playwright-mcp
     bun
     google-cloud-sdk
+    amp-cli
   ];
 
   networking = {
@@ -375,5 +381,4 @@
       value = "524288";
     }
   ];
-  # systemd.settings.Manager.DefaultLimitNOFILE = "8192:524288";
 }
