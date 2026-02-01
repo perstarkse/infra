@@ -164,6 +164,11 @@
               default = "virbr0";
               description = "Network bridge to connect to";
             };
+            networkName = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Libvirt network to connect to (overrides bridgeName)";
+            };
             virtioNet = lib.mkOption {
               type = lib.types.bool;
               default = false;
@@ -188,6 +193,11 @@
               type = lib.types.bool;
               default = false;
               description = "Add VirtIO drivers CDROM (for Windows)";
+            };
+            extraXML = lib.mkOption {
+              type = lib.types.str;
+              default = "";
+              description = "Extra XML to inject into the domain definition";
             };
             active = lib.mkOption {
               type = lib.types.nullOr lib.types.bool;
@@ -252,6 +262,11 @@
                 else {
                   inherit (network) name;
                   inherit (network) uuid;
+                  bridge = lib.mkIf (network.bridge != null) {
+                    name = network.bridge;
+                    stp = "on";
+                    delay = 0;
+                  };
                   forward = {
                     inherit (network) mode;
                     nat = lib.mkIf (network.mode == "nat") {
@@ -267,6 +282,7 @@
                   ip = {
                     address = network.gateway;
                     netmask = "255.255.255.0";
+                  } // lib.optionalAttrs (network.dhcpStart != null) {
                     dhcp = {
                       range = {
                         start = network.dhcpStart;
@@ -303,7 +319,7 @@
                     storage_vol = domain.storageVol;
                     backing_vol = domain.backingVol;
                     install_vol = domain.installVol;
-                    bridge_name = domain.bridgeName;
+                    bridge_name = if domain.networkName != null then "__NIXVIRT_NETWORK_REPLACE__" else domain.bridgeName;
                     virtio_net = domain.virtioNet;
                     virtio_video = domain.virtioVideo;
                     virtio_drive = domain.virtioDrive;
@@ -312,8 +328,33 @@
                     nvram_path = domain.nvramPath;
                     install_virtio = domain.installVirtio;
                   };
+
+                # Helper to merge extra XML roughly by appending it before </domain>
+                # We use runCommand because writeXML returns a path (derivation), not a string.
+                baseXML = inputs.NixVirt.lib.domain.writeXML (templateFunc templateArgs);
+                finalXML = pkgs.runCommand "domain-merged.xml" {
+                    extraXML = domain.extraXML;
+                    networkName = domain.networkName;
+                  } ''
+                    cat ${baseXML} > $out
+                    
+                    # Handle networkName override
+                    if [ -n "$networkName" ]; then
+                      sed -i "s|<interface type='bridge'>|<interface type='network'>|g" $out
+                      sed -i "s|<source bridge='__NIXVIRT_NETWORK_REPLACE__'/>|<source network='$networkName'/>|g" $out
+                    fi
+
+                    # Inject Extra XML
+                    if [ -n "$extraXML" ]; then
+                      # Remove closing domain tag
+                      sed -i 's|</domain>||' $out
+                      # Append extra XML and close domain
+                      echo "$extraXML" >> $out
+                      echo "</domain>" >> $out
+                    fi
+                  '';
               in
-                inputs.NixVirt.lib.domain.writeXML (templateFunc templateArgs);
+                finalXML;
               inherit (domain) active;
               inherit (domain) restart;
             })
@@ -322,7 +363,15 @@
         };
 
         # Allow bridges for qemu-bridge-helper
-        libvirtd.allowedBridges = ["virbr0" "virbr1" "virbr2" "virbr3" "virbr4" "virbr5"];
+        # Includes standard virbr0-5 plus any custom bridge names from network configs
+        libvirtd.allowedBridges = lib.unique (["virbr0" "virbr1" "virbr2" "virbr3" "virbr4" "virbr5"]
+          ++ lib.concatLists (lib.imap0 (
+              index: network:
+                if network.mode == "nat" && network.bridge != null
+                then [network.bridge]
+                else []
+            )
+            cfg.networks));
 
         # libvirtd.nss = {
         #   enable = true;

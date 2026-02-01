@@ -20,6 +20,8 @@
       frigate
       garage
       atuin
+      libvirt
+      oumu-vm
       # go2rtc
     ]
     ++ (with vars-helper.nixosModules; [default]);
@@ -68,6 +70,26 @@
     ];
 
     secrets.declarations = [
+      (config.my.secrets.mkMachineSecret {
+        name = "oumu-deploy-key";
+        share = false;
+        runtimeInputs = [pkgs.openssh];
+        files = {
+          private_key = {
+            mode = "0400";
+            owner = "root";
+            neededFor = "services";
+          };
+          public_key = {
+            mode = "0444";
+            # secret = true; # Treat as secret to avoid store warning, but readable
+          };
+        };
+        script = ''
+          ssh-keygen -t ed25519 -C "oumu-vm-deploy-key" -f "$out/private_key" -N ""
+          mv "$out/private_key.pub" "$out/public_key"
+        '';
+      })
       (config.my.secrets.mkMachineSecret {
         name = "webdav-htpasswd";
         share = true;
@@ -139,6 +161,12 @@
       };
 
       machines = [
+        {
+          name = "oumu";
+          ip = "99";
+          mac = "52:54:00:01:99:00";
+          portForwards = [];
+        }
         {
           name = "charon";
           ip = "15";
@@ -450,6 +478,24 @@
           };
         };
         journalReceiver.enable = true;
+      };
+    };
+
+    # Libvirt for VM hosting
+    libvirtd = {
+      enable = true;
+      # No special networks or domains here - managed by oumu-vm module
+    };
+
+    # Oumu AI assistant VM (interstellar visitor to the heliosphere)
+    oumu-vm = {
+      enable = true;
+      storageBaseDir = "/storage/libvirt/oumu";
+      memoryGb = 4;
+      diskSizeGb = 120;
+      gitRepo = {
+        url = "git@github.com:perstarkse/oumu-vm.git";
+        # SSH key to be added manually or via separate secret management
       };
     };
   };

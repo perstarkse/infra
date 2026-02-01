@@ -1,0 +1,28 @@
+# Secrets - never commit these
+secrets/
+*.pem
+*.key
+.env
+.env.local
+
+# Build artifacts
+result
+result-*
+
+# Nix
+.direnv
+.envrc
+
+# Temp files
+*~
+*.swp
+*.swo
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# OpenClawd data (if stored here)
+/var/
+/data/

@@ -335,6 +335,14 @@
     # Allow localsend receive port
     # Allow 3000/1 and 5000/1 for dev server and tooling
     firewall.allowedTCPPorts = [53317 3000 3001 5000 5001];
+    
+    interfaces.enp4s0.ipv4.routes = [
+      {
+        address = "192.168.200.0";
+        prefixLength = 24;
+        via = "10.0.0.1";
+      }
+    ];
   };
 
   # services.blueman.enable = true;
