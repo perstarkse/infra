@@ -592,7 +592,7 @@
           inherit routerIp;
           wanEgress = true;
           nat = true;
-          allowTo = ["wireguard"];
+          allowTo = ["wireguard" "libvirt"];
           dhcp = {
             inherit (cfg.dhcp) enable domainName;
             poolStart = dhcpStart;
@@ -653,6 +653,18 @@
           dhcp.enable = false;
         };
 
+        libvirtZone = {
+          name = "libvirt";
+          kind = "libvirt";
+          interface = "virbr*";
+          subnets = [];
+          routerIp = null;
+          wanEgress = true;
+          nat = true;
+          allowTo = [];
+          dhcp.enable = false;
+        };
+
         wanZone = {
           name = "wan";
           kind = "wan";
@@ -670,7 +682,7 @@
         wanInterface = cfg.wan.interface;
         lanInterfaces = cfg.lan.interfaces;
         vlans = vlanHelpers;
-        zones = [lanZone] ++ vlanZones ++ wgZone ++ cniZone ++ [wanZone];
+        zones = [lanZone] ++ vlanZones ++ wgZone ++ cniZone ++ [libvirtZone] ++ [wanZone];
       };
     };
   };

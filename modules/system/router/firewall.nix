@@ -82,6 +82,7 @@
               }
               chain forward {
                 type filter hook forward priority 0; policy drop;
+                ct state established,related accept
                 ${forwardSameZoneRules}
                 ${forwardWanEgressRules}
                 ${forwardWanReturnRules}
