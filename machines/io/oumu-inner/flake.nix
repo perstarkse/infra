@@ -19,7 +19,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, sops-nix, nixos-generators, home-manager, nix-openclaw }: {
+  outputs = { self, nixpkgs, sops-nix, nixos-generators, home-manager, nix-openclaw, ... }@inputs: {
     nixosConfigurations.oumu = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       specialArgs = { inherit inputs; };
