@@ -53,7 +53,7 @@
   # Home Manager configuration for oumu user with nix-openclaw
   home-manager.users.oumu = { pkgs, ... }: {
     imports = [
-      inputs.nix-openclaw.homeManagerModules.default
+      inputs.nix-openclaw.homeManagerModules.openclaw
     ];
     
     home.username = "oumu";

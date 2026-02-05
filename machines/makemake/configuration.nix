@@ -89,7 +89,7 @@
     };
 
     k3s = {
-      enable = true;
+      enable = false;
       initServer = true;
       tlsSan = "10.0.0.10";
       # disable = ["servicelb" "traefik"];
@@ -308,10 +308,33 @@
 
   environment.systemPackages = with pkgs; [
     mergerfs
+    unrar
     # devenv
   ];
 
   programs.fuse.userAllowOther = true;
+
+  programs.fish = {
+    enable = true;
+    interactiveShellInit = ''
+      function unrar-dirs --description "Unrar files in specified directories"
+        for dir in $argv
+          if test -d "$dir"
+            echo "Processing $dir..."
+            pushd "$dir"
+            if test (count (find . -maxdepth 1 -name "*.rar")) -gt 0
+              ${pkgs.unrar}/bin/unrar e -o+ *.rar
+            else
+              echo "No rar files found in $dir"
+            end
+            popd
+          else
+            echo "Directory $dir does not exist"
+          end
+        end
+      end
+    '';
+  };
 
   nixpkgs.config.allowUnfree = true;
 

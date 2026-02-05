@@ -379,11 +379,11 @@
         "nixpkgs-lib": "nixpkgs-lib_3"
       },
       "locked": {
-        "lastModified": 1768135262,
-        "narHash": "sha256-PVvu7OqHBGWN16zSi6tEmPwwHQ4rLPU9Plvs8/1TUBY=",
+        "lastModified": 1769996383,
+        "narHash": "sha256-AnYjnFWgS49RlqX7LrC4uA+sCCDBj0Ry/WOJ5XWAsa0=",
         "owner": "hercules-ci",
         "repo": "flake-parts",
-        "rev": "80daad04eddbbf5a4d883996a73f3f542fa437ac",
+        "rev": "57928607ea566b5db3ad13af0e57e921e6b12381",
         "type": "github"
       },
       "original": {
@@ -639,11 +639,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1768798936,
-        "narHash": "sha256-eHld4id3TeD9Sxx5vgv58BnTl1fz+ewIKspz/kEoAE8=",
+        "lastModified": 1770164260,
+        "narHash": "sha256-mQgOAYWlVJyuyXjZN6yxqXWyODvQI5P/UZUCU7IOuYo=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "2954aa29441a1a98901362e4d35515875761ad65",
+        "rev": "4fda26500b4539e0a1e3afba9f0e1616bdad4f85",
         "type": "github"
       },
       "original": {
@@ -1185,11 +1185,11 @@
     },
     "nixpkgs-lib_3": {
       "locked": {
-        "lastModified": 1765674936,
-        "narHash": "sha256-k00uTP4JNfmejrCLJOwdObYC9jHRrr/5M/a/8L2EIdo=",
+        "lastModified": 1769909678,
+        "narHash": "sha256-cBEymOf4/o3FD5AZnzC3J9hLbiZ+QDT/KDuyHXVJOpM=",
         "owner": "nix-community",
         "repo": "nixpkgs.lib",
-        "rev": "2075416fcb47225d9b68ac469a5c4801a9c4dd85",
+        "rev": "72716169fe93074c333e8d0173151350670b824c",
         "type": "github"
       },
       "original": {
@@ -1334,11 +1334,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1769860510,
-        "narHash": "sha256-CkDoyOQ6xQZG/ogiFnKEQ2NitRpNjeIeDLtQn5JJpvM=",
+        "lastModified": 1770309522,
+        "narHash": "sha256-T8W58+LpT0oOupHBUkq/lKfUgrrExgfBriCXI3IHOcU=",
         "ref": "refs/heads/main",
-        "rev": "688b464924232edbe47d567ef3d5af9c2c418511",
-        "revCount": 614,
+        "rev": "8bfb06170b1cc8a4a6354559bd40b1f71fb8456f",
+        "revCount": 656,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/politikerstod.git"
       },
@@ -1383,11 +1383,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1769629224,
-        "narHash": "sha256-kknXakJOfv8YwNQfuJ7KYoHzWRl8QgwSr2xMBfukADA=",
+        "lastModified": 1770238151,
+        "narHash": "sha256-zxf8yqyFDybvQ3j+5tUlMdnn+/PabGvxqTUFW13KUtQ=",
         "ref": "refs/heads/main",
-        "rev": "45dddd7f620f4e9bc7ae71ea288b1af181fc2232",
-        "revCount": 43,
+        "rev": "ba760c8a3794ca92a5f78659b44412502ff3572b",
+        "revCount": 48,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },
