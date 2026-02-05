@@ -169,6 +169,11 @@
               default = null;
               description = "Libvirt network to connect to (overrides bridgeName)";
             };
+            macAddress = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "MAC address for the network interface (e.g., '52:54:00:01:99:00')";
+            };
             virtioNet = lib.mkOption {
               type = lib.types.bool;
               default = false;
@@ -335,6 +340,7 @@
                 finalXML = pkgs.runCommand "domain-merged.xml" {
                     extraXML = domain.extraXML;
                     networkName = domain.networkName;
+                    macAddress = domain.macAddress or null;
                   } ''
                     cat ${baseXML} > $out
                     
@@ -342,6 +348,14 @@
                     if [ -n "$networkName" ]; then
                       sed -i "s|<interface type='bridge'>|<interface type='network'>|g" $out
                       sed -i "s|<source bridge='__NIXVIRT_NETWORK_REPLACE__'/>|<source network='$networkName'/>|g" $out
+                    fi
+
+                    # Handle MAC address override
+                    if [ -n "$macAddress" ]; then
+                      # Add MAC address to the interface
+                      sed -i "s|<interface type='|<interface type='|g" $out
+                      # Insert MAC address after interface opening tag
+                      sed -i "s|<interface type='\([^']*\)'>|<interface type='\1'>\n      <mac address='$macAddress'/>|g" $out
                     fi
 
                     # Inject Extra XML

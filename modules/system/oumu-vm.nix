@@ -28,20 +28,6 @@
         default = 120;
         description = "Root disk size in GB";
       };
-
-      gitRepo = {
-        url = lib.mkOption {
-          type = lib.types.str;
-          default = "git@github.com:perstarkse/oumu-vm.git";
-          description = "Git URL for inner NixOS configuration";
-        };
-
-        sshKeyFile = lib.mkOption {
-          type = lib.types.nullOr lib.types.path;
-          default = null;
-          description = "Path to SSH deploy key for git repo (if pre-provisioned)";
-        };
-      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -68,8 +54,8 @@
           Type = "oneshot";
         };
         script = ''
-          if [ -f /run/secrets/oumu-deploy-key/private_key ]; then
-            cp /run/secrets/oumu-deploy-key/private_key ${storageBase}/share/deploy_key
+          if [ -f /run/secrets/vars/oumu-deploy-key/private_key ]; then
+            cp /run/secrets/vars/oumu-deploy-key/private_key ${storageBase}/share/deploy_key
             chmod 400 ${storageBase}/share/deploy_key
           fi
         '';
@@ -95,6 +81,7 @@
           };
           storageVol = "${storageBase}/images/oumu-root.qcow2";
           bridgeName = "br-lan";
+          macAddress = "52:54:00:01:99:00";
           virtioNet = true;
           virtioVideo = false;
           virtioDrive = true;

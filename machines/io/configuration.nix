@@ -493,10 +493,6 @@
       storageBaseDir = "/storage/libvirt/oumu";
       memoryGb = 4;
       diskSizeGb = 120;
-      gitRepo = {
-        url = "git@github.com:perstarkse/oumu-vm.git";
-        # SSH key to be added manually or via separate secret management
-      };
     };
   };
 

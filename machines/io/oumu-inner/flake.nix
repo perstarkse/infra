@@ -24,7 +24,14 @@
       system = "x86_64-linux";
       specialArgs = { inherit inputs; };
       modules = [
+        ({ pkgs, ... }: {
+          nixpkgs.overlays = [ nix-openclaw.overlays.default ];
+        })
         sops-nix.nixosModules.sops
+        {
+          home-manager.useGlobalPkgs = true;
+          home-manager.useUserPackages = true;
+        }
         home-manager.nixosModules.home-manager
         ./hardware-configuration.nix
         ./configuration.nix
