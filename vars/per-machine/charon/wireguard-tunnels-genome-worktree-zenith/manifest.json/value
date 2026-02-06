@@ -1,0 +1,37 @@
+{
+  "derivation": {
+    "dependencies": [],
+    "generatedAt": "2026-02-06T09:09:16Z",
+    "hostname": "charon"
+  },
+  "files": [
+    {
+      "description": null,
+      "group": "root",
+      "mode": "0400",
+      "name": "wg.conf",
+      "neededFor": "services",
+      "owner": "root",
+      "path": "/run/secrets/vars/wireguard-tunnels-genome-worktree-zenith/wg.conf",
+      "secret": true
+    }
+  ],
+  "meta": {
+    "description": "WireGuard tunnel config for genome-worktree-zenith",
+    "tags": [
+      "wireguard-tunnels",
+      "genome-worktree-zenith"
+    ]
+  },
+  "name": "wireguard-tunnels-genome-worktree-zenith",
+  "neededFor": "services",
+  "scope": "machine",
+  "share": false,
+  "store": {
+    "publicStore": "in_repo",
+    "secretStore": "sops"
+  },
+  "validation": {
+    "hostname": "charon"
+  }
+}
