@@ -18,8 +18,8 @@
 
       address = lib.mkOption {
         type = lib.types.str;
-        default = "0.0.0.0";
-        description = "Address for Minne SaaS Server to bind to";
+        default = config.my.listenNetworkAddress;
+        description = "Address for Minne SaaS Server to bind to (defaults to my.listenNetworkAddress)";
       };
 
       dataDir = lib.mkOption {
@@ -58,6 +58,16 @@
         type = lib.types.bool;
         default = false;
         description = "Enable demo mode (blocks mutating requests)";
+      };
+
+      demoAllowedMutatingPaths = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "/signin"
+          "/gdpr/accept"
+          "/gdpr/deny"
+        ];
+        description = "Mutating paths allowed in demo mode (mapped to DEMO_ALLOWED_MUTATING_PATHS)";
       };
 
       firewallPorts = lib.mkOption {
@@ -139,6 +149,7 @@
             "RUST_LOG=${cfg.logLevel}"
             "DATA_DIR=${cfg.dataDir}"
             "DEMO_MODE=${lib.boolToString cfg.demoMode}"
+            "DEMO_ALLOWED_MUTATING_PATHS=${lib.concatStringsSep "," cfg.demoAllowedMutatingPaths}"
           ];
 
           # Load environment file for all secrets
@@ -182,6 +193,7 @@
             "RUST_LOG=${cfg.logLevel}"
             "DATA_DIR=${cfg.dataDir}"
             "DEMO_MODE=${lib.boolToString cfg.demoMode}"
+            "DEMO_ALLOWED_MUTATING_PATHS=${lib.concatStringsSep "," cfg.demoAllowedMutatingPaths}"
           ];
 
           # Load environment file for all secrets
