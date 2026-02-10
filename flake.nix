@@ -165,7 +165,8 @@
                 settings.host = "io.lan";
               };
               roles.default.machines.charon = {
-                settings.host = "charon.lan";
+                settings.host = "localhost";
+                # settings.host = "charon.lan";
               };
               roles.default.machines.makemake = {
                 settings.host = "makemake.lan";
