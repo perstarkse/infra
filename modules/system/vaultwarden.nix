@@ -21,8 +21,8 @@
 
       address = lib.mkOption {
         type = lib.types.str;
-        default = "0.0.0.0";
-        description = "Address for Vaultwarden to bind to";
+        default = config.my.listenNetworkAddress;
+        description = "Address for Vaultwarden to bind to (defaults to my.listenNetworkAddress)";
       };
 
       backupDir = lib.mkOption {

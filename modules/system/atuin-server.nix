@@ -1,8 +1,7 @@
-{inputs, ...}: {
+_: {
   config.flake.nixosModules.atuin-server = {
     config,
     lib,
-    pkgs,
     ...
   }: let
     cfg = config.my.atuin-server;
@@ -18,8 +17,8 @@
 
       address = lib.mkOption {
         type = lib.types.str;
-        default = "0.0.0.0";
-        description = "Address for Atuin server to bind to";
+        default = config.my.listenNetworkAddress;
+        description = "Address for Atuin server to bind to (defaults to my.listenNetworkAddress)";
       };
 
       openFirewall = lib.mkOption {
@@ -32,7 +31,7 @@
     config = lib.mkIf cfg.enable {
       services.atuin = {
         enable = true;
-        port = cfg.port;
+        inherit (cfg) port;
         host = cfg.address;
         openRegistration = true;
         database = {

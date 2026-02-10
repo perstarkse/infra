@@ -284,17 +284,19 @@
                   mac = {
                     address = "52:54:00:02:77:4b";
                   };
-                  ip = {
-                    address = network.gateway;
-                    netmask = "255.255.255.0";
-                  } // lib.optionalAttrs (network.dhcpStart != null) {
-                    dhcp = {
-                      range = {
-                        start = network.dhcpStart;
-                        end = network.dhcpEnd;
+                  ip =
+                    {
+                      address = network.gateway;
+                      netmask = "255.255.255.0";
+                    }
+                    // lib.optionalAttrs (network.dhcpStart != null) {
+                      dhcp = {
+                        range = {
+                          start = network.dhcpStart;
+                          end = network.dhcpEnd;
+                        };
                       };
                     };
-                  };
                 }
               );
               active = true;
@@ -324,7 +326,10 @@
                     storage_vol = domain.storageVol;
                     backing_vol = domain.backingVol;
                     install_vol = domain.installVol;
-                    bridge_name = if domain.networkName != null then "__NIXVIRT_NETWORK_REPLACE__" else domain.bridgeName;
+                    bridge_name =
+                      if domain.networkName != null
+                      then "__NIXVIRT_NETWORK_REPLACE__"
+                      else domain.bridgeName;
                     virtio_net = domain.virtioNet;
                     virtio_video = domain.virtioVideo;
                     virtio_drive = domain.virtioDrive;
@@ -337,13 +342,14 @@
                 # Helper to merge extra XML roughly by appending it before </domain>
                 # We use runCommand because writeXML returns a path (derivation), not a string.
                 baseXML = inputs.NixVirt.lib.domain.writeXML (templateFunc templateArgs);
-                finalXML = pkgs.runCommand "domain-merged.xml" {
-                    extraXML = domain.extraXML;
-                    networkName = domain.networkName;
+                finalXML =
+                  pkgs.runCommand "domain-merged.xml" {
+                    inherit (domain) extraXML;
+                    inherit (domain) networkName;
                     macAddress = domain.macAddress or null;
                   } ''
                     cat ${baseXML} > $out
-                    
+
                     # Handle networkName override
                     if [ -n "$networkName" ]; then
                       sed -i "s|<interface type='bridge'>|<interface type='network'>|g" $out
@@ -380,7 +386,7 @@
         # Includes standard virbr0-5 plus any custom bridge names from network configs
         libvirtd.allowedBridges = lib.unique (["virbr0" "virbr1" "virbr2" "virbr3" "virbr4" "virbr5"]
           ++ lib.concatLists (lib.imap0 (
-              index: network:
+              _index: network:
                 if network.mode == "nat" && network.bridge != null
                 then [network.bridge]
                 else []

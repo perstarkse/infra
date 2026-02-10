@@ -295,7 +295,7 @@
                   backends = resolveBackends backup;
                 in
                   mapAttrsToList (
-                    bkName: bkCfg: let
+                    bkName: _bkCfg: let
                       secretName = mkSecretName jobName bkName;
                     in {
                       "${jobName}-${bkName}" = {
@@ -357,9 +357,9 @@
                             ${pkgs.backblaze-b2}/bin/b2v3 update-bucket --defaultServerSideEncryption SSE-B2 "${bucketName}" >/dev/null 2>&1 || true
 
                             ${lib.optionalString (bkCfg.lifecycleKeepPriorVersionsDays != null) ''
-                          ${pkgs.backblaze-b2}/bin/b2v4 bucket update "${bucketName}" lifecycleRules='[{"fileNamePrefix":"","daysFromHidingToDeleting":'"${toString bkCfg.lifecycleKeepPriorVersionsDays}"'}]' >/dev/null 2>&1 || \
-                          ${pkgs.backblaze-b2}/bin/b2v3 update-bucket --lifecycleRules '[{"fileNamePrefix":"","daysFromHidingToDeleting":'"${toString bkCfg.lifecycleKeepPriorVersionsDays}"'}]' "${bucketName}" >/dev/null 2>&1 || true
-                        ''}
+                              ${pkgs.backblaze-b2}/bin/b2v4 bucket update "${bucketName}" lifecycleRules='[{"fileNamePrefix":"","daysFromHidingToDeleting":'"${toString bkCfg.lifecycleKeepPriorVersionsDays}"'}]' >/dev/null 2>&1 || \
+                              ${pkgs.backblaze-b2}/bin/b2v3 update-bucket --lifecycleRules '[{"fileNamePrefix":"","daysFromHidingToDeleting":'"${toString bkCfg.lifecycleKeepPriorVersionsDays}"'}]' "${bucketName}" >/dev/null 2>&1 || true
+                            ''}
                           '';
                           s3Script = ''
                             ${pkgs.awscli2}/bin/aws s3api create-bucket --bucket "${bucketName}" \
