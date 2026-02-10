@@ -20,8 +20,8 @@ _: {
 
       address = lib.mkOption {
         type = lib.types.str;
-        default = "0.0.0.0";
-        description = "Address for Nous to bind to";
+        default = config.my.listenNetworkAddress;
+        description = "Address for Nous to bind to (defaults to my.listenNetworkAddress)";
       };
 
       dataDir = lib.mkOption {

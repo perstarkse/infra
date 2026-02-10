@@ -255,6 +255,10 @@
           name = "politikerstod.stark.pub";
           target = "10.0.0.1";
         }
+        {
+          name = "paperless.lan.stark.pub";
+          target = "10.0.0.1";
+        }
       ];
 
       dhcp = {
@@ -390,7 +394,7 @@
           {
             domain = "minne-demo.stark.pub";
             target = "makemake";
-            port = 3001;
+            port = 3003;
             websockets = false;
             cloudflareOnly = true;
             extraConfig = ''
@@ -424,6 +428,17 @@
             port = 5150;
             websockets = false;
             cloudflareOnly = true;
+          }
+          {
+            domain = "paperless.lan.stark.pub";
+            target = "makemake";
+            port = 28981;
+            websockets = true;
+            lanOnly = true;
+            useWildcard = "lanstark";
+            extraConfig = ''
+              client_max_body_size 100M;
+            '';
           }
         ];
       };
@@ -464,7 +479,9 @@
       security = {
         enable = true;
         fail2ban = {
-          enable = false;
+          enable = true;
+          banTime = "30m";
+          maxRetry = 5;
           jails = {
             sshd.enable = true;
             nginx = {

@@ -1,4 +1,4 @@
-{inputs, ...}: {
+_: {
   config.flake.nixosModules.oumu-vm = {
     lib,
     config,
@@ -49,7 +49,7 @@
       # Copy deploy key to share when it changes
       systemd.services.oumu-sync-key = {
         description = "Sync Oumu deploy key to VirtioFS share";
-        path = [ pkgs.coreutils ];
+        path = [pkgs.coreutils];
         serviceConfig = {
           Type = "oneshot";
         };
@@ -59,15 +59,14 @@
             chmod 400 ${storageBase}/share/deploy_key
           fi
         '';
-        wantedBy = [ "multi-user.target" ];
-        after = [ "secret-oumu-deploy-key.service" ];
+        wantedBy = ["multi-user.target"];
+        after = ["secret-oumu-deploy-key.service"];
       };
 
       # Initialize VM disk if it doesn't exist
       # We do NOT create an empty disk automatically anymore, because
       # we expect a pre-built NixOS image to be copied here.
       # But we ensure the directory exists.
-
 
       # Add VM to libvirt domains - bridged to LAN for direct access
       my.libvirtd.domains = [
@@ -111,7 +110,7 @@
       ];
 
       # Ensure virtiofsd is available
-      environment.systemPackages = [ pkgs.virtiofsd ];
+      environment.systemPackages = [pkgs.virtiofsd];
 
       # VM is bridged to br-lan, so it gets IP from main DHCP and has full LAN/WAN access
       # No custom network needed - libvirt handles bridging automatically
