@@ -75,6 +75,12 @@
           default = false;
           description = "Enable local database container";
         };
+        allowedHosts = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          description = "Additional hosts allowed to connect to the database (e.g., remote workers)";
+          example = ["10.0.0.15"];
+        };
         container = {
           hostAddress = lib.mkOption {
             type = lib.types.str;
@@ -232,8 +238,27 @@
         "d ${cfg.dataDir} 0755 politikerstod politikerstod -"
       ];
 
-      # 5. Firewall
-      networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [cfg.port];
+      # 5. Firewall - open service port and DB proxy port for remote workers
+      networking.firewall.allowedTCPPorts = lib.mkIf (cfg.openFirewall || (cfg.database.enableContainer && cfg.database.allowedHosts != [])) (
+        lib.optional cfg.openFirewall cfg.port
+        ++ lib.optionals (cfg.database.enableContainer && cfg.database.allowedHosts != []) [5432]
+      );
+
+      # 6. Port forwarding for remote database access (when allowedHosts is set)
+      # Use socat to forward connections from LAN to the container
+      # Binds only to LAN address to avoid conflicts
+      systemd.services.politikerstod-db-proxy = lib.mkIf (cfg.database.enableContainer && cfg.database.allowedHosts != []) {
+        description = "Forward PostgreSQL connections to politikerstod-db container";
+        wantedBy = ["multi-user.target"];
+        after = ["network.target" "container@politikerstod-db.service"];
+        wants = ["container@politikerstod-db.service"];
+        serviceConfig = {
+          Type = "simple";
+          ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:5432,bind=${config.my.listenNetworkAddress},fork,reuseaddr TCP:${cfg.database.container.localAddress}:5432";
+          Restart = "always";
+          RestartSec = "5";
+        };
+      };
 
       containers.politikerstod-db = lib.mkIf cfg.database.enableContainer {
         autoStart = true;
@@ -253,11 +278,12 @@
             # Listen on all interfaces (internal container IP)
             settings.listen_addresses = lib.mkForce "*";
 
-            # Allow host to connect
+            # Allow host and remote workers to connect
             authentication = pkgs.lib.mkOverride 10 ''
               # TYPE  DATABASE        USER            ADDRESS                 METHOD
               host    all             all             ${cfg.database.container.hostAddress}/32       trust
               host    all             all             169.254.0.0/16          trust
+              ${lib.concatMapStringsSep "\n" (host: "host    all             all             ${host}/32          trust") cfg.database.allowedHosts}
               local   all             all                                     peer
             '';
 
