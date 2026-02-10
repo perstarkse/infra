@@ -29,8 +29,8 @@
           else "${pkgs.sway}/bin/sway --unsupported-gpu";
 
         tuigreetSessions =
-          "${config.services.xserver.displayManager.sessionData.desktops}/share/xsessions:"
-          + "${config.services.xserver.displayManager.sessionData.desktops}/share/wayland-sessions";
+          "${config.services.displayManager.sessionData.desktops}/share/xsessions:"
+          + "${config.services.displayManager.sessionData.desktops}/share/wayland-sessions";
 
         tuigreetCommand =
           "${pkgs.tuigreet}/bin/tuigreet"
