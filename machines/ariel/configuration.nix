@@ -15,6 +15,7 @@
       shared
       interception-tools
       system-stylix
+      atuin
       greetd
       nvidia
       fonts
@@ -36,7 +37,6 @@
         direnv
         zoxide
         fish
-        atuin
         dunst
         ncspot
         zellij
@@ -116,6 +116,7 @@
 
   security.polkit.enable = true;
   my = {
+    atuin.enable = true;
     secrets = {
       discover = {
         enable = true;

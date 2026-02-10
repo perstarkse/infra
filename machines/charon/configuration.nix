@@ -33,6 +33,9 @@
       sunshine
       atuin
       rclone-s3
+      wireguard-tunnels
+      paperless-consumption-mount
+      politikerstod-remote-worker
       # steam-gamescope
     ]
     ++ (with vars-helper.nixosModules; [default])
@@ -126,16 +129,6 @@
       };
 
       secrets.wrappedHomeBinaries = [
-        # Removed existing mods wrapper to avoid conflict
-        # {
-        #   name = "mods";
-        #   title = "Mods";
-        #   setTerminalTitle = true;
-        #   command = "${pkgs.mods}/bin/mods";
-        #   envVar = "OPENAI_API_KEY";
-        #   secretPath = config.my.secrets.getPath "api-key-openai" "api_key";
-        #   useSystemdRun = true;
-        # }
         {
           name = "z-claude";
           title = "z-claude";
@@ -172,7 +165,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3" "wireguard-tunnels"];
       };
 
       exposeUserSecrets = [
@@ -222,6 +215,16 @@
       enable = true;
       mountPoint = "/s3";
       bucket = "shared";
+      endpoint = "http://10.0.0.1:3900";
+      region = "garage";
+      user = config.my.mainUser.name;
+    };
+
+    # Paperless consumption folder mount (drop files here to ingest)
+    paperless-consumption-mount = {
+      enable = true;
+      mountPoint = "/paperless-consume";
+      bucket = "paperless-consume";
       endpoint = "http://10.0.0.1:3900";
       region = "garage";
       user = config.my.mainUser.name;
@@ -308,6 +311,25 @@
     };
 
     atuin.enable = true;
+
+    # Remote worker for politikerstod OCR/embeddings processing
+    politikerstod-remote-worker = {
+      enable = true;
+      numWorkers = 8;
+      workerTags = ["document_process"];
+    };
+
+    wireguardTunnels = {
+      enable = true;
+      tunnels = {
+        genome-worktree-zenith = {
+          activationPolicy = "manual"; # systemctl start wg-tunnel-genome-worktree-zenith
+        };
+        # nebula-crystal-forge = {
+        #   activationPolicy = "up";  # Auto-start at boot
+        # };
+      };
+    };
   };
 
   nixpkgs.config.allowUnfree = true;
@@ -335,7 +357,7 @@
     # Allow localsend receive port
     # Allow 3000/1 and 5000/1 for dev server and tooling
     firewall.allowedTCPPorts = [53317 3000 3001 5000 5001];
-    
+
     interfaces.enp4s0.ipv4.routes = [
       {
         address = "192.168.200.0";

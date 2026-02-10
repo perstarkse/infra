@@ -19,13 +19,20 @@
     };
   };
 
-  outputs = { self, nixpkgs, sops-nix, nixos-generators, home-manager, nix-openclaw, ... }@inputs: {
+  outputs = {
+    nixpkgs,
+    sops-nix,
+    nixos-generators,
+    home-manager,
+    nix-openclaw,
+    ...
+  } @ inputs: {
     nixosConfigurations.oumu = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
-      specialArgs = { inherit inputs; };
+      specialArgs = {inherit inputs;};
       modules = [
-        ({ pkgs, ... }: {
-          nixpkgs.overlays = [ nix-openclaw.overlays.default ];
+        (_: {
+          nixpkgs.overlays = [nix-openclaw.overlays.default];
         })
         sops-nix.nixosModules.sops
         {

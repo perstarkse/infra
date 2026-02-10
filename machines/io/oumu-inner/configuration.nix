@@ -1,6 +1,8 @@
-{ config, pkgs, lib, inputs, ... }:
-
 {
+  pkgs,
+  inputs,
+  ...
+}: {
   imports = [
   ];
 
@@ -14,7 +16,7 @@
     fsType = "ext4";
     autoResize = true;
   };
-  
+
   boot.growPartition = true;
 
   # Hostname
@@ -23,7 +25,7 @@
   networking.networkmanager.enable = false;
   networking.useNetworkd = true;
   networking.useDHCP = false;
-  
+
   systemd.network.networks."10-wan" = {
     matchConfig.Name = ["en*" "eth*"];
     networkConfig = {
@@ -39,7 +41,7 @@
   users.users.oumu = {
     isNormalUser = true;
     description = "Oumu Admin";
-    extraGroups = [ "wheel" "networkmanager" ];
+    extraGroups = ["wheel" "networkmanager"];
     packages = with pkgs; [
       git
       vim
@@ -51,14 +53,14 @@
   };
 
   # Home Manager configuration for oumu user with nix-openclaw
-  home-manager.users.oumu = { pkgs, ... }: {
+  home-manager.users.oumu = {pkgs, ...}: {
     imports = [
       inputs.nix-openclaw.homeManagerModules.openclaw
     ];
-    
+
     home.username = "oumu";
     home.homeDirectory = "/home/oumu";
-    
+
     programs.openclaw = {
       enable = true;
       config = {
@@ -72,7 +74,7 @@
         #   allowFrom = [ 123456789 ];
         # };
       };
-      
+
       instances.default = {
         enable = true;
         package = pkgs.openclaw;
@@ -81,7 +83,7 @@
         launchd.enable = false; # Not macOS
       };
     };
-    
+
     home.stateVersion = "24.11";
   };
 
@@ -117,20 +119,20 @@
 
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [ 22 8080 ];  # SSH and Openclaw gateway
+    allowedTCPPorts = [22 8080]; # SSH and Openclaw gateway
     allowedUDPPorts = [];
   };
 
   fileSystems."/run/secrets/host" = {
     device = "host_share";
     fsType = "virtiofs";
-    options = [ "ro" ];
+    options = ["ro"];
   };
 
   systemd.services.install-deploy-key = {
     description = "Install deploy key from host share";
-    after = [ "local-fs.target" ];
-    wantedBy = [ "multi-user.target" ];
+    after = ["local-fs.target"];
+    wantedBy = ["multi-user.target"];
     serviceConfig = {
       Type = "oneshot";
       User = "oumu";
@@ -151,7 +153,7 @@
   sops = {
     defaultSopsFile = ./secrets/secrets.yaml;
     defaultSopsFormat = "yaml";
-    age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+    age.sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
     secrets = {};
   };
 

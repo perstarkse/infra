@@ -29,6 +29,7 @@
       atuin-server
       atuin
       webdav-garage
+      paperless
     ]
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [media mailserver]);
@@ -42,7 +43,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage" "garage-s3"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage" "garage-s3" "paperless"];
       };
 
       generateManifest = false;
@@ -86,6 +87,14 @@
       surrealdb = mkB2 config.my.surrealdb.dataDir;
       surrealdb-saas = mkB2 config.my.minne-saas.surrealdb.dataDir;
       nous = mkB2 config.my.nous.dataDir;
+      paperless = {
+        enable = true;
+        path = config.my.paperless.dataDir;
+        frequency = "daily";
+        backend = {
+          type = "garage-s3";
+        };
+      };
     };
 
     k3s = {
@@ -136,7 +145,7 @@
     # Minne SaaS configuration
     minne-saas = {
       enable = true;
-      port = 3003;
+      port = 3001;
       address = "10.0.0.10";
       dataDir = "/var/lib/minne-saas";
 
@@ -148,6 +157,11 @@
 
       logLevel = "info";
       demoMode = false;
+      demoAllowedMutatingPaths = [
+        "/signin"
+        "/gdpr/accept"
+        "/gdpr/deny"
+      ];
     };
 
     # Garage S3-compatible storage (clustered with io)
@@ -211,6 +225,7 @@
         host = "192.168.100.12"; # Container IP
         port = 5432;
         enableContainer = true;
+        allowedHosts = ["10.0.0.15"]; # charon - remote worker
         container = {
           hostAddress = "192.168.100.10";
           localAddress = "192.168.100.12";
@@ -242,6 +257,36 @@
 
     # Atuin client
     atuin.enable = true;
+
+    # Paperless-ngx document management
+    paperless = {
+      enable = true;
+      port = 28981;
+      address = "10.0.0.10";
+      url = "https://paperless.lan.stark.pub";
+      dataDir = "/var/lib/paperless";
+      consumptionDir = "/var/lib/paperless/consume";
+      mediaDir = "/var/lib/paperless/media";
+      ocr.language = "swe+eng";
+      database = {
+        name = "paperless";
+        user = "paperless";
+        host = "192.168.100.22";
+        port = 5432;
+        enableContainer = true;
+        container = {
+          hostAddress = "192.168.100.20";
+          localAddress = "192.168.100.22";
+        };
+      };
+      tika.enable = true;
+      s3Consumption = {
+        enable = true;
+        bucket = "paperless-consume";
+        endpoint = "http://127.0.0.1:3900";
+        region = "garage";
+      };
+    };
 
     minecraft = {
       enable = true;
