@@ -83,103 +83,115 @@
           }
         '';
 
-        virtualHosts = lib.listToAttrs (map (
-            vhost: let
-              targetIp =
-                if lib.hasPrefix "${lanSubnet}." vhost.target
-                then vhost.target
-                else let
-                  machine = lib.findFirst (m: m.name == vhost.target) null machines;
-                in
-                  if machine != null
-                  then "${lanSubnet}.${machine.ip}"
-                  else vhost.target;
-
-              targetUrl = "http://${targetIp}:${toString vhost.port}";
-
-              lanAllow = ''
-                allow ${lanCidr};
-                allow ${ulaPrefix}::/64;
-                allow ${wgCidr};
-              '';
-
-              acl =
-                if (vhost.cloudflareOnly or false)
-                then ''
-                  if ($cf_access_ok = 0) { return 403; }
-                ''
-                else if (vhost.lanOnly or false)
-                then ''
-                  ${lanAllow}
-                  deny all;
-                ''
-                else "";
-
-              basicAuthConfig =
-                if vhost.basicAuth != null
-                then ''
-                  auth_basic "${vhost.basicAuth.realm}";
-                  auth_basic_user_file ${vhost.basicAuth.htpasswdFile};
-                ''
-                else "";
-
-              mergedExtra =
-                lib.concatStringsSep "\n"
-                (lib.filter (s: s != "") [(vhost.extraConfig or "") acl basicAuthConfig]);
-
-              # common part
-              baseCfg = {
-                serverName = vhost.domain;
-                listen = [
-                  {
-                    addr = "0.0.0.0";
-                    port = 80;
-                  }
-                  {
-                    addr = "0.0.0.0";
-                    port = 443;
-                    ssl = true;
-                  }
-                ];
-                locations."/" = {
-                  recommendedProxySettings = true;
-                  proxyWebsockets = vhost.websockets;
-                  proxyPass = targetUrl;
-                  extraConfig = mergedExtra;
-                };
+        virtualHosts =
+          # Hardened default vhost: reject requests with unknown/missing Host header
+          # This prevents direct IP access and scanning attacks
+          {
+            "_" = {
+              default = true;
+              rejectSSL = true;
+              locations."/" = {
+                return = "444";
               };
+            };
+          }
+          // lib.listToAttrs (map (
+              vhost: let
+                targetIp =
+                  if lib.hasPrefix "${lanSubnet}." vhost.target
+                  then vhost.target
+                  else let
+                    machine = lib.findFirst (m: m.name == vhost.target) null machines;
+                  in
+                    if machine != null
+                    then "${lanSubnet}.${machine.ip}"
+                    else vhost.target;
 
-              # ssl policy
-              sslConfig =
-                # Explicit wildcard certificate case
-                if vhost.useWildcard != null
-                then let
-                  wc = lib.findFirst (c: c.name == vhost.useWildcard) null nginxCfg.wildcardCerts;
-                in
-                  if wc == null
-                  then throw "nginx: unknown wildcard cert ‘‘${vhost.useWildcard}’’ for vhost ‘‘${vhost.domain}’’"
-                  else {
-                    enableACME = false; # don’t request per‑vhost cert
-                    useACMEHost = wc.baseDomain; # reuse wildcard cert
-                    forceSSL = true; # always serve HTTPS
-                  }
-                # Forced no-ACME/self-signed case
-                else if vhost.noAcme or false
-                then {
-                  enableACME = false;
-                  forceSSL = true;
-                  sslCertificate = "/etc/ssl/certs/ssl-cert-snakeoil.pem";
-                  sslCertificateKey = "/etc/ssl/private/ssl-cert-snakeoil.key";
-                }
-                # Default: issue ACME cert per vhost
-                else {
-                  enableACME = true;
-                  forceSSL = true;
+                targetUrl = "http://${targetIp}:${toString vhost.port}";
+
+                lanAllow = ''
+                  allow ${lanCidr};
+                  allow ${ulaPrefix}::/64;
+                  allow ${wgCidr};
+                '';
+
+                acl =
+                  if (vhost.cloudflareOnly or false)
+                  then ''
+                    if ($cf_access_ok = 0) { return 403; }
+                  ''
+                  else if (vhost.lanOnly or false)
+                  then ''
+                    ${lanAllow}
+                    deny all;
+                  ''
+                  else "";
+
+                basicAuthConfig =
+                  if vhost.basicAuth != null
+                  then ''
+                    auth_basic "${vhost.basicAuth.realm}";
+                    auth_basic_user_file ${vhost.basicAuth.htpasswdFile};
+                  ''
+                  else "";
+
+                mergedExtra =
+                  lib.concatStringsSep "\n"
+                  (lib.filter (s: s != "") [(vhost.extraConfig or "") acl basicAuthConfig]);
+
+                # common part
+                baseCfg = {
+                  serverName = vhost.domain;
+                  listen = [
+                    {
+                      addr = "0.0.0.0";
+                      port = 80;
+                    }
+                    {
+                      addr = "0.0.0.0";
+                      port = 443;
+                      ssl = true;
+                    }
+                  ];
+                  locations."/" = {
+                    recommendedProxySettings = true;
+                    proxyWebsockets = vhost.websockets;
+                    proxyPass = targetUrl;
+                    extraConfig = mergedExtra;
+                  };
                 };
-            in
-              lib.nameValuePair vhost.domain (baseCfg // sslConfig)
-          )
-          nginxCfg.virtualHosts);
+
+                # ssl policy
+                sslConfig =
+                  # Explicit wildcard certificate case
+                  if vhost.useWildcard != null
+                  then let
+                    wc = lib.findFirst (c: c.name == vhost.useWildcard) null nginxCfg.wildcardCerts;
+                  in
+                    if wc == null
+                    then throw "nginx: unknown wildcard cert ‘‘${vhost.useWildcard}’’ for vhost ‘‘${vhost.domain}’’"
+                    else {
+                      enableACME = false; # don’t request per‑vhost cert
+                      useACMEHost = wc.baseDomain; # reuse wildcard cert
+                      forceSSL = true; # always serve HTTPS
+                    }
+                  # Forced no-ACME/self-signed case
+                  else if vhost.noAcme or false
+                  then {
+                    enableACME = false;
+                    forceSSL = true;
+                    sslCertificate = "/etc/ssl/certs/ssl-cert-snakeoil.pem";
+                    sslCertificateKey = "/etc/ssl/private/ssl-cert-snakeoil.key";
+                  }
+                  # Default: issue ACME cert per vhost
+                  else {
+                    enableACME = true;
+                    forceSSL = true;
+                  };
+              in
+                lib.nameValuePair vhost.domain (baseCfg // sslConfig)
+            )
+            nginxCfg.virtualHosts);
       };
 
       security.acme.certs = lib.mkMerge (

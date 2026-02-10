@@ -185,7 +185,6 @@
               nginx-url-probe.settings = {
                 enabled = true;
                 filter = "nginx-url-probe";
-                action = "nginx-deny";
                 logpath = "/var/log/nginx/access.log";
                 backend = "auto";
                 maxretry = f2bCfg.jails.nginx.urlProbe.maxRetry;
@@ -199,7 +198,6 @@
               nginx-botsearch.settings = {
                 enabled = true;
                 filter = "nginx-botsearch";
-                action = "nginx-deny";
                 logpath = "/var/log/nginx/access.log";
                 backend = "auto";
                 maxretry = f2bCfg.jails.nginx.botsearch.maxRetry;
@@ -213,7 +211,6 @@
               nginx-http-auth.settings = {
                 enabled = true;
                 filter = "nginx-http-auth";
-                action = "nginx-deny";
                 logpath = "/var/log/nginx/error.log";
                 backend = "auto";
                 maxretry = f2bCfg.maxRetry;
@@ -252,14 +249,6 @@
 
         # Custom filter definitions
         environment.etc = {
-          # Define Nginx-based ban action
-          "fail2ban/action.d/nginx-deny.local".text = ''
-            [Definition]
-            actionstart = touch /var/lib/fail2ban/nginx-deny.conf; chown root:nginx /var/lib/fail2ban/nginx-deny.conf; chmod 640 /var/lib/fail2ban/nginx-deny.conf
-            actionban = printf "deny <ip>;\n" >> /var/lib/fail2ban/nginx-deny.conf; systemctl reload nginx
-            actionunban = sed -i "/deny <ip>;/d" /var/lib/fail2ban/nginx-deny.conf; systemctl reload nginx
-          '';
-
           # Nginx URL probe filter - catches scanners looking for common vulnerabilities
           "fail2ban/filter.d/nginx-url-probe.local".text = ''
             [Definition]
@@ -298,19 +287,12 @@
           # Logging for fail2ban
           access_log /var/log/nginx/access.log combined;
           error_log /var/log/nginx/error.log;
-
-          # Fail2Ban deny list
-          include /var/lib/fail2ban/nginx-deny.conf;
         '';
 
-        # Create nginx log directory and deny file
+        # Create nginx log directory
         systemd.tmpfiles.rules = [
           "d /var/log/nginx 0755 nginx nginx - -"
-          "f /var/lib/fail2ban/nginx-deny.conf 0640 root nginx - -"
         ];
-
-        # Grant Fail2Ban write access to the nginx deny file (required due to ProtectSystem=strict)
-        systemd.services.fail2ban.serviceConfig.ReadWritePaths = ["/var/lib/fail2ban"];
       })
 
       # Journal receiver configuration
