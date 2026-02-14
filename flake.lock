@@ -1334,11 +1334,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1770664522,
-        "narHash": "sha256-vxeK3w03xpNz75mdlmhgsW6jUQeaAVE8+uLOLZJJbXY=",
+        "lastModified": 1770997622,
+        "narHash": "sha256-flWT0rxxXxpn4Fcac5C1UZ13rJhXv4syeWyTMt3NiAQ=",
         "ref": "refs/heads/main",
-        "rev": "6148c67d3e22922ed56e04e17a920f1f4ef22ffc",
-        "revCount": 707,
+        "rev": "73c555911f5c3182621f9ab519fea111d5945d5a",
+        "revCount": 773,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/politikerstod.git"
       },
@@ -1454,11 +1454,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1768937840,
-        "narHash": "sha256-47ul7+OxZGsM6LCawKrtTlkpj8qmwBVT9O7sGSmad7M=",
+        "lastModified": 1770925190,
+        "narHash": "sha256-4Uea7/RHF2ujqf0sVZwNFk1sbDWX4X/o2/rgOe5pnPw=",
         "ref": "main",
-        "rev": "9ed84c1a2048642b145608d1e90c485b84ec3eb8",
-        "revCount": 45,
+        "rev": "47e0422f1b8aab48e8282b9b5c113c723faa7bf8",
+        "revCount": 56,
         "submodules": true,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/saas-minne.git"

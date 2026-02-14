@@ -156,11 +156,13 @@
       };
 
       logLevel = "info";
-      demoMode = false;
+      demoMode = true;
       demoAllowedMutatingPaths = [
         "/signin"
         "/gdpr/accept"
         "/gdpr/deny"
+        "/waitlist"
+        "/waitlist/"
       ];
     };
 
@@ -261,6 +263,7 @@
     # Paperless-ngx document management
     paperless = {
       enable = true;
+      openFirewall = true;
       port = 28981;
       address = "10.0.0.10";
       url = "https://paperless.lan.stark.pub";

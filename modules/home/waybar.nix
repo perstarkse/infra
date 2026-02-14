@@ -92,14 +92,92 @@
       '
     '';
 
+    vpnScript = pkgs.writeShellScriptBin "waybar-vpn-status" ''
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      ip_bin="${pkgs.iproute2}/bin/ip"
+      curl_bin="${pkgs.curl}/bin/curl"
+      notify_bin="${pkgs.libnotify}/bin/notify-send"
+      mode="''${1:-status}"
+
+      interfaces=()
+      while IFS= read -r line; do
+        iface="''${line#*: }"
+        iface="''${iface%%:*}"
+        interfaces+=("$iface")
+      done < <("$ip_bin" -o link show up type wireguard 2>/dev/null || true)
+
+      if [ "''${#interfaces[@]}" -eq 0 ]; then
+        if [ "$mode" = "notify" ]; then
+          public_default="$($curl_bin -4 -m 5 -sf https://ifconfig.me 2>/dev/null || echo "N/A")"
+          "$notify_bin" "VPN status" "Tunnel: down\nPublic (default route): $public_default"
+          exit 0
+        fi
+
+        printf '{"text":"VPN Off","tooltip":"WireGuard tunnel is down","class":"disconnected"}\n'
+        exit 0
+      fi
+
+      iface_list=""
+      for iface in "''${interfaces[@]}"; do
+        if [ -n "$iface_list" ]; then
+          iface_list="$iface_list, "
+        fi
+        iface_list="$iface_list$iface"
+      done
+
+      primary_iface="''${interfaces[0]}"
+      ip_list=""
+
+      while IFS= read -r line; do
+        addr="''${line#* inet }"
+        addr="''${addr%% *}"
+        if [ -n "$ip_list" ]; then
+          ip_list="$ip_list, "
+        fi
+        ip_list="$ip_list$addr"
+      done < <("$ip_bin" -o -4 addr show dev "$primary_iface" 2>/dev/null || true)
+
+      if [ -z "$ip_list" ]; then
+        while IFS= read -r line; do
+          addr="''${line#* inet6 }"
+          addr="''${addr%% *}"
+          if [ -n "$ip_list" ]; then
+            ip_list="$ip_list, "
+          fi
+          ip_list="$ip_list$addr"
+        done < <("$ip_bin" -o -6 addr show dev "$primary_iface" scope global 2>/dev/null || true)
+      fi
+
+      if [ -z "$ip_list" ]; then
+        ip_list="N/A"
+      fi
+
+      if [ "$mode" = "notify" ]; then
+        public_default="$($curl_bin -4 -m 5 -sf https://ifconfig.me 2>/dev/null || echo "N/A")"
+        public_vpn="$($curl_bin -4 -m 5 -sf --interface "$primary_iface" https://ifconfig.me 2>/dev/null || echo "N/A")"
+        "$notify_bin" "VPN status" "WireGuard: $iface_list\nTunnel IP: $ip_list\nPublic (default route): $public_default\nPublic (via $primary_iface): $public_vpn"
+        exit 0
+      fi
+
+      if [ "''${#interfaces[@]}" -eq 1 ]; then
+        text="VPN $primary_iface"
+      else
+        text="VPN ''${#interfaces[@]} up"
+      fi
+
+      printf '{"text":"%s","tooltip":"WireGuard: %s\\nTunnel IP: %s","class":"connected"}\n' "$text" "$iface_list" "$ip_list"
+    '';
+
     commonModules = {
-      "network" = {
-        "interface" = "se-mma-wg-001";
-        "format" = "{ifname}"; # Example: "se-mma-wg-001 🔒"
-        "format-disconnected" = "VPN Off";
-        "tooltip-format" = "VPN: {ifname}\nIP: {ipaddr}/{cidr}";
-        "on-click" = "dunstify 'External IP' \"$(LANG=C curl -sf ifconfig.me || echo 'N/A (check connection)')\"";
-        "interval" = 10;
+      "custom/vpn" = {
+        "interval" = 5;
+        "exec" = "${vpnScript}/bin/waybar-vpn-status";
+        "return-type" = "json";
+        "format" = "{}";
+        "tooltip" = true;
+        "on-click" = "${vpnScript}/bin/waybar-vpn-status notify";
       };
       "privacy" = {
         "icon-spacing" = 4;
@@ -364,7 +442,7 @@
               height = 20;
               modules-left = [wmWorkspaces];
               modules-center = [wmWindow "mpris"];
-              modules-right = ["network" "memory" "cpu" "temperature" "disk" "custom/backup" wmLanguage "bluetooth" "pulseaudio" "clock" "custom/voxtype" "privacy"];
+              modules-right = ["custom/vpn" "memory" "cpu" "temperature" "disk" "custom/backup" wmLanguage "bluetooth" "pulseaudio" "clock" "custom/voxtype" "privacy"];
             }
             // commonModules // wmModules;
         };
