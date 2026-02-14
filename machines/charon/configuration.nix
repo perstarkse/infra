@@ -33,6 +33,7 @@
       sunshine
       atuin
       rclone-s3
+      auto-suspend
       wireguard-tunnels
       paperless-consumption-mount
       politikerstod-remote-worker
@@ -76,6 +77,7 @@
         agent-browser
         sandboxed-binaries
         local-ai
+        swayidle
       ]
       ++ (with vars-helper.homeModules; [default])
       ++ (with private-infra.homeModules; [
@@ -156,6 +158,11 @@
 
     programs.agent-browser = {
       enable = true;
+    };
+
+    my.swayidle = {
+      enable = true;
+      idleSeconds = 300; # 5 min no input -> mark session idle
     };
 
     home.stateVersion = "25.11";
@@ -311,6 +318,15 @@
     };
 
     atuin.enable = true;
+
+    # Auto-suspend when system is idle (load < threshold + no user input)
+    autoSuspend = {
+      enable = true;
+      checkIntervalMinutes = 5;
+      requiredIdleChecks = 3;
+      loadThreshold = "2.0";
+      userIdleSeconds = 600;
+    };
 
     # Remote worker for politikerstod OCR/embeddings processing
     politikerstod-remote-worker = {

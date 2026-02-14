@@ -14,6 +14,7 @@
       shared
       options
       router
+      wake-proxy
       home-assistant
       k3s
       unifi-controller
@@ -51,10 +52,41 @@
       syncAddress = "http://10.0.0.10:8888";
     };
 
+    wake-proxy = {
+      enable = true;
+      package = pkgs.writeShellApplication {
+        name = "wol-web-proxy";
+        text = ''
+          exec /home/p/repos/wol-web-proxy/target/release/wol-web-proxy "$@"
+        '';
+      };
+      listenAddress = "10.0.0.1";
+      port = 8091;
+
+      upstreamHost = "10.0.0.15";
+      upstreamPort = 3000;
+      healthPath = "/health";
+
+      wolMac = "f0:2f:74:de:91:0a";
+      wolBroadcastIp = "10.0.0.255";
+      wolBroadcastPort = 9;
+
+      wakeTimeout = 180;
+      pollInterval = 2;
+      edgeWaitTimeout = 20;
+      readyCacheTtl = 5;
+      trustProxyHeaders = true;
+      trustedProxyIps = [
+        "127.0.0.1"
+        "::1"
+        "10.0.0.1"
+      ];
+    };
+
     secrets.discover = {
       enable = true;
       dir = ../../vars/generators;
-      includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage"];
+      includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage" "wake-proxy"];
     };
 
     secrets.generateManifest = false;
@@ -224,6 +256,10 @@
           target = "10.0.0.1";
         }
         {
+          name = "minne.lan.stark.pub";
+          target = "10.0.0.1";
+        }
+        {
           name = "request.stark.pub";
           target = "10.0.0.1";
         }
@@ -257,6 +293,10 @@
         }
         {
           name = "paperless.lan.stark.pub";
+          target = "10.0.0.1";
+        }
+        {
+          name = "wake.stark.pub";
           target = "10.0.0.1";
         }
       ];
@@ -297,6 +337,7 @@
                 "minne-demo.stark.pub"
                 "mail.stark.pub"
                 "politikerstod.stark.pub"
+                "wake.stark.pub"
               ];
               passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
             }
@@ -380,7 +421,7 @@
           {
             domain = "minne.stark.pub";
             target = "makemake";
-            port = 3000;
+            port = 3001;
             websockets = false;
             cloudflareOnly = true;
             extraConfig = ''
@@ -394,9 +435,21 @@
           {
             domain = "minne-demo.stark.pub";
             target = "makemake";
-            port = 3003;
+            port = 3001;
             websockets = false;
             cloudflareOnly = true;
+            extraConfig = ''
+              return 301 https://minne.stark.pub$request_uri;
+            '';
+          }
+          {
+            domain = "minne.lan.stark.pub";
+            target = "makemake";
+            port = 3000;
+            websockets = false;
+            lanOnly = true;
+            useWildcard = "lanstark";
+            cloudflareOnly = false;
             extraConfig = ''
               proxy_set_header Connection "close";
               proxy_http_version 1.1;
@@ -439,6 +492,13 @@
             extraConfig = ''
               client_max_body_size 100M;
             '';
+          }
+          {
+            domain = "wake.stark.pub";
+            target = "10.0.0.1";
+            port = 8091;
+            websockets = true;
+            cloudflareOnly = true;
           }
         ];
       };

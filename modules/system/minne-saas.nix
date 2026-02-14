@@ -66,6 +66,8 @@
           "/signin"
           "/gdpr/accept"
           "/gdpr/deny"
+          "/waitlist"
+          "/waitlist/"
         ];
         description = "Mutating paths allowed in demo mode (mapped to DEMO_ALLOWED_MUTATING_PATHS)";
       };
@@ -86,7 +88,7 @@
           };
         };
         default = {
-          tcp = [3003];
+          tcp = [cfg.port];
           udp = [];
         };
         description = "Firewall port configuration for Minne SaaS";
