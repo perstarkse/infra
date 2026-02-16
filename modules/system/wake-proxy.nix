@@ -1,18 +1,21 @@
-_: {
+{inputs, ...}: {
   config.flake.nixosModules.wake-proxy = {
     config,
     lib,
+    pkgs,
     ...
   }: let
     cfg = config.my.wake-proxy;
     envFile = config.my.secrets.getPath cfg.secretName "env";
+    defaultPackage = inputs.wol-web-proxy.packages.${pkgs.stdenv.hostPlatform.system}.default;
   in {
     options.my.wake-proxy = {
       enable = lib.mkEnableOption "Wake-on-LAN authenticated reverse proxy";
 
       package = lib.mkOption {
-        type = lib.types.nullOr lib.types.package;
-        default = null;
+        type = lib.types.package;
+        default = defaultPackage;
+        defaultText = lib.literalExpression "inputs.wol-web-proxy.packages.${pkgs.stdenv.hostPlatform.system}.default";
         description = "Package containing the wol-web-proxy binary.";
       };
 
@@ -159,13 +162,6 @@ _: {
     };
 
     config = lib.mkIf cfg.enable {
-      assertions = [
-        {
-          assertion = cfg.package != null;
-          message = "my.wake-proxy.package must be set when my.wake-proxy.enable = true";
-        }
-      ];
-
       my.secrets.allowReadAccess = [
         {
           readers = [cfg.user];
@@ -185,6 +181,7 @@ _: {
         wantedBy = ["multi-user.target"];
         after = ["network-online.target"];
         wants = ["network-online.target"];
+        path = [pkgs.iputils];
 
         serviceConfig = {
           Type = "simple";

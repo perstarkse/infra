@@ -52,17 +52,14 @@
 
     private-infra = {
       url = "git+ssh://git@github.com/perstarkse/private-infra.git";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     minne = {
-      url = "github:perstarkse/minne?ref=development";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:perstarkse/minne";
     };
 
     saas-minne = {
       url = "git+ssh://git@github.com/perstarkse/saas-minne.git?ref=main&submodules=1";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     NixVirt = {
@@ -99,6 +96,10 @@
     politikerstod = {
       url = "git+ssh://git@github.com/perstarkse/politikerstod.git";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    wol-web-proxy = {
+      url = "git+ssh://git@github.com/perstarkse/wol-web-proxy.git";
     };
 
     nix-topology = {
