@@ -32,6 +32,7 @@
       backups
       sunshine
       atuin
+      codenomad
       rclone-s3
       auto-suspend
       wireguard-tunnels
@@ -319,6 +320,18 @@
 
     atuin.enable = true;
 
+    codenomad = {
+      enable = true;
+      runAsMainUser = true;
+      listenAddress = "0.0.0.0";
+      port = 9898;
+      skipAuth = true;
+      unrestrictedRoot = false;
+      workspaceRoot = "/home/p/repos";
+      manageWorkspaceRoot = false;
+      openFirewall = true;
+    };
+
     # Auto-suspend when system is idle (load < threshold + no user input)
     autoSuspend = {
       enable = true;
@@ -370,6 +383,7 @@
 
   networking = {
     interfaces.enp4s0.wakeOnLan.enable = true;
+    firewall.allowPing = true;
     # Allow localsend receive port
     # Allow 3000/1 and 5000/1 for dev server and tooling
     firewall.allowedTCPPorts = [53317 3000 3001 5000 5001];

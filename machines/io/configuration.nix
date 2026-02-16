@@ -54,18 +54,12 @@
 
     wake-proxy = {
       enable = true;
-      package = pkgs.writeShellApplication {
-        name = "wol-web-proxy";
-        text = ''
-          exec /home/p/repos/wol-web-proxy/target/release/wol-web-proxy "$@"
-        '';
-      };
       listenAddress = "10.0.0.1";
       port = 8091;
 
       upstreamHost = "10.0.0.15";
-      upstreamPort = 3000;
-      healthPath = "/health";
+      upstreamPort = 9898;
+      healthPath = "/api/meta";
 
       wolMac = "f0:2f:74:de:91:0a";
       wolBroadcastIp = "10.0.0.255";
@@ -499,6 +493,10 @@
             port = 8091;
             websockets = true;
             cloudflareOnly = true;
+            acmeDns01 = {
+              dnsProvider = "cloudflare";
+              environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+            };
           }
         ];
       };
