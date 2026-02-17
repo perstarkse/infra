@@ -6,6 +6,7 @@
   }: let
     cfg = config.my.router;
     inherit (lib) mkEnableOption mkOption types;
+    isHostOctet = s: builtins.match "^([2-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-4])$" s != null;
 
     machineSubmodule = types.submodule {
       options = {
@@ -298,6 +299,11 @@
                   type = types.str;
                   description = "Target machine name (from router.machines) or IP:port";
                 };
+                targetScheme = mkOption {
+                  type = types.enum ["http" "https"];
+                  default = "http";
+                  description = "Upstream protocol to use when proxying to the target";
+                };
                 port = mkOption {
                   type = types.int;
                   description = "Target port";
@@ -397,7 +403,7 @@
             };
             interfaces = mkOption {
               type = types.listOf types.str;
-              default = ["br-lan" "enp1s0"];
+              default = ["br-lan" cfg.wan.interface];
               description = "Interfaces to monitor";
             };
           };
@@ -557,13 +563,99 @@
     };
 
     config = lib.mkIf cfg.enable {
+      assertions = [
+        {
+          assertion = cfg.lan.interfaces != [];
+          message = "my.router.lan.interfaces must include at least one LAN interface";
+        }
+        {
+          assertion = !(lib.elem cfg.wan.interface cfg.lan.interfaces);
+          message = "my.router.wan.interface must not also be present in my.router.lan.interfaces";
+        }
+        {
+          assertion = (lib.length cfg.lan.interfaces) == (lib.length (lib.unique cfg.lan.interfaces));
+          message = "my.router.lan.interfaces must not contain duplicates";
+        }
+        {
+          assertion =
+            cfg.lan.dhcpRange.start
+            >= 2
+            && cfg.lan.dhcpRange.end <= 254
+            && cfg.lan.dhcpRange.start <= cfg.lan.dhcpRange.end;
+          message = "my.router.lan.dhcpRange must be within 2..254 and start <= end";
+        }
+        {
+          assertion = (lib.length cfg.machines) == (lib.length (lib.unique (map (m: m.name) cfg.machines)));
+          message = "my.router.machines names must be unique";
+        }
+        {
+          assertion = (lib.length cfg.machines) == (lib.length (lib.unique (map (m: m.mac) cfg.machines)));
+          message = "my.router.machines MAC addresses must be unique";
+        }
+        {
+          assertion = lib.all (m: isHostOctet m.ip) cfg.machines;
+          message = "my.router.machines.<name>.ip must be a numeric host octet in the range 2..254";
+        }
+        {
+          assertion =
+            (lib.length (map (m: m.ip) cfg.machines))
+            == (lib.length (lib.unique (map (m: m.ip) cfg.machines)));
+          message = "my.router.machines IP host octets must be unique";
+        }
+        {
+          assertion = lib.all (m: lib.all (pf: pf.port >= 1 && pf.port <= 65535) m.portForwards) cfg.machines;
+          message = "my.router.machines.*.portForwards.*.port must be in range 1..65535";
+        }
+        {
+          assertion = (lib.length cfg.vlans) == (lib.length (lib.unique (map (v: v.name) cfg.vlans)));
+          message = "my.router.vlans names must be unique";
+        }
+        {
+          assertion = (lib.length cfg.vlans) == (lib.length (lib.unique (map (v: v.id) cfg.vlans)));
+          message = "my.router.vlans IDs must be unique";
+        }
+        {
+          assertion = lib.all (v: v.id >= 2 && v.id <= 4094) cfg.vlans;
+          message = "my.router.vlans.*.id must be in range 2..4094 (VLAN 1 is reserved for LAN)";
+        }
+        {
+          assertion =
+            (lib.length (map (v: v.subnet) cfg.vlans))
+            == (lib.length (lib.unique (map (v: v.subnet) cfg.vlans)));
+          message = "my.router.vlans subnets must be unique";
+        }
+        {
+          assertion = !(lib.elem cfg.lan.subnet (map (v: v.subnet) cfg.vlans));
+          message = "my.router.vlans subnets must not reuse my.router.lan.subnet";
+        }
+        {
+          assertion = lib.all (
+            v:
+              v.dhcpRange.start
+              >= 2
+              && v.dhcpRange.end <= 254
+              && v.dhcpRange.start <= v.dhcpRange.end
+          )
+          cfg.vlans;
+          message = "my.router.vlans.*.dhcpRange must be within 2..254 and start <= end";
+        }
+        {
+          assertion = lib.all (v: lib.all (r: isHostOctet r.ip) v.reservations) cfg.vlans;
+          message = "my.router.vlans.*.reservations.*.ip must be a numeric host octet in the range 2..254";
+        }
+      ];
+
       routerHelpers = let
         lanSubnet = cfg.lan.subnet;
         lanCidr = "${lanSubnet}.0/24";
         routerIp = "${lanSubnet}.1";
+        lanBridge = "br-lan";
+        lanVlanId = 1;
+        lanInterface = "vlan${toString lanVlanId}";
         dhcpStart = "${lanSubnet}.${toString cfg.lan.dhcpRange.start}";
         dhcpEnd = "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
         wgCfg = cfg.wireguard or {};
+        wgRouteToLan = wgCfg.routeToLan or true;
         wgSubnet = wgCfg.subnet or "10.6.0";
         wgCidr = "${wgSubnet}.0/${toString (wgCfg.cidrPrefix or 24)}";
         vlanHelpers =
@@ -587,12 +679,11 @@
         lanZone = {
           name = "lan";
           kind = "lan";
-          interface = "br-lan";
+          interface = lanInterface;
           subnets = [lanCidr];
           inherit routerIp;
           wanEgress = true;
-          nat = true;
-          allowTo = ["wireguard" "libvirt"];
+          allowTo = (lib.optional wgRouteToLan "wireguard") ++ ["libvirt"];
           dhcp = {
             inherit (cfg.dhcp) enable domainName;
             poolStart = dhcpStart;
@@ -612,7 +703,6 @@
             kind = "vlan";
             subnets = [v.subnetCidr];
             routerIp = v.routerVlanIp;
-            nat = v.wanEgress;
             allowTo = [];
             dhcp = {
               enable = true;
@@ -636,8 +726,7 @@
           subnets = [wgCidr];
           routerIp = "${wgSubnet}.1";
           wanEgress = true;
-          nat = true;
-          allowTo = ["lan" "cni"];
+          allowTo = (lib.optional wgRouteToLan "lan") ++ ["cni"];
           dhcp.enable = false;
         };
 
@@ -648,7 +737,6 @@
           subnets = [];
           routerIp = null;
           wanEgress = true;
-          nat = true;
           allowTo = ["lan" "wireguard"];
           dhcp.enable = false;
         };
@@ -660,7 +748,6 @@
           subnets = [];
           routerIp = null;
           wanEgress = true;
-          nat = true;
           allowTo = [];
           dhcp.enable = false;
         };
@@ -672,15 +759,14 @@
           subnets = [];
           routerIp = null;
           wanEgress = false;
-          nat = false;
           allowTo = [];
           dhcp.enable = false;
         };
       in {
-        inherit lanSubnet lanCidr routerIp dhcpStart dhcpEnd;
+        inherit lanSubnet lanCidr routerIp lanBridge lanVlanId lanInterface dhcpStart dhcpEnd;
         inherit (cfg.ipv6) ulaPrefix;
         wanInterface = cfg.wan.interface;
-        lanInterfaces = cfg.lan.interfaces;
+        lanPorts = cfg.lan.interfaces;
         vlans = vlanHelpers;
         zones = [lanZone] ++ vlanZones ++ wgZone ++ cniZone ++ [libvirtZone] ++ [wanZone];
       };

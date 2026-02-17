@@ -22,7 +22,7 @@
       garage
       atuin
       libvirt
-      oumu-vm
+      # oumu-vm
       # go2rtc
     ]
     ++ (with vars-helper.nixosModules; [default]);
@@ -155,7 +155,13 @@
             end = 50;
           };
           wanEgress = false;
-          reservations = [];
+          reservations = [
+            {
+              name = "reolink-p330";
+              ip = "10";
+              mac = "ec:71:db:01:64:fd";
+            }
+          ];
         }
       ];
       wan.interface = "enp1s0";
@@ -187,12 +193,6 @@
       };
 
       machines = [
-        {
-          name = "oumu";
-          ip = "99";
-          mac = "52:54:00:01:99:00";
-          portForwards = [];
-        }
         {
           name = "charon";
           ip = "15";
@@ -267,6 +267,14 @@
         }
         {
           name = "frigate.lan.stark.pub";
+          target = "10.0.0.1";
+        }
+        {
+          name = "home.lan.stark.pub";
+          target = "10.0.0.1";
+        }
+        {
+          name = "unifi.lan.stark.pub";
           target = "10.0.0.1";
         }
         {
@@ -356,7 +364,24 @@
             domain = "frigate.lan.stark.pub";
             target = "10.0.0.1";
             port = 5000;
-            websockets = false;
+            websockets = true;
+            useWildcard = "lanstark";
+          }
+          {
+            domain = "home.lan.stark.pub";
+            target = "10.0.0.1";
+            port = 8123;
+            websockets = true;
+            lanOnly = true;
+            useWildcard = "lanstark";
+          }
+          {
+            domain = "unifi.lan.stark.pub";
+            target = "10.0.0.1";
+            targetScheme = "https";
+            port = 8443;
+            websockets = true;
+            lanOnly = true;
             useWildcard = "lanstark";
           }
           {
@@ -559,16 +584,15 @@
     # Libvirt for VM hosting
     libvirtd = {
       enable = true;
-      # No special networks or domains here - managed by oumu-vm module
     };
 
-    # Oumu AI assistant VM (interstellar visitor to the heliosphere)
-    oumu-vm = {
-      enable = true;
-      storageBaseDir = "/storage/libvirt/oumu";
-      memoryGb = 4;
-      diskSizeGb = 120;
-    };
+    # # Oumu AI assistant VM (interstellar visitor to the heliosphere)
+    # oumu-vm = {
+    #   enable = true;
+    #   storageBaseDir = "/storage/libvirt/oumu";
+    #   memoryGb = 4;
+    #   diskSizeGb = 120;
+    # };
   };
 
   # Custom nginx location for nous.fyi /app/ -> /assets/app/ rewrite

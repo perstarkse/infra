@@ -76,7 +76,8 @@ _: {
       manageWorkspaceRoot = lib.mkOption {
         type = lib.types.bool;
         default =
-          cfg.workspaceRoot == (toString cfg.dataDir)
+          cfg.workspaceRoot
+          == (toString cfg.dataDir)
           || lib.hasPrefix "${toString cfg.dataDir}/" cfg.workspaceRoot;
         description = "Manage workspaceRoot ownership/permissions with tmpfiles.";
       };
@@ -122,7 +123,7 @@ _: {
       users.users = lib.mkIf (!cfg.runAsMainUser) {
         ${cfg.user} = {
           isSystemUser = true;
-          group = cfg.group;
+          inherit (cfg) group;
           home = cfg.dataDir;
           createHome = true;
         };
@@ -145,6 +146,7 @@ _: {
         wantedBy = ["multi-user.target"];
         after = ["network-online.target"];
         wants = ["network-online.target"];
+        environment.PATH = lib.mkForce "/home/p/.npm-global/bin:/run/wrappers/bin:/run/current-system/sw/bin:/run/current-system/sw/sbin";
 
         serviceConfig = {
           Type = "simple";

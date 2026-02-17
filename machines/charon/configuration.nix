@@ -433,6 +433,7 @@
     IOSchedulingPriority = lib.mkForce 7;
     LimitNOFILE = "infinity";
   };
+
   security.pam.loginLimits = [
     {
       domain = "*";

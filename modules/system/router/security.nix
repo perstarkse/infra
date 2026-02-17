@@ -15,6 +15,11 @@
     wgSubnet = wgCfg.subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/${toString (wgCfg.cidrPrefix or 24)}";
     routerIp = helpers.routerIp or "${cfg.lan.subnet}.1";
+    jrListenHost =
+      if builtins.match ".*:.*" jrCfg.listenAddress != null && !(lib.hasPrefix "[" jrCfg.listenAddress)
+      then "[${jrCfg.listenAddress}]"
+      else jrCfg.listenAddress;
+    jrListenStream = "${jrListenHost}:${toString jrCfg.port}";
 
     # Compute all IPs to ignore (never ban)
     autoIgnoreIPs =
@@ -139,7 +144,7 @@
         listenAddress = mkOption {
           type = types.str;
           default = routerIp;
-          description = "Address to listen for incoming journal streams";
+          description = "Address to bind for incoming journal streams";
         };
 
         port = mkOption {
@@ -304,13 +309,16 @@
           inherit (jrCfg) port;
         };
 
+        # Bind journal-remote to an explicit address+port socket
+        systemd.sockets.systemd-journal-remote.listenStreams = lib.mkForce [
+          ""
+          jrListenStream
+        ];
+
         # Create directory for remote journals
         systemd.tmpfiles.rules = [
           "d ${journalLogDir} 0755 systemd-journal-remote systemd-journal-remote - -"
         ];
-
-        # Open firewall for journal-remote from LAN only
-        networking.firewall.interfaces."br-lan".allowedTCPPorts = [jrCfg.port];
       })
     ]);
   };

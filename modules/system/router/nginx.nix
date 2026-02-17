@@ -20,6 +20,49 @@
     cfAllow = "${cfDir}/allow.conf";
     cfRealip = "${cfDir}/realip.conf";
     cfGeo = "${cfDir}/edge-geo.conf";
+
+    ddclientEnabled = nginxCfg.ddclient.enable;
+    ddclientZones = nginxCfg.ddclient.zones;
+    mkDdclientConfEntry = zone:
+      lib.nameValuePair "ddclient-${zone.zone}.conf" {
+        mode = "0600";
+        text = ''
+          daemon=0
+          protocol=cloudflare
+          use=web, web=https://api.ipify.org
+          ssl=yes
+          ttl=1
+          login=token
+          password='@PASSWORD@'
+          zone=${zone.zone}
+          ${lib.concatStringsSep "\n" zone.domains}
+        '';
+      };
+    mkDdclientServiceEntry = zone:
+      lib.nameValuePair "ddclient-${zone.zone}" {
+        description = "Dynamic DNS update for ${zone.zone}";
+        wants = ["network-online.target"];
+        after = ["network-online.target"];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = pkgs.writeShellScript "ddclient-${zone.zone}-prepare" ''
+            ${pkgs.coreutils}/bin/install -m 0600 /etc/ddclient-${zone.zone}.conf /run/ddclient-${zone.zone}.conf
+            ${pkgs.gnused}/bin/sed -i "s|@PASSWORD@|$(${pkgs.coreutils}/bin/cat ${zone.passwordFile})|" /run/ddclient-${zone.zone}.conf
+          '';
+          ExecStart = "${pkgs.ddclient}/bin/ddclient -verbose -noquiet -file /run/ddclient-${zone.zone}.conf";
+          ExecStartPost = "${pkgs.coreutils}/bin/rm -f /run/ddclient-${zone.zone}.conf";
+        };
+      };
+    mkDdclientTimerEntry = zone:
+      lib.nameValuePair "ddclient-${zone.zone}" {
+        description = "Timer for dynamic DNS update of ${zone.zone}";
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnBootSec = "2min";
+          OnUnitActiveSec = "10min";
+          RandomizedDelaySec = "30s";
+        };
+      };
   in {
     config = lib.mkIf enabled {
       security.acme = {
@@ -29,24 +72,7 @@
 
       # Multi-zone ddclient support via custom systemd services
       # Each zone gets its own config file, service, and timer
-      environment.etc = lib.mkIf nginxCfg.ddclient.enable (
-        lib.listToAttrs (map (zone:
-          lib.nameValuePair "ddclient-${zone.zone}.conf" {
-            mode = "0600";
-            text = ''
-              daemon=0
-              protocol=cloudflare
-              use=web, web=https://api.ipify.org
-              ssl=yes
-              ttl=1
-              login=token
-              password='@PASSWORD@'
-              zone=${zone.zone}
-              ${lib.concatStringsSep "\n" zone.domains}
-            '';
-          })
-        nginxCfg.ddclient.zones)
-      );
+      environment.etc = lib.mkIf ddclientEnabled (lib.listToAttrs (map mkDdclientConfEntry ddclientZones));
 
       services.nginx = {
         enable = true;
@@ -107,7 +133,7 @@
                     then "${lanSubnet}.${machine.ip}"
                     else vhost.target;
 
-                targetUrl = "http://${targetIp}:${toString vhost.port}";
+                targetUrl = "${vhost.targetScheme}://${targetIp}:${toString vhost.port}";
 
                 lanAllow = ''
                   allow ${lanCidr};
@@ -139,20 +165,23 @@
                   lib.concatStringsSep "\n"
                   (lib.filter (s: s != "") [(vhost.extraConfig or "") acl basicAuthConfig]);
 
+                noAcme = vhost.noAcme or false;
+
                 # common part
                 baseCfg = {
                   serverName = vhost.domain;
-                  listen = [
-                    {
-                      addr = "0.0.0.0";
-                      port = 80;
-                    }
-                    {
+                  listen =
+                    [
+                      {
+                        addr = "0.0.0.0";
+                        port = 80;
+                      }
+                    ]
+                    ++ lib.optional (!noAcme) {
                       addr = "0.0.0.0";
                       port = 443;
                       ssl = true;
-                    }
-                  ];
+                    };
                   locations."/" = {
                     recommendedProxySettings = true;
                     proxyWebsockets = vhost.websockets;
@@ -176,12 +205,10 @@
                       forceSSL = true; # always serve HTTPS
                     }
                   # Forced no-ACME/self-signed case
-                  else if vhost.noAcme or false
+                  else if noAcme
                   then {
                     enableACME = false;
-                    forceSSL = true;
-                    sslCertificate = "/etc/ssl/certs/ssl-cert-snakeoil.pem";
-                    sslCertificateKey = "/etc/ssl/private/ssl-cert-snakeoil.key";
+                    forceSSL = false;
                   }
                   # Default: issue ACME cert per vhost
                   else {
@@ -236,24 +263,7 @@
 
       systemd.services = lib.mkMerge [
         # ddclient services for each zone
-        (lib.mkIf nginxCfg.ddclient.enable (
-          lib.listToAttrs (map (zone:
-            lib.nameValuePair "ddclient-${zone.zone}" {
-              description = "Dynamic DNS update for ${zone.zone}";
-              wants = ["network-online.target"];
-              after = ["network-online.target"];
-              serviceConfig = {
-                Type = "oneshot";
-                ExecStartPre = pkgs.writeShellScript "ddclient-${zone.zone}-prepare" ''
-                  ${pkgs.coreutils}/bin/install -m 0600 /etc/ddclient-${zone.zone}.conf /run/ddclient-${zone.zone}.conf
-                  ${pkgs.gnused}/bin/sed -i "s|@PASSWORD@|$(${pkgs.coreutils}/bin/cat ${zone.passwordFile})|" /run/ddclient-${zone.zone}.conf
-                '';
-                ExecStart = "${pkgs.ddclient}/bin/ddclient -verbose -noquiet -file /run/ddclient-${zone.zone}.conf";
-                ExecStartPost = "${pkgs.coreutils}/bin/rm -f /run/ddclient-${zone.zone}.conf";
-              };
-            })
-          nginxCfg.ddclient.zones)
-        ))
+        (lib.mkIf ddclientEnabled (lib.listToAttrs (map mkDdclientServiceEntry ddclientZones)))
 
         # Cloudflare IPs update service
         (lib.mkIf cfNeeded {
@@ -313,19 +323,7 @@
 
       systemd.timers = lib.mkMerge [
         # ddclient timers for each zone
-        (lib.mkIf nginxCfg.ddclient.enable (
-          lib.listToAttrs (map (zone:
-            lib.nameValuePair "ddclient-${zone.zone}" {
-              description = "Timer for dynamic DNS update of ${zone.zone}";
-              wantedBy = ["timers.target"];
-              timerConfig = {
-                OnBootSec = "2min";
-                OnUnitActiveSec = "10min";
-                RandomizedDelaySec = "30s";
-              };
-            })
-          nginxCfg.ddclient.zones)
-        ))
+        (lib.mkIf ddclientEnabled (lib.listToAttrs (map mkDdclientTimerEntry ddclientZones)))
 
         # Cloudflare IPs update timer
         (lib.mkIf cfNeeded {
