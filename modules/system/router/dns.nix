@@ -28,6 +28,15 @@
       if lst == []
       then ["lan."]
       else lib.unique (map normalizeZone lst);
+    isIPv4Literal = s: builtins.match "^[0-9]{1,3}(\.[0-9]{1,3}){3}$" s != null;
+    normalizeFqdn = host:
+      if lib.hasSuffix "." host
+      then host
+      else "${host}.";
+    mkServiceRecord = service:
+      if isIPv4Literal service.target
+      then "\"${service.name} IN A ${service.target}\""
+      else "\"${service.name} IN CNAME ${normalizeFqdn service.target}\"";
   in {
     config = lib.mkIf enabled {
       services.unbound = {
@@ -76,7 +85,7 @@
                   zones
               )
               localZones
-              ++ (map (service: "\"${service.name} IN A ${service.target}\"") services);
+              ++ map mkServiceRecord services;
           };
           "forward-zone" = [
             {

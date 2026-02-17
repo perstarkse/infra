@@ -166,8 +166,8 @@
                 settings.host = "io.lan";
               };
               roles.default.machines.charon = {
-                settings.host = "localhost";
-                # settings.host = "charon.lan";
+                # settings.host = "localhost";
+                settings.host = "charon.lan";
               };
               roles.default.machines.makemake = {
                 settings.host = "makemake.lan";
@@ -239,6 +239,11 @@
         buildChecks = lib.mapAttrs (
           _: cfg: cfg.config.system.build.toplevel
         ) (lib.filterAttrs (_: cfg: (cfg.pkgs.system or null) == system) nixosConfigs);
+        routerChecks = import ./tests/router.nix {
+          inherit lib;
+          inherit pkgs;
+          inherit (inputs.self) nixosModules;
+        };
       in {
         treefmt = {
           projectRootFile = "flake.nix";
@@ -261,7 +266,7 @@
         };
 
         # Flake checks: treefmt (module-provided) + per-host builds
-        checks = buildChecks;
+        checks = buildChecks // routerChecks;
       };
     });
 }

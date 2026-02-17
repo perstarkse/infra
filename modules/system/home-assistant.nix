@@ -1,9 +1,50 @@
 {
-  config.flake.nixosModules.home-assistant = {
+  config.flake.nixosModules.home-assistant = {pkgs, ...}: {
     config = {
       systemd.tmpfiles.rules = [
         "d /data/.state/home-assistant 0755 root root - -"
       ];
+      systemd.services.homeassistant-reverse-proxy-config = {
+        description = "Ensure Home Assistant trusts local reverse proxy";
+        before = ["podman-homeassistant.service"];
+        serviceConfig.Type = "oneshot";
+        script = ''
+          set -eu
+
+          cfg=/data/.state/home-assistant/configuration.yaml
+
+          if [ ! -f "$cfg" ]; then
+            cat > "$cfg" <<'EOF'
+          # Loads default set of integrations. Do not remove.
+          default_config:
+
+          # Load frontend themes from the themes folder
+          frontend:
+            themes: !include_dir_merge_named themes
+
+          automation: !include automations.yaml
+          script: !include scripts.yaml
+          scene: !include scenes.yaml
+          EOF
+          fi
+
+          if ! ${pkgs.gnugrep}/bin/grep -q "use_x_forwarded_for:" "$cfg"; then
+            cat >> "$cfg" <<'EOF'
+
+          http:
+            use_x_forwarded_for: true
+            trusted_proxies:
+              - 10.0.0.1
+              - 127.0.0.1
+              - ::1
+          EOF
+          fi
+        '';
+      };
+      systemd.services.podman-homeassistant = {
+        requires = ["homeassistant-reverse-proxy-config.service"];
+        after = ["homeassistant-reverse-proxy-config.service"];
+      };
       services = {
         # System requirements for bluetooth
         dbus.enable = true;

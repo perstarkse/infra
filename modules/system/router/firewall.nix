@@ -6,6 +6,9 @@
   }: let
     cfg = config.my.router;
     helpers = config.routerHelpers or {};
+    lanVlanId = helpers.lanVlanId or 1;
+    lanInterface = helpers.lanInterface or "vlan${toString lanVlanId}";
+    lanBridge = helpers.lanBridge or "br-lan";
     lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
     zones = helpers.zones or [];
     wanZone = lib.findFirst (z: z.kind == "wan") null zones;
@@ -14,30 +17,56 @@
       then wanZone.interface
       else (helpers.wanInterface or cfg.wan.interface);
     internalZones = lib.filter (z: z.kind != "wan") zones;
+    zoneMap = lib.listToAttrs (map (z: lib.nameValuePair z.name z) internalZones);
+    lanZone = lib.attrByPath ["lan"] null zoneMap;
+    lanZoneInterface =
+      if lanZone != null
+      then lanZone.interface
+      else lanInterface;
 
-    machinesByName = lib.listToAttrs (map (m: lib.nameValuePair m.name m) cfg.machines);
-    forwardRules = lib.concatStringsSep "\n" (lib.mapAttrsToList (
-        _: machine:
-          lib.concatStringsSep "\n" (map (
-              pf: "iifname \"${wan}\" oifname \"br-lan\" ip daddr ${lanSubnet}.${machine.ip} ${pf.protocol} dport ${toString pf.port} accept"
-            )
-            machine.portForwards)
+    expandProtocols = pf:
+      if pf.protocol == "tcp udp"
+      then ["tcp" "udp"]
+      else [pf.protocol];
+
+    portForwards =
+      lib.concatMap (
+        machine:
+          lib.concatMap (
+            pf:
+              map (
+                protocol: {
+                  inherit machine protocol;
+                  inherit (pf) port;
+                }
+              ) (expandProtocols pf)
+          )
+          machine.portForwards
       )
-      machinesByName);
-    dnatRules = lib.concatStringsSep "\n" (lib.mapAttrsToList (
-        _: machine:
-          lib.concatStringsSep "\n" (map (
-              pf: "iifname \"${wan}\" ${pf.protocol} dport ${toString pf.port} dnat to ${lanSubnet}.${machine.ip}"
-            )
-            machine.portForwards)
+      cfg.machines;
+
+    forwardRules = lib.concatStringsSep "\n" (map (
+        pfRule: "iifname \"${wan}\" oifname \"${lanZoneInterface}\" ip daddr ${lanSubnet}.${pfRule.machine.ip} ${pfRule.protocol} dport ${toString pfRule.port} accept"
       )
-      machinesByName);
+      portForwards);
+    dnatRules = lib.concatStringsSep "\n" (map (
+        pfRule: "iifname \"${wan}\" ${pfRule.protocol} dport ${toString pfRule.port} dnat to ${lanSubnet}.${pfRule.machine.ip}"
+      )
+      portForwards);
 
     wgEnabled = cfg.wireguard.enable or false;
-    wgInterface = cfg.wireguard.interfaceName or "wg0";
     wgPort = toString (cfg.wireguard.listenPort or 51820);
 
     inputInternalRules = lib.concatStringsSep "\n" (map (zone: "iifname \"${zone.interface}\" accept") internalZones);
+
+    dropLanBridgeTaggedDhcpRules =
+      if lanZoneInterface == lanBridge
+      then
+        lib.concatStringsSep "\n" (map (
+            vlan: "iifname \"${lanBridge}\" vlan id ${toString vlan.id} udp dport 67 drop"
+          )
+          cfg.vlans)
+      else "";
 
     forwardSameZoneRules = lib.concatStringsSep "\n" (map (zone: "iifname \"${zone.interface}\" oifname \"${zone.interface}\" accept") internalZones);
 
@@ -51,7 +80,33 @@
       )
       internalZones);
 
-    zoneMap = lib.listToAttrs (map (z: lib.nameValuePair z.name z) internalZones);
+    bridgeLanInputCompatRule =
+      if lanZone != null && lanZone.interface != lanBridge
+      then ''
+        iifname "${lanBridge}" accept
+      ''
+      else "";
+
+    bridgeLanForwardCompatRules =
+      if lanZone != null && lanZone.interface != lanBridge
+      then let
+        bridgeAllowToRules = lib.concatStringsSep "\n" (map (
+            targetName: let
+              target = lib.attrByPath [targetName] null zoneMap;
+            in
+              if target == null
+              then ""
+              else "iifname \"${lanBridge}\" oifname \"${target.interface}\" accept"
+          )
+          (lanZone.allowTo or []));
+      in ''
+        iifname "${lanBridge}" oifname "${lanBridge}" accept
+        ${lib.optionalString (lanZone.wanEgress or false) "iifname \"${lanBridge}\" oifname \"${wan}\" accept"}
+        iifname "${wan}" oifname "${lanBridge}" ct state established,related accept
+        ${bridgeAllowToRules}
+      ''
+      else "";
+
     forwardZoneAllowRules = lib.concatStringsSep "\n" (lib.concatMap (zone:
       map (
         targetName: let
@@ -63,6 +118,15 @@
       )
       (zone.allowTo or []))
     internalZones);
+
+    forwardCommonRules = ''
+      ct state established,related accept
+      ${forwardSameZoneRules}
+      ${forwardWanEgressRules}
+      ${forwardWanReturnRules}
+      ${bridgeLanForwardCompatRules}
+      ${forwardZoneAllowRules}
+    '';
   in {
     config = lib.mkIf cfg.enable {
       networking.nftables = {
@@ -74,6 +138,8 @@
               chain input {
                 type filter hook input priority 0; policy drop;
                 iifname "lo" accept
+                ${dropLanBridgeTaggedDhcpRules}
+                ${bridgeLanInputCompatRule}
                 ${inputInternalRules}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" ip protocol icmp accept
@@ -82,11 +148,7 @@
               }
               chain forward {
                 type filter hook forward priority 0; policy drop;
-                ct state established,related accept
-                ${forwardSameZoneRules}
-                ${forwardWanEgressRules}
-                ${forwardWanReturnRules}
-                ${forwardZoneAllowRules}
+                ${forwardCommonRules}
                 ${forwardRules}
               }
             '';
@@ -110,9 +172,9 @@
               chain input {
                 type filter hook input priority 0; policy drop;
                 iifname "lo" accept
-                iifname "br-lan" accept
+                ${bridgeLanInputCompatRule}
+                ${inputInternalRules}
                 iifname "zt*" accept
-                ${lib.optionalString wgEnabled "iifname \"${wgInterface}\" accept"}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" icmpv6 type {
                   destination-unreachable, packet-too-big, time-exceeded,
@@ -124,10 +186,9 @@
               }
               chain forward {
                 type filter hook forward priority 0; policy drop;
-                iifname "br-lan" oifname "${wan}" accept
-                iifname "${wan}" oifname "br-lan" ct state established,related accept
-                iifname "zt*" oifname "br-lan" accept
-                iifname "br-lan" oifname "zt*" accept
+                ${forwardCommonRules}
+                ${lib.optionalString (lanZone != null) "iifname \"zt*\" oifname \"${lanZoneInterface}\" accept"}
+                ${lib.optionalString (lanZone != null) "iifname \"${lanZoneInterface}\" oifname \"zt*\" accept"}
               }
             '';
           };

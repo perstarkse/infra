@@ -110,9 +110,9 @@
       go2rtc:
         streams:
           reolink_p330:
-            - rtsp://watcher:YSx%250z3nTS5zp%21hN%25V9I@10.0.0.103:554/h264Preview_01_main
+            - rtsp://watcher:YSx%250z3nTS5zp%21hN%25V9I@10.0.30.10:554/h264Preview_01_main
           reolink_p330_sub:
-            - rtsp://watcher:YSx%250z3nTS5zp%21hN%25V9I@10.0.0.103:554/h264Preview_01_sub
+            - rtsp://watcher:YSx%250z3nTS5zp%21hN%25V9I@10.0.30.10:554/h264Preview_01_sub
 
       cameras:
         reolink_p330:
@@ -150,13 +150,25 @@
       # Required dirs
       systemd.tmpfiles.rules = [
         "d /storage/frigate 0750 frigate frigate -"
+        "d /storage/frigate/config 0750 frigate frigate -"
         "d /storage/frigate/recordings 0750 frigate frigate -"
         "d /storage/frigate/clips 0750 frigate frigate -"
         "d /storage/frigate/cache 0750 frigate frigate -"
       ];
 
-      # The YAML config injected into the container
-      environment.etc."frigate/config.yml".source = frigateConfigYAML;
+      systemd.services.frigate-config-sync = {
+        description = "Sync Frigate config into persistent storage";
+        before = ["podman-frigate.service"];
+        serviceConfig.Type = "oneshot";
+        script = ''
+          install -D -m 0644 ${frigateConfigYAML} /storage/frigate/config/config.yml
+        '';
+      };
+
+      systemd.services.podman-frigate = {
+        requires = ["frigate-config-sync.service"];
+        after = ["frigate-config-sync.service"];
+      };
 
       virtualisation.oci-containers.containers.frigate = {
         image = "ghcr.io/blakeblackshear/frigate:0.16.1";
@@ -177,7 +189,7 @@
 
         # Container mounts
         volumes = [
-          "${frigateConfigYAML}:/config/config.yml"
+          "/storage/frigate/config:/config"
           "/storage/frigate:/media/frigate"
           # "/etc/openvino-model:/openvino-model:ro"
         ];
