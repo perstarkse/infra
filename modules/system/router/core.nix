@@ -629,14 +629,15 @@
           message = "my.router.vlans subnets must not reuse my.router.lan.subnet";
         }
         {
-          assertion = lib.all (
-            v:
-              v.dhcpRange.start
-              >= 2
-              && v.dhcpRange.end <= 254
-              && v.dhcpRange.start <= v.dhcpRange.end
-          )
-          cfg.vlans;
+          assertion =
+            lib.all (
+              v:
+                v.dhcpRange.start
+                >= 2
+                && v.dhcpRange.end <= 254
+                && v.dhcpRange.start <= v.dhcpRange.end
+            )
+            cfg.vlans;
           message = "my.router.vlans.*.dhcpRange must be within 2..254 and start <= end";
         }
         {

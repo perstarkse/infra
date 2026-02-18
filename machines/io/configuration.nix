@@ -586,7 +586,7 @@
       enable = true;
     };
 
-    # # Oumu AI assistant VM (interstellar visitor to the heliosphere)
+    # # Oumu AI assistant VM (interstellar visitor)
     # oumu-vm = {
     #   enable = true;
     #   storageBaseDir = "/storage/libvirt/oumu";

@@ -1395,11 +1395,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1771330908,
-        "narHash": "sha256-EnSYuSZJSr7o9goX4duqIPb9ILDhmgOoP3Dk5OBS9XE=",
+        "lastModified": 1771407750,
+        "narHash": "sha256-/S9x9/4bBUheCmAMOAzN5ClG7xWkQzL5PnyDAQkLtAs=",
         "ref": "refs/heads/main",
-        "rev": "2ec0e0e0a23b60c09c2ccf99a98f44b79516b0ec",
-        "revCount": 779,
+        "rev": "9d48735a127b49a506c3ad7e9242284de8d227df",
+        "revCount": 780,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/politikerstod.git"
       },
@@ -1930,11 +1930,11 @@
         "nixpkgs": "nixpkgs_8"
       },
       "locked": {
-        "lastModified": 1771272345,
-        "narHash": "sha256-v3mQz9AertnA+AvJK9yRadW2wKSjOVV1PiiPSeEKRh8=",
+        "lastModified": 1771441612,
+        "narHash": "sha256-gIU0ltcqeiTAq+OLiq1oKwPUk18eeNVMfNKisOz8u8E=",
         "ref": "refs/heads/main",
-        "rev": "8e7b0e2285f31733ff058f9895e1bff56cfb8f98",
-        "revCount": 10,
+        "rev": "039f51552bc02c372046d10026317f079667e599",
+        "revCount": 11,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/wol-web-proxy.git"
       },

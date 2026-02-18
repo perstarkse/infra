@@ -146,7 +146,7 @@ _: {
         wantedBy = ["multi-user.target"];
         after = ["network-online.target"];
         wants = ["network-online.target"];
-        environment.PATH = lib.mkForce "/home/p/.npm-global/bin:/run/wrappers/bin:/run/current-system/sw/bin:/run/current-system/sw/sbin";
+        environment.PATH = lib.mkForce "/home/p/.npm-global/bin:/home/p/.nix-profile/bin:/run/wrappers/bin:/run/current-system/sw/bin:/run/current-system/sw/sbin";
 
         serviceConfig = {
           Type = "simple";
