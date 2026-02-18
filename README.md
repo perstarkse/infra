@@ -73,6 +73,27 @@ my.secrets.allowReadAccess = [
 
 Each machine imports shared modules via flake-parts, follows consistent patterns, and consumes secrets declaratively.
 
+## Local test workflow
+
+Recommended commands:
+
+- `nix build path:.#router-checks` — router integration suite (`router-smoke`, `router-vlan-regression`, `router-services`, `router-port-forward`, `router-wireguard`).
+- `nix build path:.#predeploy-check` — `io-predeploy` only (real `machines/io/configuration.nix` with test overrides/stubs).
+- `nix build path:.#final-checks` — router suite + `io-predeploy`.
+- `nix flake check path:.` — all configured checks in this flake.
+
+Useful targeted checks:
+
+- `nix build path:.#checks.x86_64-linux.router-services` for nginx/domain routing changes.
+- `nix build path:.#checks.x86_64-linux.router-port-forward` for NAT/port-forward changes.
+- `nix build path:.#checks.x86_64-linux.io-predeploy` for full `io` predeploy coverage only.
+
+Notes:
+
+- Prefer `path:.#...` during local work; it includes uncommitted files.
+- `nix build path:.#checks.x86_64-linux` builds all checks for that system.
+- Add `--show-trace` to any command for full error traces.
+
 ## Module: Router
 
 - Path: `modules/system/router/core.nix`

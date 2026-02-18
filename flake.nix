@@ -239,10 +239,28 @@
         buildChecks = lib.mapAttrs (
           _: cfg: cfg.config.system.build.toplevel
         ) (lib.filterAttrs (_: cfg: (cfg.pkgs.system or null) == system) nixosConfigs);
+        mkCheckBundle = name: checks:
+          pkgs.linkFarm name (
+            lib.mapAttrsToList (checkName: drv: {
+              name = checkName;
+              path = drv;
+            })
+            checks
+          );
         routerChecks = import ./tests/router.nix {
           inherit lib;
           inherit pkgs;
           inherit (inputs.self) nixosModules;
+        };
+        ioPredeployChecks = import ./tests/io-predeploy.nix {
+          inherit lib;
+          inherit pkgs;
+          inherit (inputs.self) nixosModules;
+        };
+        localCheckTargets = {
+          router-checks = mkCheckBundle "router-checks" routerChecks;
+          predeploy-check = ioPredeployChecks.io-predeploy;
+          final-checks = mkCheckBundle "final-checks" (routerChecks // ioPredeployChecks);
         };
       in {
         treefmt = {
@@ -265,8 +283,10 @@
           ];
         };
 
+        packages = localCheckTargets;
+
         # Flake checks: treefmt (module-provided) + per-host builds
-        checks = buildChecks // routerChecks;
+        checks = buildChecks // routerChecks // ioPredeployChecks;
       };
     });
 }
