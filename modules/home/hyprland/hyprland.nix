@@ -23,7 +23,7 @@
       enable = true;
       plugins = [
         inputs.hy3.packages.x86_64-linux.hy3
-        inputs.hyprland-plugins.packages.${pkgs.system}.hyprfocus
+        inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprfocus
       ];
 
       settings = {

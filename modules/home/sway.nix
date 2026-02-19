@@ -39,7 +39,7 @@
         startup = [
           {command = "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP";}
           {
-            command = "${inputs.sway-focus-flash.packages.${pkgs.system}.sway-focus-flash}/bin/sway-focus-flash --start-opacity 0.85";
+            command = "${inputs.sway-focus-flash.packages.${pkgs.stdenv.hostPlatform.system}.sway-focus-flash}/bin/sway-focus-flash --start-opacity 0.85";
             always = true;
           }
         ];

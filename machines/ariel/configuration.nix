@@ -1,4 +1,4 @@
-{
+args@{
   modules,
   private-infra,
   config,
@@ -22,6 +22,7 @@
       niri
       vfio
     ]
+    ++ (if args ? "nix-topology" then [args."nix-topology".nixosModules.default] else [])
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [hello-service]);
 

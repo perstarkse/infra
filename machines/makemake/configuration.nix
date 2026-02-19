@@ -1,4 +1,4 @@
-{
+args@{
   modules,
   config,
   pkgs,
@@ -31,6 +31,7 @@
       webdav-garage
       paperless
     ]
+    ++ (if args ? "nix-topology" then [args."nix-topology".nixosModules.default] else [])
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [media mailserver]);
   my = {
