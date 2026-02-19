@@ -18,7 +18,7 @@
             then {
               node = nodeName;
               interface = ifName;
-              network = iface.network;
+              inherit (iface) network;
               addresses = iface.addresses or [];
             }
             else null
@@ -40,8 +40,8 @@
             key
           }
           or {
-            node = x.node;
-            network = x.network;
+            inherit (x) node;
+            inherit (x) network;
             interfaces = [];
             addresses = [];
           };

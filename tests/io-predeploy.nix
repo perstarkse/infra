@@ -18,7 +18,10 @@
     unwrappedRouter = unwrapSingletonImports nixosModules.router;
   in
     if builtins.isFunction unwrappedRouter
-    then unwrappedRouter {modules.nixosModules = nixosModules;}
+    then
+      unwrappedRouter {
+        ctx.flake.nixosModules = nixosModules;
+      }
     else nixosModules.router;
 
   testNixosModules =
@@ -71,15 +74,24 @@
     nixosModules.default = secretsStubModule;
   };
 
+  nixTopologyStubModule = {lib, ...}: {
+    options.topology.extractors.kea.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+    };
+  };
+
   wireguardTestKeys = {
     routerPrivate = "eAcrKw/di4rNdd4YdfEMbawFXB7j2AKR2nM8WnxRu2o=";
     routerPublic = "Tx4IUngFH9q+qGdSr/BxIWnUlSbmWoxxRY+Juf/jnHs=";
   };
 
   commonNode = {
-    networking.useNetworkd = true;
-    networking.useDHCP = false;
-    networking.firewall.enable = false;
+    networking = {
+      useNetworkd = true;
+      useDHCP = false;
+      firewall.enable = false;
+    };
     systemd.network.enable = true;
     system.stateVersion = "25.11";
     environment.systemPackages = with pkgsUnfree; [
@@ -125,70 +137,76 @@
   camClientNode = lib.recursiveUpdate commonNode {
     virtualisation.vlans = [2];
 
-    systemd.network.netdevs."10-vlan30" = {
-      netdevConfig = {
-        Name = "vlan30";
-        Kind = "vlan";
-      };
-      vlanConfig.Id = 30;
-    };
+    systemd = {
+      network = {
+        netdevs."10-vlan30" = {
+          netdevConfig = {
+            Name = "vlan30";
+            Kind = "vlan";
+          };
+          vlanConfig.Id = 30;
+        };
 
-    systemd.network.networks."10-eth1" = {
-      matchConfig.Name = "eth1";
-      networkConfig = {
-        ConfigureWithoutCarrier = true;
-        VLAN = ["vlan30"];
-      };
-    };
+        networks."10-eth1" = {
+          matchConfig.Name = "eth1";
+          networkConfig = {
+            ConfigureWithoutCarrier = true;
+            VLAN = ["vlan30"];
+          };
+        };
 
-    systemd.network.networks."20-vlan30" = {
-      matchConfig.Name = "vlan30";
-      networkConfig.DHCP = "yes";
+        networks."20-vlan30" = {
+          matchConfig.Name = "vlan30";
+          networkConfig.DHCP = "yes";
+        };
+      };
     };
   };
 
   lanServerNode = lib.recursiveUpdate commonNode {
     virtualisation.vlans = [2];
 
-    systemd.network.networks."10-eth1" = {
-      matchConfig.Name = "eth1";
-      address = ["10.0.0.10/24"];
-      routes = [
-        {
-          Gateway = "10.0.0.1";
-        }
-      ];
-      networkConfig.ConfigureWithoutCarrier = true;
-    };
-
-    systemd.services.lan-http-32400 = {
-      description = "LAN test HTTP service on 32400";
-      wantedBy = ["multi-user.target"];
-      serviceConfig = {
-        Type = "simple";
-        Restart = "always";
-        RestartSec = "2s";
+    systemd = {
+      network.networks."10-eth1" = {
+        matchConfig.Name = "eth1";
+        address = ["10.0.0.10/24"];
+        routes = [
+          {
+            Gateway = "10.0.0.1";
+          }
+        ];
+        networkConfig.ConfigureWithoutCarrier = true;
       };
-      script = ''
-        mkdir -p /var/lib/lan-http-32400
-        printf 'predeploy\n' > /var/lib/lan-http-32400/index.html
-        exec ${pkgsUnfree.busybox}/bin/httpd -f -p 32400 -h /var/lib/lan-http-32400
-      '';
-    };
 
-    systemd.services.lan-http-18081 = {
-      description = "LAN test HTTP service on 18081";
-      wantedBy = ["multi-user.target"];
-      serviceConfig = {
-        Type = "simple";
-        Restart = "always";
-        RestartSec = "2s";
+      services.lan-http-32400 = {
+        description = "LAN test HTTP service on 32400";
+        wantedBy = ["multi-user.target"];
+        serviceConfig = {
+          Type = "simple";
+          Restart = "always";
+          RestartSec = "2s";
+        };
+        script = ''
+          mkdir -p /var/lib/lan-http-32400
+          printf 'predeploy\n' > /var/lib/lan-http-32400/index.html
+          exec ${pkgsUnfree.busybox}/bin/httpd -f -p 32400 -h /var/lib/lan-http-32400
+        '';
       };
-      script = ''
-        mkdir -p /var/lib/lan-http-18081
-        printf 'blocked\n' > /var/lib/lan-http-18081/index.html
-        exec ${pkgsUnfree.busybox}/bin/httpd -f -p 18081 -h /var/lib/lan-http-18081
-      '';
+
+      services.lan-http-18081 = {
+        description = "LAN test HTTP service on 18081";
+        wantedBy = ["multi-user.target"];
+        serviceConfig = {
+          Type = "simple";
+          Restart = "always";
+          RestartSec = "2s";
+        };
+        script = ''
+          mkdir -p /var/lib/lan-http-18081
+          printf 'blocked\n' > /var/lib/lan-http-18081/index.html
+          exec ${pkgsUnfree.busybox}/bin/httpd -f -p 18081 -h /var/lib/lan-http-18081
+        '';
+      };
     };
   };
 
@@ -200,10 +218,13 @@
           (args
             // {
               pkgs = pkgsUnfree;
-              modules = {
-                nixosModules = testNixosModules;
+              ctx = {
+                flake.nixosModules = testNixosModules;
+                inputs = {
+                  varsHelper = varsHelperStub;
+                  nixTopology.nixosModules.default = nixTopologyStubModule;
+                };
               };
-              "vars-helper" = varsHelperStub;
             });
         ioImports = builtins.filter (
           m: let
@@ -228,68 +249,79 @@
     boot.loader.systemd-boot.enable = lib.mkForce false;
     boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
 
-    virtualisation.vlans = [1 2];
-    virtualisation.memorySize = 4096;
-    virtualisation.cores = 2;
-
-    my.router.wan.interface = lib.mkForce "eth1";
-    my.router.lan.interfaces = lib.mkForce ["eth2"];
-    my.router.wireguard.privateKeyFile = lib.mkForce "/etc/test-secrets/wireguard-server/private-key";
-    my.router.wireguard.peers = lib.mkForce [];
-
-    environment.etc."test-secrets/wireguard-server/private-key" = {
-      text = wireguardTestKeys.routerPrivate;
-      mode = "0440";
-      user = "root";
-      group = "systemd-network";
+    virtualisation = {
+      vlans = [1 2];
+      memorySize = 4096;
+      cores = 2;
+      oci-containers.containers = lib.mkForce {};
     };
 
-    environment.etc."test-secrets/wireguard-server/public-key" = {
-      text = wireguardTestKeys.routerPublic;
-      mode = "0444";
+    my = {
+      router = {
+        wan.interface = lib.mkForce "eth1";
+        lan.interfaces = lib.mkForce ["eth2"];
+        wireguard.privateKeyFile = lib.mkForce "/etc/test-secrets/wireguard-server/private-key";
+        wireguard.peers = lib.mkForce [];
+      };
+
+      # test-only: avoid generating install-time machine credentials.
+      secrets.declarations = lib.mkForce [];
+
+      # Keep test boot deterministic by avoiding VM-in-VM dependencies.
+      libvirtd.enable = lib.mkForce false;
     };
 
-    # Keep test boot deterministic by avoiding VM-in-VM dependencies.
-    my.libvirtd.enable = lib.mkForce false;
+    environment.etc = {
+      "test-secrets/wireguard-server/private-key" = {
+        text = wireguardTestKeys.routerPrivate;
+        mode = "0440";
+        user = "root";
+        group = "systemd-network";
+      };
+
+      "test-secrets/wireguard-server/public-key" = {
+        text = wireguardTestKeys.routerPublic;
+        mode = "0444";
+      };
+
+      # Force all secret paths to exist for enabled services.
+      "test-secrets/ddclient/ddclient.conf" = {
+        text = "dummy";
+        mode = "0400";
+      };
+
+      "test-secrets/api-key-cloudflare-dns/api-token" = {
+        text = "CLOUDFLARE_API_TOKEN=dummy";
+        mode = "0400";
+      };
+
+      "test-secrets/webdav-htpasswd/htpasswd" = {
+        text = "webdav:$2y$10$hwzQHAl9zWgWii0Vf0D5.OXgEeGT0HnQf3pcSmceD1zDx0hDWQjQ2";
+        mode = "0400";
+      };
+
+      "test-secrets/wake-proxy/env" = {
+        text = ''
+          WOL_PROXY_ADMIN_USERNAME=admin
+          WOL_PROXY_ADMIN_PASSWORD=password
+          WOL_PROXY_SESSION_SECRET=0123456789abcdef0123456789abcdef
+        '';
+        mode = "0400";
+      };
+
+      "test-secrets/garage/rpc_secret" = {
+        text = "test-garage-rpc-secret";
+        mode = "0400";
+      };
+    };
+
     services.unifi.enable = lib.mkForce false;
 
     # podman pulls are flaky in isolated test networks and not relevant for router predeploy.
-    virtualisation.oci-containers.containers = lib.mkForce {};
-    systemd.services.podman-homeassistant.enable = lib.mkForce false;
-    systemd.services.podman-frigate.enable = lib.mkForce false;
-
-    # Force all secret paths to exist for enabled services.
-    environment.etc."test-secrets/ddclient/ddclient.conf" = {
-      text = "dummy";
-      mode = "0400";
+    systemd.services = {
+      podman-homeassistant.enable = lib.mkForce false;
+      podman-frigate.enable = lib.mkForce false;
     };
-
-    environment.etc."test-secrets/api-key-cloudflare-dns/api-token" = {
-      text = "CLOUDFLARE_API_TOKEN=dummy";
-      mode = "0400";
-    };
-
-    environment.etc."test-secrets/webdav-htpasswd/htpasswd" = {
-      text = "webdav:$2y$10$hwzQHAl9zWgWii0Vf0D5.OXgEeGT0HnQf3pcSmceD1zDx0hDWQjQ2";
-      mode = "0400";
-    };
-
-    environment.etc."test-secrets/wake-proxy/env" = {
-      text = ''
-        WOL_PROXY_ADMIN_USERNAME=admin
-        WOL_PROXY_ADMIN_PASSWORD=password
-        WOL_PROXY_SESSION_SECRET=0123456789abcdef0123456789abcdef
-      '';
-      mode = "0400";
-    };
-
-    environment.etc."test-secrets/garage/rpc_secret" = {
-      text = "test-garage-rpc-secret";
-      mode = "0400";
-    };
-
-    # test-only: avoid generating install-time machine credentials.
-    my.secrets.declarations = lib.mkForce [];
   };
 in {
   io-predeploy = pkgsUnfree.testers.runNixOSTest {

@@ -147,14 +147,16 @@
         defaultEditor = true;
         settings = {
           keys.normal = {
-            space.c = ":clipboard-yank";
-            space.l = [":new" ":insert-output lazygit" ":buffer-close!" ":redraw"];
-            space.W = lib.mkIf (lib.lists.elem "typst" config.my.programs.helix.languages) ''
-              :sh mkdir -p build \
-              && ${pkgs.typst}/bin/typst compile %{buffer_name} build/%sh{basename %{buffer_name} .typ}.pdf \
-              && ${pkgs.zathura}/bin/zathura build/%sh{basename %{buffer_name} .typ}.pdf >/dev/null 2>&1 & \
-              ${pkgs.typst}/bin/typst watch %{buffer_name} build/%sh{basename %{buffer_name} .typ}.pdf
-            '';
+            space = {
+              c = ":clipboard-yank";
+              l = [":new" ":insert-output lazygit" ":buffer-close!" ":redraw"];
+              W = lib.mkIf (lib.lists.elem "typst" config.my.programs.helix.languages) ''
+                :sh mkdir -p build \
+                && ${pkgs.typst}/bin/typst compile %{buffer_name} build/%sh{basename %{buffer_name} .typ}.pdf \
+                && ${pkgs.zathura}/bin/zathura build/%sh{basename %{buffer_name} .typ}.pdf >/dev/null 2>&1 & \
+                ${pkgs.typst}/bin/typst watch %{buffer_name} build/%sh{basename %{buffer_name} .typ}.pdf
+              '';
+            };
           };
           keys.select = {
             space.c = ":clipboard-yank";

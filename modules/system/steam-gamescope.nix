@@ -33,55 +33,56 @@
       hardware.opengl.driSupport32Bit = true;
       services.pipewire.alsa.support32Bit = true;
 
-      # Correct override: only use real pkgs attributes here
-      programs.steam.package = pkgs.steam.override {
-        extraLibraries = pkgs:
-          with pkgs; [
-            systemd # pulls in libsystemd/libudev, multiarch
-            nssmdns # mDNS NSS plugin, multiarch
-            # add more *real* packages here if you confirm they are missing
-            # curlWithGnuTls   # already in Steam fhsenv by default
-            # dbus             # already pulled via dbus-glib in fhsenv
-          ];
-        # no extraPkgs needed for now
-      };
-
-      programs.gamescope = {
-        enable = true;
-        capSysNice = true;
-      };
-
-      programs.steam = {
-        enable = true;
-        remotePlay.openFirewall = true;
-
-        gamescopeSession = {
-          enable = true;
-
-          args = [
-            "-W"
-            (toString cfg.width)
-            "-H"
-            (toString cfg.height)
-            "-w"
-            (toString cfg.width)
-            "-h"
-            (toString cfg.height)
-            "-r"
-            (toString cfg.refreshRate)
-            "-f"
-            "-e"
-          ];
-
-          steamArgs = [
-            "-pipewire-dmabuf"
-            "-gamepadui"
-          ];
-
-          env = {
-            XDG_RUNTIME_DIR = "/run/user/$UID";
-            DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/$UID/bus";
+      programs = {
+        # Correct override: only use real pkgs attributes here
+        steam = {
+          package = pkgs.steam.override {
+            extraLibraries = pkgs:
+              with pkgs; [
+                systemd # pulls in libsystemd/libudev, multiarch
+                nssmdns # mDNS NSS plugin, multiarch
+                # add more *real* packages here if you confirm they are missing
+                # curlWithGnuTls   # already in Steam fhsenv by default
+                # dbus             # already pulled via dbus-glib in fhsenv
+              ];
+            # no extraPkgs needed for now
           };
+          enable = true;
+          remotePlay.openFirewall = true;
+
+          gamescopeSession = {
+            enable = true;
+
+            args = [
+              "-W"
+              (toString cfg.width)
+              "-H"
+              (toString cfg.height)
+              "-w"
+              (toString cfg.width)
+              "-h"
+              (toString cfg.height)
+              "-r"
+              (toString cfg.refreshRate)
+              "-f"
+              "-e"
+            ];
+
+            steamArgs = [
+              "-pipewire-dmabuf"
+              "-gamepadui"
+            ];
+
+            env = {
+              XDG_RUNTIME_DIR = "/run/user/$UID";
+              DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/$UID/bus";
+            };
+          };
+        };
+
+        gamescope = {
+          enable = true;
+          capSysNice = true;
         };
       };
     };

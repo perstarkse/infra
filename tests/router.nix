@@ -12,7 +12,10 @@
     unwrappedRouter = unwrapSingletonImports nixosModules.router;
   in
     if builtins.isFunction unwrappedRouter
-    then unwrappedRouter {modules.nixosModules = nixosModules;}
+    then
+      unwrappedRouter {
+        ctx.flake.nixosModules = nixosModules;
+      }
     else nixosModules.router;
 
   secretsStubModule = {lib, ...}: {
@@ -42,9 +45,11 @@
   };
 
   commonNode = {
-    networking.useNetworkd = true;
-    networking.useDHCP = false;
-    networking.firewall.enable = false;
+    networking = {
+      useNetworkd = true;
+      useDHCP = false;
+      firewall.enable = false;
+    };
     systemd.network.enable = true;
     system.stateVersion = stateVersion;
     environment.systemPackages = with pkgs; [
@@ -141,25 +146,29 @@
   camClientNode = lib.recursiveUpdate commonNode {
     virtualisation.vlans = [2];
 
-    systemd.network.netdevs."10-vlan30" = {
-      netdevConfig = {
-        Name = "vlan30";
-        Kind = "vlan";
-      };
-      vlanConfig.Id = 30;
-    };
+    systemd = {
+      network = {
+        netdevs."10-vlan30" = {
+          netdevConfig = {
+            Name = "vlan30";
+            Kind = "vlan";
+          };
+          vlanConfig.Id = 30;
+        };
 
-    systemd.network.networks."10-eth1" = {
-      matchConfig.Name = "eth1";
-      networkConfig = {
-        ConfigureWithoutCarrier = true;
-        VLAN = ["vlan30"];
-      };
-    };
+        networks."10-eth1" = {
+          matchConfig.Name = "eth1";
+          networkConfig = {
+            ConfigureWithoutCarrier = true;
+            VLAN = ["vlan30"];
+          };
+        };
 
-    systemd.network.networks."20-vlan30" = {
-      matchConfig.Name = "vlan30";
-      networkConfig.DHCP = "yes";
+        networks."20-vlan30" = {
+          matchConfig.Name = "vlan30";
+          networkConfig.DHCP = "yes";
+        };
+      };
     };
   };
 

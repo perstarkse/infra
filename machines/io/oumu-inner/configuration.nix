@@ -7,31 +7,72 @@
   ];
 
   # Bootloader
-  boot.loader.grub.enable = true;
-  boot.loader.grub.device = "/dev/vda";
+  boot = {
+    loader.grub.enable = true;
+    loader.grub.device = "/dev/vda";
 
-  # Resize root partition to fill disk on boot
+    # Resize root partition to fill disk on boot
+    growPartition = true;
+  };
+
   fileSystems."/" = {
     device = "/dev/disk/by-label/nixos";
     fsType = "ext4";
     autoResize = true;
   };
 
-  boot.growPartition = true;
-
   # Hostname
-  networking.hostName = "oumu";
+  networking = {
+    hostName = "oumu";
 
-  networking.networkmanager.enable = false;
-  networking.useNetworkd = true;
-  networking.useDHCP = false;
+    networkmanager.enable = false;
+    useNetworkd = true;
+    useDHCP = false;
 
-  systemd.network.networks."10-wan" = {
-    matchConfig.Name = ["en*" "eth*"];
-    networkConfig = {
-      DHCP = "yes";
-      IPv6AcceptRA = true;
+    firewall = {
+      enable = true;
+      allowedTCPPorts = [22 8080]; # SSH and Openclaw gateway
+      allowedUDPPorts = [];
     };
+  };
+
+  systemd = {
+    network.networks."10-wan" = {
+      matchConfig.Name = ["en*" "eth*"];
+      networkConfig = {
+        DHCP = "yes";
+        IPv6AcceptRA = true;
+      };
+    };
+
+    services.install-deploy-key = {
+      description = "Install deploy key from host share";
+      after = ["local-fs.target"];
+      wantedBy = ["multi-user.target"];
+      serviceConfig = {
+        Type = "oneshot";
+        User = "oumu";
+      };
+      script = ''
+        mkdir -p /home/oumu/.ssh
+        chmod 700 /home/oumu/.ssh
+        if [ -f /run/secrets/host/deploy_key ]; then
+          cp /run/secrets/host/deploy_key /home/oumu/.ssh/id_ed25519
+          chmod 600 /home/oumu/.ssh/id_ed25519
+          chown oumu:users /home/oumu/.ssh/id_ed25519
+          ssh-keyscan github.com > /home/oumu/.ssh/known_hosts
+          chown oumu:users /home/oumu/.ssh/known_hosts
+        fi
+      '';
+    };
+
+    tmpfiles.rules = [
+      "d /var/lib/oumu 0750 oumu oumu -"
+      "d /var/lib/oumu/secrets 0700 oumu oumu -"
+      "d /var/lib/oumu/data 0750 oumu oumu -"
+      "d /home/oumu/.openclaw 0750 oumu oumu -"
+      "d /home/oumu/.secrets 0700 oumu oumu -"
+    ];
   };
 
   time.timeZone = "Europe/Stockholm";
@@ -58,8 +99,11 @@
       inputs.nix-openclaw.homeManagerModules.openclaw
     ];
 
-    home.username = "oumu";
-    home.homeDirectory = "/home/oumu";
+    home = {
+      username = "oumu";
+      homeDirectory = "/home/oumu";
+      stateVersion = "24.11";
+    };
 
     programs.openclaw = {
       enable = true;
@@ -83,8 +127,6 @@
         launchd.enable = false; # Not macOS
       };
     };
-
-    home.stateVersion = "24.11";
   };
 
   security.sudo.wheelNeedsPassword = false;
@@ -117,37 +159,10 @@
     };
   };
 
-  networking.firewall = {
-    enable = true;
-    allowedTCPPorts = [22 8080]; # SSH and Openclaw gateway
-    allowedUDPPorts = [];
-  };
-
   fileSystems."/run/secrets/host" = {
     device = "host_share";
     fsType = "virtiofs";
     options = ["ro"];
-  };
-
-  systemd.services.install-deploy-key = {
-    description = "Install deploy key from host share";
-    after = ["local-fs.target"];
-    wantedBy = ["multi-user.target"];
-    serviceConfig = {
-      Type = "oneshot";
-      User = "oumu";
-    };
-    script = ''
-      mkdir -p /home/oumu/.ssh
-      chmod 700 /home/oumu/.ssh
-      if [ -f /run/secrets/host/deploy_key ]; then
-        cp /run/secrets/host/deploy_key /home/oumu/.ssh/id_ed25519
-        chmod 600 /home/oumu/.ssh/id_ed25519
-        chown oumu:users /home/oumu/.ssh/id_ed25519
-        ssh-keyscan github.com > /home/oumu/.ssh/known_hosts
-        chown oumu:users /home/oumu/.ssh/known_hosts
-      fi
-    '';
   };
 
   sops = {
@@ -156,14 +171,6 @@
     age.sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
     secrets = {};
   };
-
-  systemd.tmpfiles.rules = [
-    "d /var/lib/oumu 0750 oumu oumu -"
-    "d /var/lib/oumu/secrets 0700 oumu oumu -"
-    "d /var/lib/oumu/data 0750 oumu oumu -"
-    "d /home/oumu/.openclaw 0750 oumu oumu -"
-    "d /home/oumu/.secrets 0700 oumu oumu -"
-  ];
 
   system.stateVersion = "24.11";
 }

@@ -1,12 +1,10 @@
-args@{
-  modules,
+{
+  ctx,
   config,
   pkgs,
-  vars-helper,
-  private-infra,
   ...
 }: {
-  imports = with modules.nixosModules;
+  imports = with ctx.flake.nixosModules;
     [
       ./hardware-configuration.nix
       ./boot.nix
@@ -31,9 +29,9 @@ args@{
       webdav-garage
       paperless
     ]
-    ++ (if args ? "nix-topology" then [args."nix-topology".nixosModules.default] else [])
-    ++ (with vars-helper.nixosModules; [default])
-    ++ (with private-infra.nixosModules; [media mailserver]);
+    ++ [ctx.inputs.nixTopology.nixosModules.default]
+    ++ (with ctx.inputs.varsHelper.nixosModules; [default])
+    ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
   my = {
     mainUser = {
       name = "p";

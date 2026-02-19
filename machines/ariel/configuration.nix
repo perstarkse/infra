@@ -1,13 +1,11 @@
-args@{
-  modules,
-  private-infra,
+{
+  ctx,
   config,
   pkgs,
-  vars-helper,
   lib,
   ...
 }: {
-  imports = with modules.nixosModules;
+  imports = with ctx.flake.nixosModules;
     [
       home-module
       sound
@@ -22,12 +20,12 @@ args@{
       niri
       vfio
     ]
-    ++ (if args ? "nix-topology" then [args."nix-topology".nixosModules.default] else [])
-    ++ (with vars-helper.nixosModules; [default])
-    ++ (with private-infra.nixosModules; [hello-service]);
+    ++ [ctx.inputs.nixTopology.nixosModules.default]
+    ++ (with ctx.inputs.varsHelper.nixosModules; [default])
+    ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
 
   home-manager.users.${config.my.mainUser.name} = {
-    imports = with modules.homeModules;
+    imports = with ctx.flake.homeModules;
       [
         options
         sops
@@ -51,8 +49,8 @@ args@{
         firefox
         node
       ]
-      ++ (with vars-helper.homeModules; [default])
-      ++ (with private-infra.homeModules; [
+      ++ (with ctx.inputs.varsHelper.homeModules; [default])
+      ++ (with ctx.inputs.privateInfra.homeModules; [
         mail-clients
         rbw
       ]);
@@ -112,8 +110,22 @@ args@{
     moonlight-qt
   ];
 
-  hardware.bluetooth.enable = true;
-  services.blueman.enable = true;
+  hardware = {
+    bluetooth.enable = true;
+    nvidia.package = lib.mkForce config.boot.kernelPackages.nvidiaPackages.legacy_470;
+    nvidia.prime = {
+      intelBusId = "PCI:0:2:0";
+      nvidiaBusId = "PCI:0:4:0";
+    };
+  };
+
+  services = {
+    blueman.enable = true;
+    libinput = {
+      enable = true;
+      touchpad.disableWhileTyping = true;
+    };
+  };
 
   security.polkit.enable = true;
   my = {
@@ -199,14 +211,5 @@ args@{
     };
   };
 
-  hardware.nvidia.package = lib.mkForce config.boot.kernelPackages.nvidiaPackages.legacy_470;
   nixpkgs.config.nvidia.acceptLicense = true;
-
-  hardware.nvidia.prime = {
-    intelBusId = "PCI:0:2:0";
-    nvidiaBusId = "PCI:0:4:0";
-  };
-  services.libinput.enable = true;
-
-  services.libinput.touchpad.disableWhileTyping = true;
 }

@@ -186,18 +186,103 @@ _: {
         bind = "127.0.0.1";
       };
 
-      # Tika server for Office document parsing
-      systemd.services.tika = lib.mkIf cfg.tika.enable {
-        description = "Apache Tika Server";
-        wantedBy = ["multi-user.target"];
-        after = ["network.target"];
-        serviceConfig = {
-          Type = "simple";
-          ExecStart = "${pkgs.tika}/bin/tika-server";
-          Restart = "always";
-          RestartSec = "10";
-          DynamicUser = true;
+      systemd = {
+        services = {
+          # Tika server for Office document parsing
+          tika = lib.mkIf cfg.tika.enable {
+            description = "Apache Tika Server";
+            wantedBy = ["multi-user.target"];
+            after = ["network.target"];
+            serviceConfig = {
+              Type = "simple";
+              ExecStart = "${pkgs.tika}/bin/tika-server";
+              Restart = "always";
+              RestartSec = "10";
+              DynamicUser = true;
+            };
+          };
+
+          # Update Paperless service to depend on container and use correct DB host
+          paperless-scheduler = lib.mkIf cfg.database.enableContainer {
+            after = ["container@paperless-db.service"];
+            wants = ["container@paperless-db.service"];
+          };
+
+          paperless-consumer = {
+            after =
+              lib.optionals cfg.database.enableContainer ["container@paperless-db.service"]
+              ++ lib.optionals cfg.s3Consumption.enable ["paperless-consumption-mount.service"];
+            wants =
+              lib.optionals cfg.database.enableContainer ["container@paperless-db.service"]
+              ++ lib.optionals cfg.s3Consumption.enable ["paperless-consumption-mount.service"];
+          };
+
+          paperless-task-queue = lib.mkIf cfg.database.enableContainer {
+            after = ["container@paperless-db.service"];
+            wants = ["container@paperless-db.service"];
+          };
+
+          paperless-web = lib.mkIf cfg.database.enableContainer {
+            after = ["container@paperless-db.service"];
+            wants = ["container@paperless-db.service"];
+          };
+
+          paperless-consumption-mount = lib.mkIf cfg.s3Consumption.enable (let
+            accessKeyPath = config.my.secrets.getPath "garage-s3" "access_key_id";
+            secretKeyPath = config.my.secrets.getPath "garage-s3" "secret_access_key";
+            # Get paperless user/group IDs
+            uid = toString config.users.users.paperless.uid;
+            gid = toString config.users.groups.paperless.gid;
+            mountScript = pkgs.writeShellScript "paperless-consumption-mount" ''
+              set -euo pipefail
+              export RCLONE_S3_ACCESS_KEY_ID="$(cat ${accessKeyPath})"
+              export RCLONE_S3_SECRET_ACCESS_KEY="$(cat ${secretKeyPath})"
+              exec ${pkgs.rclone}/bin/rclone mount \
+                --config /dev/null \
+                --s3-provider Other \
+                --s3-endpoint ${cfg.s3Consumption.endpoint} \
+                --s3-region ${cfg.s3Consumption.region} \
+                --vfs-cache-mode writes \
+                --vfs-cache-max-size 1G \
+                --allow-other \
+                --uid ${uid} \
+                --gid ${gid} \
+                --dir-perms 0775 \
+                --file-perms 0664 \
+                --dir-cache-time 1m \
+                --poll-interval 30s \
+                --vfs-write-back 5s \
+                :s3:${cfg.s3Consumption.bucket} ${cfg.consumptionDir}
+            '';
+          in {
+            description = "Rclone S3 Mount for Paperless Consumption";
+            after = ["network-online.target"];
+            wants = ["network-online.target"];
+            wantedBy = ["multi-user.target"];
+            before = ["paperless-consumer.service"];
+
+            serviceConfig = {
+              Type = "notify";
+              ExecStartPre = [
+                "${pkgs.coreutils}/bin/mkdir -p ${cfg.consumptionDir}"
+                "-${pkgs.fuse}/bin/fusermount -u ${cfg.consumptionDir}"
+              ];
+              ExecStart = mountScript;
+              ExecStop = "${pkgs.fuse}/bin/fusermount -u ${cfg.consumptionDir}";
+              Restart = "on-failure";
+              RestartSec = "10s";
+            };
+          });
         };
+
+        # Directory setup (consumption dir needs 0770 and recursive ownership)
+        tmpfiles.rules = [
+          "d ${cfg.dataDir} 0750 paperless paperless -"
+          "d ${cfg.consumptionDir} 0775 paperless paperless -"
+          "Z ${cfg.consumptionDir} 0775 paperless paperless -"
+          "d ${cfg.mediaDir} 0750 paperless paperless -"
+          "d ${cfg.dataDir}/log 0750 paperless paperless -"
+        ];
       };
 
       # Gotenberg for document conversion (port 3100 to avoid conflict with minne)
@@ -210,15 +295,6 @@ _: {
           "--chromium-allow-list=file:///tmp/.*"
         ];
       };
-
-      # Directory setup (consumption dir needs 0770 and recursive ownership)
-      systemd.tmpfiles.rules = [
-        "d ${cfg.dataDir} 0750 paperless paperless -"
-        "d ${cfg.consumptionDir} 0775 paperless paperless -"
-        "Z ${cfg.consumptionDir} 0775 paperless paperless -"
-        "d ${cfg.mediaDir} 0750 paperless paperless -"
-        "d ${cfg.dataDir}/log 0750 paperless paperless -"
-      ];
 
       # Firewall
       networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [cfg.port];
@@ -289,31 +365,6 @@ _: {
         };
       };
 
-      # Update Paperless service to depend on container and use correct DB host
-      systemd.services.paperless-scheduler = lib.mkIf cfg.database.enableContainer {
-        after = ["container@paperless-db.service"];
-        wants = ["container@paperless-db.service"];
-      };
-
-      systemd.services.paperless-consumer = {
-        after =
-          lib.optionals cfg.database.enableContainer ["container@paperless-db.service"]
-          ++ lib.optionals cfg.s3Consumption.enable ["paperless-consumption-mount.service"];
-        wants =
-          lib.optionals cfg.database.enableContainer ["container@paperless-db.service"]
-          ++ lib.optionals cfg.s3Consumption.enable ["paperless-consumption-mount.service"];
-      };
-
-      systemd.services.paperless-task-queue = lib.mkIf cfg.database.enableContainer {
-        after = ["container@paperless-db.service"];
-        wants = ["container@paperless-db.service"];
-      };
-
-      systemd.services.paperless-web = lib.mkIf cfg.database.enableContainer {
-        after = ["container@paperless-db.service"];
-        wants = ["container@paperless-db.service"];
-      };
-
       # S3 consumption mount (for distributed document ingestion)
       environment.systemPackages = lib.mkIf cfg.s3Consumption.enable [pkgs.rclone];
 
@@ -327,53 +378,6 @@ _: {
           path = config.my.secrets.getPath "garage-s3" "secret_access_key";
         }
       ];
-
-      systemd.services.paperless-consumption-mount = lib.mkIf cfg.s3Consumption.enable (let
-        accessKeyPath = config.my.secrets.getPath "garage-s3" "access_key_id";
-        secretKeyPath = config.my.secrets.getPath "garage-s3" "secret_access_key";
-        # Get paperless user/group IDs
-        uid = toString config.users.users.paperless.uid;
-        gid = toString config.users.groups.paperless.gid;
-        mountScript = pkgs.writeShellScript "paperless-consumption-mount" ''
-          set -euo pipefail
-          export RCLONE_S3_ACCESS_KEY_ID="$(cat ${accessKeyPath})"
-          export RCLONE_S3_SECRET_ACCESS_KEY="$(cat ${secretKeyPath})"
-          exec ${pkgs.rclone}/bin/rclone mount \
-            --config /dev/null \
-            --s3-provider Other \
-            --s3-endpoint ${cfg.s3Consumption.endpoint} \
-            --s3-region ${cfg.s3Consumption.region} \
-            --vfs-cache-mode writes \
-            --vfs-cache-max-size 1G \
-            --allow-other \
-            --uid ${uid} \
-            --gid ${gid} \
-            --dir-perms 0775 \
-            --file-perms 0664 \
-            --dir-cache-time 1m \
-            --poll-interval 30s \
-            --vfs-write-back 5s \
-            :s3:${cfg.s3Consumption.bucket} ${cfg.consumptionDir}
-        '';
-      in {
-        description = "Rclone S3 Mount for Paperless Consumption";
-        after = ["network-online.target"];
-        wants = ["network-online.target"];
-        wantedBy = ["multi-user.target"];
-        before = ["paperless-consumer.service"];
-
-        serviceConfig = {
-          Type = "notify";
-          ExecStartPre = [
-            "${pkgs.coreutils}/bin/mkdir -p ${cfg.consumptionDir}"
-            "-${pkgs.fuse}/bin/fusermount -u ${cfg.consumptionDir}"
-          ];
-          ExecStart = mountScript;
-          ExecStop = "${pkgs.fuse}/bin/fusermount -u ${cfg.consumptionDir}";
-          Restart = "on-failure";
-          RestartSec = "10s";
-        };
-      });
 
       programs.fuse.userAllowOther = lib.mkIf cfg.s3Consumption.enable true;
     };
