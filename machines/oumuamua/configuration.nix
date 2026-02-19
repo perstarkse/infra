@@ -1,11 +1,9 @@
-args@{
-  modules,
-  private-infra,
+{
+  ctx,
   config,
-  vars-helper,
   ...
 }: {
-  imports = with modules.nixosModules;
+  imports = with ctx.flake.nixosModules;
     [
       home-module
       options
@@ -15,12 +13,12 @@ args@{
       surrealdb
       minne
     ]
-    ++ (if args ? "nix-topology" then [args."nix-topology".nixosModules.default] else [])
-    ++ (with vars-helper.nixosModules; [default])
-    ++ (with private-infra.nixosModules; [hello-service]);
+    ++ [ctx.inputs.nixTopology.nixosModules.default]
+    ++ (with ctx.inputs.varsHelper.nixosModules; [default])
+    ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
 
   home-manager.users.${config.my.mainUser.name} = {
-    imports = with modules.homeModules;
+    imports = with ctx.flake.homeModules;
       [
         options
         sops
@@ -33,7 +31,7 @@ args@{
         ssh
         mail-clients-setup
       ]
-      ++ (with private-infra.homeModules; [
+      ++ (with ctx.inputs.privateInfra.homeModules; [
         mail-clients
       ]);
     my = {

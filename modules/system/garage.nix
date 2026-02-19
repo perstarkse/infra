@@ -111,18 +111,20 @@ _: {
         }
       ];
 
-      systemd.services.garage.serviceConfig.DynamicUser = lib.mkForce false;
+      systemd = {
+        services.garage.serviceConfig.DynamicUser = lib.mkForce false;
 
-      systemd.services.garage.environment.GARAGE_ALLOW_WORLD_READABLE_SECRETS = "true";
+        services.garage.environment.GARAGE_ALLOW_WORLD_READABLE_SECRETS = "true";
 
-      systemd.tmpfiles.rules = [
-        "d /var/lib/garage 0700 garage garage -"
-        "d ${cfg.dataDir} 0700 garage garage -"
-        "d ${cfg.metaDir} 0700 garage garage -"
-        "Z /var/lib/garage 0700 garage garage -"
-        "Z ${cfg.dataDir} 0700 garage garage -"
-        "Z ${cfg.metaDir} 0700 garage garage -"
-      ];
+        tmpfiles.rules = [
+          "d /var/lib/garage 0700 garage garage -"
+          "d ${cfg.dataDir} 0700 garage garage -"
+          "d ${cfg.metaDir} 0700 garage garage -"
+          "Z /var/lib/garage 0700 garage garage -"
+          "Z ${cfg.dataDir} 0700 garage garage -"
+          "Z ${cfg.metaDir} 0700 garage garage -"
+        ];
+      };
 
       networking.firewall.allowedTCPPorts = [cfg.s3Port cfg.rpcPort 3902];
 

@@ -185,9 +185,7 @@
   nodeForBackendHost = backendHost:
     if nodes ? ${backendHost}
     then backendHost
-    else if backendHostToNode ? ${backendHost}
-    then backendHostToNode.${backendHost}
-    else null;
+    else backendHostToNode.${backendHost} or null;
 
   mkBackendNodeIdForRoute = route:
     if route.backendHostPort != null
@@ -222,7 +220,7 @@
           ${mkBackendNodeIdForRoute route} = {
             nodeId = mkBackendNodeIdForRoute route;
             label = backendLabelForRoute route;
-            backendText = route.backendText;
+            inherit (route) backendText;
           };
         }
     ) {}

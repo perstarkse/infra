@@ -1,6 +1,6 @@
 {
-  config.flake.nixosModules.router = {modules, ...}: {
-    imports = with modules.nixosModules; [
+  config.flake.nixosModules.router = {ctx, ...}: {
+    imports = with ctx.flake.nixosModules; [
       router-core
       router-network
       router-firewall

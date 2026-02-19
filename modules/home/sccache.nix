@@ -10,16 +10,18 @@
     sccacheDir = cacheBase + "/sccache";
   in {
     config = {
-      home.packages = [pkgs.sccache];
-      home.sessionVariables = {
-        RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-        SCCACHE_DIR = sccacheDir;
-        SCCACHE_CACHE_SIZE = "150G";
-        CARGO_INCREMENTAL = "0";
+      home = {
+        packages = [pkgs.sccache];
+        sessionVariables = {
+          RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+          SCCACHE_DIR = sccacheDir;
+          SCCACHE_CACHE_SIZE = "150G";
+          CARGO_INCREMENTAL = "0";
+        };
+        activation.ensureSccacheDir = lib.hm.dag.entryAfter ["writeBoundary"] ''
+          mkdir -p ${lib.escapeShellArg sccacheDir}
+        '';
       };
-      home.activation.ensureSccacheDir = lib.hm.dag.entryAfter ["writeBoundary"] ''
-        mkdir -p ${lib.escapeShellArg sccacheDir}
-      '';
       programs.fish.interactiveShellInit =
         lib.mkIf (config.programs.fish.enable or false)
         (lib.mkAfter ''

@@ -139,35 +139,41 @@
   in {
     config = {
       # GPU access for container user
-      users.groups.video.members = ["frigate"];
-      users.groups.render.members = ["frigate"];
-      users.users.frigate = {
-        isSystemUser = true;
-        group = "frigate";
-      };
-      users.groups.frigate = {};
-
-      # Required dirs
-      systemd.tmpfiles.rules = [
-        "d /storage/frigate 0750 frigate frigate -"
-        "d /storage/frigate/config 0750 frigate frigate -"
-        "d /storage/frigate/recordings 0750 frigate frigate -"
-        "d /storage/frigate/clips 0750 frigate frigate -"
-        "d /storage/frigate/cache 0750 frigate frigate -"
-      ];
-
-      systemd.services.frigate-config-sync = {
-        description = "Sync Frigate config into persistent storage";
-        before = ["podman-frigate.service"];
-        serviceConfig.Type = "oneshot";
-        script = ''
-          install -D -m 0644 ${frigateConfigYAML} /storage/frigate/config/config.yml
-        '';
+      users = {
+        groups = {
+          video.members = ["frigate"];
+          render.members = ["frigate"];
+          frigate = {};
+        };
+        users.frigate = {
+          isSystemUser = true;
+          group = "frigate";
+        };
       };
 
-      systemd.services.podman-frigate = {
-        requires = ["frigate-config-sync.service"];
-        after = ["frigate-config-sync.service"];
+      systemd = {
+        # Required dirs
+        tmpfiles.rules = [
+          "d /storage/frigate 0750 frigate frigate -"
+          "d /storage/frigate/config 0750 frigate frigate -"
+          "d /storage/frigate/recordings 0750 frigate frigate -"
+          "d /storage/frigate/clips 0750 frigate frigate -"
+          "d /storage/frigate/cache 0750 frigate frigate -"
+        ];
+
+        services.frigate-config-sync = {
+          description = "Sync Frigate config into persistent storage";
+          before = ["podman-frigate.service"];
+          serviceConfig.Type = "oneshot";
+          script = ''
+            install -D -m 0644 ${frigateConfigYAML} /storage/frigate/config/config.yml
+          '';
+        };
+
+        services.podman-frigate = {
+          requires = ["frigate-config-sync.service"];
+          after = ["frigate-config-sync.service"];
+        };
       };
 
       virtualisation.oci-containers.containers.frigate = {

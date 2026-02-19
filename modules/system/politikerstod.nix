@@ -176,51 +176,74 @@
     };
 
     config = lib.mkIf cfg.enable {
-      systemd.services.politikerstod = {
-        description = "Politikerstöd Service";
-        wantedBy = ["multi-user.target"];
-        after = ["network.target"];
-        # requires = ["politikerstod-s3-setup.service"];
+      systemd = {
+        services.politikerstod = {
+          description = "Politikerstöd Service";
+          wantedBy = ["multi-user.target"];
+          after = ["network.target"];
+          # requires = ["politikerstod-s3-setup.service"];
 
-        serviceConfig = {
-          Type = "simple";
-          User = "politikerstod";
-          Group = "politikerstod";
-          WorkingDirectory = cfg.dataDir;
-          # Run the binary
-          ExecStart = "${appPkg}/bin/politikerstod-cli start --all";
-          Restart = "always";
-          RestartSec = "10";
+          serviceConfig = {
+            Type = "simple";
+            User = "politikerstod";
+            Group = "politikerstod";
+            WorkingDirectory = cfg.dataDir;
+            # Run the binary
+            ExecStart = "${appPkg}/bin/politikerstod-cli start --all";
+            Restart = "always";
+            RestartSec = "10";
 
-          # Pass non-secret config via Environment
-          Environment = [
-            "LOCO_ENV=production"
-            "PORT=${toString cfg.port}"
-            "HOST=${cfg.host}"
-            "CORS_ALLOW_ORIGIN=${cfg.host}"
-            "DATABASE_URL=postgres://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}"
-            "SMTP_HOST=${cfg.smtp.host}"
-            "SMTP_PORT=${toString cfg.smtp.port}"
-            "MAILER_FROM=${cfg.smtp.from}"
-            # S3
-            "S3_ENDPOINT=${cfg.s3.endpoint}"
-            "S3_BUCKET=${cfg.s3.bucket}"
-            "AWS_REGION=${cfg.s3.region}"
-            # Settings
-            "LOG_LEVEL=${cfg.settings.logLevel}"
-            "PRETTY_BACKTRACE=${lib.boolToString cfg.settings.prettyBacktrace}"
-            "NUM_WORKERS=${toString cfg.settings.numWorkers}"
-            "POLLING_HISTORICAL_MONTHS=${toString cfg.settings.pollingHistoricalMonths}"
-            "OPENAI_MODEL=${cfg.settings.openaiModel}"
-            "EVALUATION_MODEL=${cfg.settings.evaluationModel}"
-            "AUTH_ALLOWED_EMAIL_DOMAINS=\"${authAllowedRegex}\""
-            "FASTEMBED_CACHE_PATH=${cfg.dataDir}/fastembed_cache"
-          ];
+            # Pass non-secret config via Environment
+            Environment = [
+              "LOCO_ENV=production"
+              "PORT=${toString cfg.port}"
+              "HOST=${cfg.host}"
+              "CORS_ALLOW_ORIGIN=${cfg.host}"
+              "DATABASE_URL=postgres://${cfg.database.user}@${cfg.database.host}:${toString cfg.database.port}/${cfg.database.name}"
+              "SMTP_HOST=${cfg.smtp.host}"
+              "SMTP_PORT=${toString cfg.smtp.port}"
+              "MAILER_FROM=${cfg.smtp.from}"
+              # S3
+              "S3_ENDPOINT=${cfg.s3.endpoint}"
+              "S3_BUCKET=${cfg.s3.bucket}"
+              "AWS_REGION=${cfg.s3.region}"
+              # Settings
+              "LOG_LEVEL=${cfg.settings.logLevel}"
+              "PRETTY_BACKTRACE=${lib.boolToString cfg.settings.prettyBacktrace}"
+              "NUM_WORKERS=${toString cfg.settings.numWorkers}"
+              "POLLING_HISTORICAL_MONTHS=${toString cfg.settings.pollingHistoricalMonths}"
+              "OPENAI_MODEL=${cfg.settings.openaiModel}"
+              "EVALUATION_MODEL=${cfg.settings.evaluationModel}"
+              "AUTH_ALLOWED_EMAIL_DOMAINS=\"${authAllowedRegex}\""
+              "FASTEMBED_CACHE_PATH=${cfg.dataDir}/fastembed_cache"
+            ];
 
-          # Pass secrets via EnvironmentFile
-          EnvironmentFile = [
-            (config.my.secrets.getPath "politikerstod" "env")
-          ];
+            # Pass secrets via EnvironmentFile
+            EnvironmentFile = [
+              (config.my.secrets.getPath "politikerstod" "env")
+            ];
+          };
+        };
+
+        # 4. Persistence / Data Dir Permissions
+        tmpfiles.rules = [
+          "d ${cfg.dataDir} 0755 politikerstod politikerstod -"
+        ];
+
+        # 6. Port forwarding for remote database access (when allowedHosts is set)
+        # Use socat to forward connections from LAN to the container
+        # Binds only to LAN address to avoid conflicts
+        services.politikerstod-db-proxy = lib.mkIf (cfg.database.enableContainer && cfg.database.allowedHosts != []) {
+          description = "Forward PostgreSQL connections to politikerstod-db container";
+          wantedBy = ["multi-user.target"];
+          after = ["network.target" "container@politikerstod-db.service"];
+          wants = ["container@politikerstod-db.service"];
+          serviceConfig = {
+            Type = "simple";
+            ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:5432,bind=${config.my.listenNetworkAddress},fork,reuseaddr TCP:${cfg.database.container.localAddress}:5432";
+            Restart = "always";
+            RestartSec = "5";
+          };
         };
       };
 
@@ -233,32 +256,11 @@
       };
       users.groups.politikerstod = {};
 
-      # 4. Persistence / Data Dir Permissions
-      systemd.tmpfiles.rules = [
-        "d ${cfg.dataDir} 0755 politikerstod politikerstod -"
-      ];
-
       # 5. Firewall - open service port and DB proxy port for remote workers
       networking.firewall.allowedTCPPorts = lib.mkIf (cfg.openFirewall || (cfg.database.enableContainer && cfg.database.allowedHosts != [])) (
         lib.optional cfg.openFirewall cfg.port
         ++ lib.optionals (cfg.database.enableContainer && cfg.database.allowedHosts != []) [5432]
       );
-
-      # 6. Port forwarding for remote database access (when allowedHosts is set)
-      # Use socat to forward connections from LAN to the container
-      # Binds only to LAN address to avoid conflicts
-      systemd.services.politikerstod-db-proxy = lib.mkIf (cfg.database.enableContainer && cfg.database.allowedHosts != []) {
-        description = "Forward PostgreSQL connections to politikerstod-db container";
-        wantedBy = ["multi-user.target"];
-        after = ["network.target" "container@politikerstod-db.service"];
-        wants = ["container@politikerstod-db.service"];
-        serviceConfig = {
-          Type = "simple";
-          ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:5432,bind=${config.my.listenNetworkAddress},fork,reuseaddr TCP:${cfg.database.container.localAddress}:5432";
-          Restart = "always";
-          RestartSec = "5";
-        };
-      };
 
       containers.politikerstod-db = lib.mkIf cfg.database.enableContainer {
         autoStart = true;

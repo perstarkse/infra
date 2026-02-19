@@ -254,89 +254,91 @@
           nginxCfg.wildcardCerts)
       );
 
-      systemd.tmpfiles.rules = lib.mkIf cfNeeded [
-        "d ${cfDir} 0755 root root - -"
-        "f ${cfAllow} 0644 root root - -"
-        "f ${cfRealip} 0644 root root - -"
-        "f ${cfGeo} 0644 root root - -"
-      ];
+      systemd = {
+        tmpfiles.rules = lib.mkIf cfNeeded [
+          "d ${cfDir} 0755 root root - -"
+          "f ${cfAllow} 0644 root root - -"
+          "f ${cfRealip} 0644 root root - -"
+          "f ${cfGeo} 0644 root root - -"
+        ];
 
-      systemd.services = lib.mkMerge [
-        # ddclient services for each zone
-        (lib.mkIf ddclientEnabled (lib.listToAttrs (map mkDdclientServiceEntry ddclientZones)))
+        services = lib.mkMerge [
+          # ddclient services for each zone
+          (lib.mkIf ddclientEnabled (lib.listToAttrs (map mkDdclientServiceEntry ddclientZones)))
 
-        # Cloudflare IPs update service
-        (lib.mkIf cfNeeded {
-          cloudflare-ips-update = {
-            description = "Update Cloudflare IP snippets for nginx";
-            wants = ["network-online.target"];
-            after = ["network-online.target"];
-            serviceConfig = {
-              Type = "oneshot";
-              ExecStart = "${pkgs.writeShellScript "cloudflare-ips-update" ''
-                set -euo pipefail
-                dir="${cfDir}"
-                ${pkgs.coreutils}/bin/mkdir -p "$dir"
-                tmp="$(${pkgs.coreutils}/bin/mktemp -d)"
-                trap '${pkgs.coreutils}/bin/rm -rf "$tmp"' EXIT
+          # Cloudflare IPs update service
+          (lib.mkIf cfNeeded {
+            cloudflare-ips-update = {
+              description = "Update Cloudflare IP snippets for nginx";
+              wants = ["network-online.target"];
+              after = ["network-online.target"];
+              serviceConfig = {
+                Type = "oneshot";
+                ExecStart = "${pkgs.writeShellScript "cloudflare-ips-update" ''
+                  set -euo pipefail
+                  dir="${cfDir}"
+                  ${pkgs.coreutils}/bin/mkdir -p "$dir"
+                  tmp="$(${pkgs.coreutils}/bin/mktemp -d)"
+                  trap '${pkgs.coreutils}/bin/rm -rf "$tmp"' EXIT
 
-                ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v4 > "$tmp/ips-v4"
-                ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v6 > "$tmp/ips-v6"
+                  ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v4 > "$tmp/ips-v4"
+                  ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v6 > "$tmp/ips-v6"
 
-                # Access module style allow list (kept for reference)
-                {
-                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v4"
-                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v6"
-                } > "$tmp/allow.conf"
+                  # Access module style allow list (kept for reference)
+                  {
+                    while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v4"
+                    while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v6"
+                  } > "$tmp/allow.conf"
 
-                # Real IP trust
-                {
-                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v4"
-                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v6"
-                  printf 'real_ip_header CF-Connecting-IP;\n'
-                  printf 'real_ip_recursive on;\n'
-                } > "$tmp/realip.conf"
+                  # Real IP trust
+                  {
+                    while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v4"
+                    while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v6"
+                    printf 'real_ip_header CF-Connecting-IP;\n'
+                    printf 'real_ip_recursive on;\n'
+                  } > "$tmp/realip.conf"
 
-                # Geo include for CF edges
-                {
-                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v4"
-                  while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v6"
-                } > "$tmp/edge-geo.conf"
+                  # Geo include for CF edges
+                  {
+                    while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v4"
+                    while IFS= read -r cidr; do [ -n "$cidr" ] && printf '%s 1;\n' "$cidr"; done < "$tmp/ips-v6"
+                  } > "$tmp/edge-geo.conf"
 
-                changed=0
-                for f in allow.conf realip.conf edge-geo.conf; do
-                  if ! ${pkgs.diffutils}/bin/cmp -s "$tmp/$f" "$dir/$f"; then
-                    ${pkgs.coreutils}/bin/install -m 0644 -D "$tmp/$f" "$dir/$f"
-                    changed=1
+                  changed=0
+                  for f in allow.conf realip.conf edge-geo.conf; do
+                    if ! ${pkgs.diffutils}/bin/cmp -s "$tmp/$f" "$dir/$f"; then
+                      ${pkgs.coreutils}/bin/install -m 0644 -D "$tmp/$f" "$dir/$f"
+                      changed=1
+                    fi
+                  done
+
+                  if [ "$changed" -eq 1 ]; then
+                    ${pkgs.nginx}/bin/nginx -t && ${pkgs.systemd}/bin/systemctl reload nginx || true
                   fi
-                done
-
-                if [ "$changed" -eq 1 ]; then
-                  ${pkgs.nginx}/bin/nginx -t && ${pkgs.systemd}/bin/systemctl reload nginx || true
-                fi
-              ''}";
+                ''}";
+              };
+              wantedBy = ["multi-user.target"];
             };
-            wantedBy = ["multi-user.target"];
-          };
-        })
-      ];
+          })
+        ];
 
-      systemd.timers = lib.mkMerge [
-        # ddclient timers for each zone
-        (lib.mkIf ddclientEnabled (lib.listToAttrs (map mkDdclientTimerEntry ddclientZones)))
+        timers = lib.mkMerge [
+          # ddclient timers for each zone
+          (lib.mkIf ddclientEnabled (lib.listToAttrs (map mkDdclientTimerEntry ddclientZones)))
 
-        # Cloudflare IPs update timer
-        (lib.mkIf cfNeeded {
-          cloudflare-ips-update = {
-            wantedBy = ["timers.target"];
-            timerConfig = {
-              OnBootSec = "5m";
-              OnUnitActiveSec = "12h";
-              RandomizedDelaySec = "10m";
+          # Cloudflare IPs update timer
+          (lib.mkIf cfNeeded {
+            cloudflare-ips-update = {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnBootSec = "5m";
+                OnUnitActiveSec = "12h";
+                RandomizedDelaySec = "10m";
+              };
             };
-          };
-        })
-      ];
+          })
+        ];
+      };
     };
   };
 }

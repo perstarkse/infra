@@ -1,11 +1,10 @@
-args@{
-  modules,
+{
+  ctx,
   config,
-  vars-helper,
   pkgs,
   ...
 }: {
-  imports = with modules.nixosModules;
+  imports = with ctx.flake.nixosModules;
     [
       ./hardware-configuration.nix
       ./boot.nix
@@ -25,11 +24,11 @@ args@{
       # oumu-vm
       # go2rtc
     ]
-    ++ (if args ? "nix-topology" then [
-      args."nix-topology".nixosModules.default
+    ++ [
+      ctx.inputs.nixTopology.nixosModules.default
       {topology.extractors.kea.enable = false;}
-    ] else [])
-    ++ (with vars-helper.nixosModules; [default]);
+    ]
+    ++ (with ctx.inputs.varsHelper.nixosModules; [default]);
 
   time.timeZone = "Europe/Stockholm";
   nixpkgs.config.allowUnfree = true;
@@ -81,61 +80,63 @@ args@{
       ];
     };
 
-    secrets.discover = {
-      enable = true;
-      dir = ../../vars/generators;
-      includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage" "wake-proxy"];
+    secrets = {
+      discover = {
+        enable = true;
+        dir = ../../vars/generators;
+        includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage" "wake-proxy"];
+      };
+
+      generateManifest = false;
+      allowReadAccess = [
+        {
+          readers = ["systemd-network"];
+          path = config.my.secrets.getPath "wireguard-server" "private-key";
+        }
+        {
+          readers = ["nginx"];
+          path = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
+        }
+      ];
+
+      declarations = [
+        (config.my.secrets.mkMachineSecret {
+          name = "oumu-deploy-key";
+          share = false;
+          runtimeInputs = [pkgs.openssh];
+          files = {
+            private_key = {
+              mode = "0400";
+              owner = "root";
+              neededFor = "services";
+            };
+            public_key = {
+              mode = "0444";
+              # secret = true; # Treat as secret to avoid store warning, but readable
+            };
+          };
+          script = ''
+            ssh-keygen -t ed25519 -C "oumu-vm-deploy-key" -f "$out/private_key" -N ""
+            mv "$out/private_key.pub" "$out/public_key"
+          '';
+        })
+        (config.my.secrets.mkMachineSecret {
+          name = "webdav-htpasswd";
+          share = true;
+          runtimeInputs = [pkgs.apacheHttpd];
+          files = {
+            htpasswd = {mode = "0400";};
+            password = {mode = "0400";};
+          };
+          script = ''
+            username="webdav"
+            password=$(head -c 24 /dev/urandom | base64 -w0 | tr -d '/+=')
+            htpasswd -nbB "$username" "$password" > "$out/htpasswd"
+            echo "$password" > "$out/password"
+          '';
+        })
+      ];
     };
-
-    secrets.generateManifest = false;
-    secrets.allowReadAccess = [
-      {
-        readers = ["systemd-network"];
-        path = config.my.secrets.getPath "wireguard-server" "private-key";
-      }
-      {
-        readers = ["nginx"];
-        path = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
-      }
-    ];
-
-    secrets.declarations = [
-      (config.my.secrets.mkMachineSecret {
-        name = "oumu-deploy-key";
-        share = false;
-        runtimeInputs = [pkgs.openssh];
-        files = {
-          private_key = {
-            mode = "0400";
-            owner = "root";
-            neededFor = "services";
-          };
-          public_key = {
-            mode = "0444";
-            # secret = true; # Treat as secret to avoid store warning, but readable
-          };
-        };
-        script = ''
-          ssh-keygen -t ed25519 -C "oumu-vm-deploy-key" -f "$out/private_key" -N ""
-          mv "$out/private_key.pub" "$out/public_key"
-        '';
-      })
-      (config.my.secrets.mkMachineSecret {
-        name = "webdav-htpasswd";
-        share = true;
-        runtimeInputs = [pkgs.apacheHttpd];
-        files = {
-          htpasswd = {mode = "0400";};
-          password = {mode = "0400";};
-        };
-        script = ''
-          username="webdav"
-          password=$(head -c 24 /dev/urandom | base64 -w0 | tr -d '/+=')
-          htpasswd -nbB "$username" "$password" > "$out/htpasswd"
-          echo "$password" > "$out/password"
-        '';
-      })
-    ];
 
     router = {
       enable = true;
@@ -600,7 +601,6 @@ args@{
   };
 
   # Custom nginx location for nous.fyi /app/ -> /assets/app/ rewrite
-  # This merges with the router module's virtualHost config
   services.nginx.virtualHosts."nous.fyi".locations = {
     "/app/" = {
       proxyPass = "http://10.0.0.10:3002/assets/app/";

@@ -108,32 +108,34 @@
     };
 
     config = lib.mkIf cfg.enable {
-      # Timer runs the check periodically
-      systemd.timers.auto-suspend = {
-        wantedBy = ["timers.target"];
-        timerConfig = {
-          OnBootSec = "${toString cfg.checkIntervalMinutes}min";
-          OnUnitActiveSec = "${toString cfg.checkIntervalMinutes}min";
-          Persistent = false;
+      systemd = {
+        # Timer runs the check periodically
+        timers.auto-suspend = {
+          wantedBy = ["timers.target"];
+          timerConfig = {
+            OnBootSec = "${toString cfg.checkIntervalMinutes}min";
+            OnUnitActiveSec = "${toString cfg.checkIntervalMinutes}min";
+            Persistent = false;
+          };
         };
-      };
 
-      systemd.services.auto-suspend = {
-        description = "Check for idle and suspend";
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = autoSuspendScript;
+        services.auto-suspend = {
+          description = "Check for idle and suspend";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = autoSuspendScript;
+          };
         };
-      };
 
-      # Reset idle counter on resume
-      systemd.services.auto-suspend-reset = {
-        description = "Reset auto-suspend counter on wake";
-        wantedBy = ["suspend.target" "hibernate.target"];
-        after = ["suspend.target" "hibernate.target"];
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = "${pkgs.coreutils}/bin/rm -f /run/auto-suspend/idle-count";
+        # Reset idle counter on resume
+        services.auto-suspend-reset = {
+          description = "Reset auto-suspend counter on wake";
+          wantedBy = ["suspend.target" "hibernate.target"];
+          after = ["suspend.target" "hibernate.target"];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${pkgs.coreutils}/bin/rm -f /run/auto-suspend/idle-count";
+          };
         };
       };
     };

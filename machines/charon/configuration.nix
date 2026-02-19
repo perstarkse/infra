@@ -1,14 +1,11 @@
-args@{
-  modules,
-  private-infra,
+{
+  ctx,
   config,
   pkgs,
-  vars-helper,
   lib,
-  playwrightMcpLatest,
   ...
 }: {
-  imports = with modules.nixosModules;
+  imports = with ctx.flake.nixosModules;
     [
       home-module
       sound
@@ -40,12 +37,12 @@ args@{
       politikerstod-remote-worker
       # steam-gamescope
     ]
-    ++ (if args ? "nix-topology" then [args."nix-topology".nixosModules.default] else [])
-    ++ (with vars-helper.nixosModules; [default])
-    ++ (with private-infra.nixosModules; [hello-service]);
+    ++ [ctx.inputs.nixTopology.nixosModules.default]
+    ++ (with ctx.inputs.varsHelper.nixosModules; [default])
+    ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
 
   home-manager.users.${config.my.mainUser.name} = {
-    imports = with modules.homeModules;
+    imports = with ctx.flake.homeModules;
       [
         options
         sops
@@ -81,8 +78,8 @@ args@{
         local-ai
         swayidle
       ]
-      ++ (with vars-helper.homeModules; [default])
-      ++ (with private-infra.homeModules; [
+      ++ (with ctx.inputs.varsHelper.homeModules; [default])
+      ++ (with ctx.inputs.privateInfra.homeModules; [
         mail-clients
         rbw
       ]);
@@ -144,22 +141,24 @@ args@{
       ];
     };
 
-    programs.wtp = {
-      enable = true;
-      enableFishIntegration = true;
-      enableFishCdWrapper = true;
-    };
+    programs = {
+      wtp = {
+        enable = true;
+        enableFishIntegration = true;
+        enableFishCdWrapper = true;
+      };
 
-    programs.voxtype = {
-      enable = true;
-      model = "large-v3-turbo";
-      # modelHash = "sha256-kh5M+Ghv3Zk9zQgaXaW2w2W/3hFi5ysI11rHUomSCx8=";
-      enableService = true;
-      enableVulkan = true;
-    };
+      voxtype = {
+        enable = true;
+        model = "large-v3-turbo";
+        # modelHash = "sha256-kh5M+Ghv3Zk9zQgaXaW2w2W/3hFi5ysI11rHUomSCx8=";
+        enableService = true;
+        enableVulkan = true;
+      };
 
-    programs.agent-browser = {
-      enable = true;
+      agent-browser = {
+        enable = true;
+      };
     };
 
     my.swayidle = {
@@ -376,7 +375,7 @@ args@{
     prismlauncher
     virt-manager
     gamescope
-    playwrightMcpLatest.legacyPackages.${pkgs.stdenv.hostPlatform.system}.playwright-mcp
+    ctx.inputs.playwrightMcpLatest.legacyPackages.${pkgs.stdenv.hostPlatform.system}.playwright-mcp
     bun
     google-cloud-sdk
     amp-cli
@@ -413,16 +412,27 @@ args@{
     };
   };
 
-  security.polkit.enable = true;
+  security = {
+    polkit.enable = true;
+
+    wrappers.intel_gpu_top = {
+      owner = "root";
+      group = "root";
+      capabilities = "cap_sys_admin+ep";
+      source = "${pkgs.intel-gpu-tools}/bin/intel_gpu_top";
+    };
+
+    pam.loginLimits = [
+      {
+        domain = "*";
+        item = "nofile";
+        type = "-";
+        value = "524288";
+      }
+    ];
+  };
 
   hardware.cpu.amd.updateMicrocode = true;
-
-  security.wrappers.intel_gpu_top = {
-    owner = "root";
-    group = "root";
-    capabilities = "cap_sys_admin+ep";
-    source = "${pkgs.intel-gpu-tools}/bin/intel_gpu_top";
-  };
 
   powerManagement.enable = true;
 
@@ -434,13 +444,4 @@ args@{
     IOSchedulingPriority = lib.mkForce 7;
     LimitNOFILE = "infinity";
   };
-
-  security.pam.loginLimits = [
-    {
-      domain = "*";
-      item = "nofile";
-      type = "-";
-      value = "524288";
-    }
-  ];
 }

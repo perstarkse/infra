@@ -215,40 +215,40 @@
         ]
         ++ map mkPeerSecret generatedPeers;
 
-      systemd.network.netdevs.
-        "30-${interfaceName}" = {
-        netdevConfig = {
-          Kind = "wireguard";
-          Name = interfaceName;
+      systemd = {
+        network.netdevs."30-${interfaceName}" = {
+          netdevConfig = {
+            Kind = "wireguard";
+            Name = interfaceName;
+          };
+          wireguardConfig = {
+            PrivateKeyFile =
+              if wg.privateKeyFile != null
+              then wg.privateKeyFile
+              else (config.my.secrets.getPath "wireguard-server" "private-key");
+            ListenPort = listenPort;
+            RouteTable = "main";
+          };
+          wireguardPeers = map mkPeer staticPeers;
         };
-        wireguardConfig = {
-          PrivateKeyFile =
-            if wg.privateKeyFile != null
-            then wg.privateKeyFile
-            else (config.my.secrets.getPath "wireguard-server" "private-key");
-          ListenPort = listenPort;
-          RouteTable = "main";
-        };
-        wireguardPeers = map mkPeer staticPeers;
-      };
 
-      systemd.network.networks.
-        "30-${interfaceName}" = {
-        matchConfig.Name = interfaceName;
-        address = [routerAddressWithPrefix];
-        networkConfig = {
-          ConfigureWithoutCarrier = true;
-          IPv4Forwarding = true;
-          IPv6Forwarding = false;
+        network.networks."30-${interfaceName}" = {
+          matchConfig.Name = interfaceName;
+          address = [routerAddressWithPrefix];
+          networkConfig = {
+            ConfigureWithoutCarrier = true;
+            IPv4Forwarding = true;
+            IPv6Forwarding = false;
+          };
+          linkConfig.MTUBytes = "1420";
         };
-        linkConfig.MTUBytes = "1420";
-      };
 
-      systemd.services = lib.listToAttrs (map (peer: {
-          name = "wireguard-apply-${peer.name}";
-          value = mkPeerService peer;
-        })
-        generatedPeers);
+        services = lib.listToAttrs (map (peer: {
+            name = "wireguard-apply-${peer.name}";
+            value = mkPeerService peer;
+          })
+          generatedPeers);
+      };
     };
   };
 }
