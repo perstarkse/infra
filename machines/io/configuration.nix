@@ -1,4 +1,4 @@
-{
+args@{
   modules,
   config,
   vars-helper,
@@ -25,6 +25,10 @@
       # oumu-vm
       # go2rtc
     ]
+    ++ (if args ? "nix-topology" then [
+      args."nix-topology".nixosModules.default
+      {topology.extractors.kea.enable = false;}
+    ] else [])
     ++ (with vars-helper.nixosModules; [default]);
 
   time.timeZone = "Europe/Stockholm";

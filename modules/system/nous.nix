@@ -7,7 +7,7 @@ _: {
     ...
   }: let
     cfg = config.my.nous;
-    nousPkg = nous.packages.${pkgs.system}.default;
+    nousPkg = nous.packages.${pkgs.stdenv.hostPlatform.system}.default;
   in {
     options.my.nous = {
       enable = lib.mkEnableOption "Enable Nous burnout prevention app";

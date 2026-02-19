@@ -6,7 +6,7 @@
     ...
   }: let
     cfg = config.my.politikerstod-remote-worker;
-    appPkg = inputs.politikerstod.packages.${pkgs.system}.default;
+    appPkg = inputs.politikerstod.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
     # Build AUTH_ALLOWED_EMAIL_DOMAINS regex (same logic as main module)
     authAllowedRegex = let

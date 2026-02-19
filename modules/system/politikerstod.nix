@@ -7,7 +7,7 @@
   }: let
     cfg = config.my.politikerstod;
     # Access the package from inputs
-    appPkg = inputs.politikerstod.packages.${pkgs.system}.default;
+    appPkg = inputs.politikerstod.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
     authAllowedRegex = let
       # Escape characters for systemd's double-quoted Environment value:

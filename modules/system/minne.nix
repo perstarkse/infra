@@ -84,7 +84,7 @@
           User = "minne";
           Group = "minne";
           WorkingDirectory = cfg.dataDir;
-          ExecStart = "${inputs.minne.packages.${pkgs.system}.default}/bin/main";
+          ExecStart = "${inputs.minne.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/main";
           Restart = "always";
           RestartSec = "10";
 

@@ -1,4 +1,4 @@
-{
+args@{
   modules,
   private-infra,
   config,
@@ -40,6 +40,7 @@
       politikerstod-remote-worker
       # steam-gamescope
     ]
+    ++ (if args ? "nix-topology" then [args."nix-topology".nixosModules.default] else [])
     ++ (with vars-helper.nixosModules; [default])
     ++ (with private-infra.nixosModules; [hello-service]);
 
@@ -375,7 +376,7 @@
     prismlauncher
     virt-manager
     gamescope
-    playwrightMcpLatest.legacyPackages.${pkgs.system}.playwright-mcp
+    playwrightMcpLatest.legacyPackages.${pkgs.stdenv.hostPlatform.system}.playwright-mcp
     bun
     google-cloud-sdk
     amp-cli

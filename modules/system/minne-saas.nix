@@ -139,7 +139,7 @@
               export SURREALDB_PASSWORD="$SURREALDB_PASS"
             fi
 
-            exec ${inputs.saas-minne.packages.${pkgs.system}.default}/bin/saas-server
+            exec ${inputs.saas-minne.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/saas-server
           '';
           Restart = "always";
           RestartSec = "10";
@@ -183,7 +183,7 @@
               export SURREALDB_PASSWORD="$SURREALDB_PASS"
             fi
 
-            exec ${inputs.saas-minne.packages.${pkgs.system}.default}/bin/saas-worker
+            exec ${inputs.saas-minne.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/saas-worker
           '';
           Restart = "always";
           RestartSec = "10";
