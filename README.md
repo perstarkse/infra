@@ -107,11 +107,13 @@ machine-update <machine> [options]
 | Machine | Checks run |
 |---------|-----------|
 | `io` (router) | treefmt + final-checks (router + io-predeploy) |
+| Other router-enabled machines | treefmt + router-checks |
 | Other | treefmt only |
 
 ### Options
 
 - `--force` — Skip all preflight checks and deploy immediately.
+- `--checks-only` — Run preflight checks only, skip deploy.
 - `--clan-help` — Show upstream `clan machines update` help and exit.
 - Extra Clan flags can be forwarded after `--`.
 
@@ -120,6 +122,9 @@ machine-update <machine> [options]
 ```bash
 # Deploy io with full checks
 machine-update io
+
+# Run checks only for io (no deploy)
+machine-update io --checks-only
 
 # Deploy io, skipping checks (fast)
 machine-update io --force
@@ -133,6 +138,11 @@ machine-update ariel -- --debug --host-key-check accept-new
 # Show upstream Clan update help
 machine-update --clan-help
 ```
+
+Notes:
+
+- `io` is configured with `clan.core.deployment.requireExplicitUpdate = true`, so broad updates do not include it by accident.
+- `machine-update` validates machine names before running checks; unknown names fail fast.
 
 ## Module: Router
 

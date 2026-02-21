@@ -81,6 +81,13 @@
     };
   };
 
+  clanDeploymentStubModule = {lib, ...}: {
+    options.clan.core.deployment.requireExplicitUpdate = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+    };
+  };
+
   wireguardTestKeys = {
     routerPrivate = "eAcrKw/di4rNdd4YdfEMbawFXB7j2AKR2nM8WnxRu2o=";
     routerPublic = "Tx4IUngFH9q+qGdSr/BxIWnUlSbmWoxxRY+Juf/jnHs=";
@@ -212,6 +219,7 @@
 
   ioNode = {lib, ...}: {
     imports = [
+      clanDeploymentStubModule
       (args: let
         ioConfigRaw =
           import ../machines/io/configuration.nix
