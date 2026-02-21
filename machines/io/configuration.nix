@@ -4,6 +4,8 @@
   pkgs,
   ...
 }: {
+  clan.core.deployment.requireExplicitUpdate = true;
+
   imports = with ctx.flake.nixosModules;
     [
       ./hardware-configuration.nix
