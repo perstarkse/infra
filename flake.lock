@@ -1930,11 +1930,11 @@
         "nixpkgs": "nixpkgs_8"
       },
       "locked": {
-        "lastModified": 1771441612,
-        "narHash": "sha256-gIU0ltcqeiTAq+OLiq1oKwPUk18eeNVMfNKisOz8u8E=",
+        "lastModified": 1771679816,
+        "narHash": "sha256-bBXAWjBAMJvU+L/LcOJHanIBYhIVyLltQQgHenU1b+4=",
         "ref": "refs/heads/main",
-        "rev": "039f51552bc02c372046d10026317f079667e599",
-        "revCount": 11,
+        "rev": "7cd0bb2191608e95be7ce329cd0f8644e4075b12",
+        "revCount": 14,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/wol-web-proxy.git"
       },

@@ -94,6 +94,46 @@ Notes:
 - `nix build path:.#checks.x86_64-linux` builds all checks for that system.
 - Add `--show-trace` to any command for full error traces.
 
+## Machine update workflow
+
+Use the `machine-update` command for deploying machines with automatic preflight checks:
+
+```bash
+machine-update <machine> [options]
+```
+
+### Preflight checks by machine type
+
+| Machine | Checks run |
+|---------|-----------|
+| `io` (router) | treefmt + final-checks (router + io-predeploy) |
+| Other | treefmt only |
+
+### Options
+
+- `--force` — Skip all preflight checks and deploy immediately.
+- `--clan-help` — Show upstream `clan machines update` help and exit.
+- Extra Clan flags can be forwarded after `--`.
+
+### Examples
+
+```bash
+# Deploy io with full checks
+machine-update io
+
+# Deploy io, skipping checks (fast)
+machine-update io --force
+
+# Deploy makemake (fast check only)
+machine-update makemake
+
+# Deploy with extra Clan flags
+machine-update ariel -- --debug --host-key-check accept-new
+
+# Show upstream Clan update help
+machine-update --clan-help
+```
+
 ## Module: Router
 
 - Path: `modules/system/router/core.nix`
