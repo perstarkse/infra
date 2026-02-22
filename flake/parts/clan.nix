@@ -42,6 +42,8 @@
             "check-profile-fast"
             "check-profile-garage"
             "check-profile-politikerstod"
+            "check-profile-paperless"
+            "check-profile-backups"
           ];
         };
         charon = {
@@ -50,6 +52,8 @@
             "check-profile-fast"
             "check-profile-politikerstod"
             "check-profile-wireguard"
+            "check-profile-paperless"
+            "check-profile-backups"
           ];
         };
         ariel = {

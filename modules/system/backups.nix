@@ -408,7 +408,7 @@
                     Type = "oneshot";
                     EnvironmentFile = config.my.secrets.getPath secretName "env";
                     ExecStart = ''
-                      ${pkgs.restic}/bin/restic -r $(cat ${config.my.secrets.getPath secretName "repo"}) \
+                      ${pkgs.restic}/bin/restic --repository-file ${config.my.secrets.getPath secretName "repo"} \
                         --password-file ${config.my.secrets.getPath secretName "password"} \
                         restore ${backup.restore.snapshot} --target ${backup.path}
                     '';
