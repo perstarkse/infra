@@ -171,7 +171,13 @@
           ];
         }
       ];
-      wan.interface = "enp1s0";
+      wan = {
+        interface = "enp1s0";
+        allowedUdpPorts =
+          if config.services.zerotierone.enable
+          then [config.services.zerotierone.port]
+          else [];
+      };
       ipv6.ulaPrefix = "fd00:711a:edcd:7e75";
 
       wireguard = {

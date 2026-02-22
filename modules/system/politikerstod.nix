@@ -25,6 +25,19 @@
     options.my.politikerstod = {
       enable = lib.mkEnableOption "Enable Politikerstöd Service";
 
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = appPkg;
+        defaultText = lib.literalExpression "inputs.politikerstod.packages.${pkgs.stdenv.hostPlatform.system}.default";
+        description = "Package providing the politikerstod-cli binary.";
+      };
+
+      startMode = lib.mkOption {
+        type = lib.types.enum ["all" "server"];
+        default = "all";
+        description = "Whether to run server+workers or server-only in the main service.";
+      };
+
       port = lib.mkOption {
         type = lib.types.port;
         default = 5150;
@@ -189,7 +202,7 @@
             Group = "politikerstod";
             WorkingDirectory = cfg.dataDir;
             # Run the binary
-            ExecStart = "${appPkg}/bin/politikerstod-cli start --all";
+            ExecStart = "${cfg.package}/bin/politikerstod-cli start --${cfg.startMode}";
             Restart = "always";
             RestartSec = "10";
 

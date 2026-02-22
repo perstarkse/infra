@@ -21,6 +21,13 @@
     options.my.politikerstod-remote-worker = {
       enable = lib.mkEnableOption "Enable Politikerstöd remote worker (OCR + embeddings processing)";
 
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = appPkg;
+        defaultText = lib.literalExpression "inputs.politikerstod.packages.${pkgs.stdenv.hostPlatform.system}.default";
+        description = "Package providing the politikerstod-cli binary.";
+      };
+
       dataDir = lib.mkOption {
         type = lib.types.path;
         default = "/var/lib/politikerstod-worker";
@@ -157,7 +164,7 @@
               if cfg.workerTags != []
               then "--worker=${lib.concatStringsSep "," cfg.workerTags}"
               else "--worker";
-          in "${appPkg}/bin/politikerstod-cli start ${workerArgs}";
+          in "${cfg.package}/bin/politikerstod-cli start ${workerArgs}";
 
           Restart = "always";
           RestartSec = "10";

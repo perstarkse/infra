@@ -156,6 +156,16 @@
             default = "enp1s0";
             description = "WAN interface name";
           };
+          allowedTcpPorts = mkOption {
+            type = types.listOf types.int;
+            default = [];
+            description = "Additional TCP ports to allow from WAN to the router";
+          };
+          allowedUdpPorts = mkOption {
+            type = types.listOf types.int;
+            default = [];
+            description = "Additional UDP ports to allow from WAN to the router";
+          };
         };
 
         ipv6.ulaPrefix = mkOption {
@@ -571,6 +581,14 @@
         {
           assertion = !(lib.elem cfg.wan.interface cfg.lan.interfaces);
           message = "my.router.wan.interface must not also be present in my.router.lan.interfaces";
+        }
+        {
+          assertion = lib.all (port: port >= 1 && port <= 65535) cfg.wan.allowedTcpPorts;
+          message = "my.router.wan.allowedTcpPorts must only contain ports in range 1..65535";
+        }
+        {
+          assertion = lib.all (port: port >= 1 && port <= 65535) cfg.wan.allowedUdpPorts;
+          message = "my.router.wan.allowedUdpPorts must only contain ports in range 1..65535";
         }
         {
           assertion = (lib.length cfg.lan.interfaces) == (lib.length (lib.unique cfg.lan.interfaces));
