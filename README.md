@@ -102,13 +102,21 @@ Use the `machine-update` command for deploying machines with automatic preflight
 machine-update <machine> [options]
 ```
 
-### Preflight checks by machine type
+### Preflight checks by profile
 
-| Machine | Checks run |
-|---------|-----------|
-| `io` (router) | treefmt + final-checks (router + io-predeploy) |
-| Other router-enabled machines | treefmt + router-checks |
-| Other | treefmt only |
+`machine-update` resolves profile tags from Clan inventory (`check-profile-*`) and runs the union:
+
+| Profile tag | Additional checks |
+|-------------|-------------------|
+| `check-profile-fast` | none (treefmt only) |
+| `check-profile-router` | `router-checks` |
+| `check-profile-io-predeploy` | `predeploy-check` |
+| `check-profile-io-final` | `final-checks` |
+| `check-profile-garage` | `garage-checks` |
+| `check-profile-politikerstod` | `politikerstod-checks` |
+| `check-profile-wireguard` | `wireguard-checks` |
+
+All machines always run `nix fmt` + treefmt verification first (unless `--force`).
 
 ### Options
 
@@ -143,6 +151,13 @@ Notes:
 
 - `io` is configured with `clan.core.deployment.requireExplicitUpdate = true`, so broad updates do not include it by accident.
 - `machine-update` validates machine names before running checks; unknown names fail fast.
+- Multiple `check-profile-*` tags on a machine run as a union of checks.
+
+Additional local check bundles:
+
+- `nix build path:.#garage-checks`
+- `nix build path:.#politikerstod-checks`
+- `nix build path:.#wireguard-checks`
 
 ## Module: Router
 

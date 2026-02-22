@@ -28,6 +28,22 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    garageChecks = import ../../tests/garage.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+    };
+    politikerstodDistributedChecks = import ../../tests/politikerstod-distributed.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+      politikerstodPackage = inputs.politikerstod.packages.${system}.default;
+    };
+    wireguardSystemChecks = import ../../tests/wireguard-system.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+    };
     mainTopology = import ../main-topology.nix {
       inherit lib;
       inherit pkgs;
@@ -54,35 +70,45 @@
       router-checks = mkCheckBundle "router-checks" routerChecks;
       predeploy-check = ioPredeployChecks.io-predeploy;
       final-checks = mkCheckBundle "final-checks" (routerChecks // ioPredeployChecks);
+      garage-checks = mkCheckBundle "garage-checks" garageChecks;
+      politikerstod-checks = mkCheckBundle "politikerstod-checks" politikerstodDistributedChecks;
+      wireguard-checks = mkCheckBundle "wireguard-checks" wireguardSystemChecks;
     };
 
     machineUpdateScript = pkgs.writeShellApplication {
       name = "machine-update";
-      runtimeInputs = [inputs.clan-core.packages.${system}.clan-cli];
+      runtimeInputs = [
+        inputs.clan-core.packages.${system}.clan-cli
+        pkgs.python3
+      ];
       text = ''
                 set -euo pipefail
 
+                PROFILE_TAG_PREFIX="check-profile-"
+                DEFAULT_PROFILE_TAG="check-profile-fast"
+
                 show_usage() {
                   local exit_code="''${1:-1}"
+
                   echo "Usage: machine-update <machine> [options] [-- <extra clan flags>]"
                   echo "       machine-update --clan-help"
                   echo ""
-                  echo "Deploy a machine with preflight checks."
+                  echo "Deploy a machine with profile-driven preflight checks."
                   echo ""
                   echo "Options:"
-                  echo "  --force    Skip all preflight checks and deploy immediately"
+                  echo "  --force       Skip all preflight checks and deploy immediately"
                   echo "  --checks-only Run preflight checks only, skip deploy"
-                  echo "  --clan-help Show help for 'clan machines update'"
-                  echo "  -h, --help Show this help message"
+                  echo "  --clan-help   Show help for 'clan machines update'"
+                  echo "  -h, --help    Show this help message"
                   echo ""
+                  echo "Profile tags are read from clan inventory tags with prefix '$PROFILE_TAG_PREFIX'."
                   echo "Any args after '--' are forwarded to 'clan machines update'."
                   echo ""
                   echo "Examples:"
-                  echo "  machine-update io              # Deploy io with checks"
-                  echo "  machine-update io --checks-only  # Run checks without deploy"
-                  echo "  machine-update io --force      # Deploy io, skipping checks"
-                  echo "  machine-update makemake        # Deploy makemake with fast checks"
-                  echo "  machine-update ariel -- --debug  # Forward extra clan args"
+                  echo "  machine-update io"
+                  echo "  machine-update io --checks-only"
+                  echo "  machine-update io --force"
+                  echo "  machine-update ariel -- --debug"
                   exit "$exit_code"
                 }
 
@@ -92,12 +118,13 @@
                 MACHINE=""
                 EXTRA_CLAN_ARGS=()
 
+                AVAILABLE_MACHINES=()
+                KNOWN_MACHINE_LIST=""
+                PROFILE_TAGS=()
+                REQUIRED_CHECKS=()
+
                 refresh_machine_lists() {
                   local all_machines_raw=""
-                  local all_machines_json=""
-                  local all_machines_csv=""
-                  local all_machines_selector=""
-                  local machine_router_value=""
                   local machine=""
 
                   all_machines_raw="$(clan machines list)"
@@ -115,48 +142,11 @@
                   KNOWN_MACHINE_LIST=""
                   for machine in "''${AVAILABLE_MACHINES[@]}"; do
                     if [[ -n "$KNOWN_MACHINE_LIST" ]]; then
-                      KNOWN_MACHINE_LIST+="; "
+                      KNOWN_MACHINE_LIST+=", "
                     fi
                     KNOWN_MACHINE_LIST+="$machine"
                   done
-
-                  all_machines_csv="$(printf '%s\n' "''${AVAILABLE_MACHINES[@]}" | paste -sd ',' -)"
-                  all_machines_selector="{$(printf '%s' "$all_machines_csv")}"
-                  all_machines_json="$(clan select --flake . "nixosConfigurations.$all_machines_selector.config.my.router.enable" 2>/dev/null || true)"
-
-                  ROUTER_ENABLED_MACHINES=()
-                  for machine in "''${AVAILABLE_MACHINES[@]}"; do
-                    machine_router_value="$(
-                      printf '%s' "$all_machines_json" \
-                        | ${pkgs.python3}/bin/python3 -c 'import json, sys
-        try:
-            data = json.load(sys.stdin)
-        except Exception:
-            print("missing")
-            raise SystemExit(0)
-        machine = sys.argv[1]
-        value = data.get(machine, "missing") if isinstance(data, dict) else "missing"
-        if value is True:
-            print("true")
-        elif value is False:
-            print("false")
-        else:
-            print("missing")' "$machine"
-                    )"
-
-                    if [[ "$machine_router_value" == "missing" ]]; then
-                      machine_router_value="$(clan select --flake . "nixosConfigurations.$machine.config.my.router.enable" 2>/dev/null || true)"
-                    fi
-
-                    if [[ "$machine_router_value" == "true" ]]; then
-                      ROUTER_ENABLED_MACHINES+=("$machine")
-                    fi
-                  done
                 }
-
-                AVAILABLE_MACHINES=()
-                ROUTER_ENABLED_MACHINES=()
-                KNOWN_MACHINE_LIST=""
 
                 array_contains() {
                   local needle="$1"
@@ -172,14 +162,96 @@
                   return 1
                 }
 
+                add_check_target() {
+                  local target="$1"
+
+                  if ! array_contains "$target" "''${REQUIRED_CHECKS[@]}"; then
+                    REQUIRED_CHECKS+=("$target")
+                  fi
+                }
+
                 is_known_machine() {
                   local machine="$1"
                   array_contains "$machine" "''${AVAILABLE_MACHINES[@]}"
                 }
 
-                is_router_machine() {
+                resolve_profile_checks() {
                   local machine="$1"
-                  array_contains "$machine" "''${ROUTER_ENABLED_MACHINES[@]}"
+                  local tags_json=""
+                  local profile=""
+
+                  tags_json="$(clan select --flake . "clan.inventory.machines.$machine.tags")"
+
+                  mapfile -t PROFILE_TAGS < <(
+                    printf '%s' "$tags_json" \
+                      | ${pkgs.python3}/bin/python3 -c 'import json, sys
+        data = json.load(sys.stdin)
+        for tag in data:
+            if isinstance(tag, str) and tag.startswith("check-profile-"):
+                print(tag)
+        '
+                  )
+
+                  if [[ ''${#PROFILE_TAGS[@]} -eq 0 ]]; then
+                    PROFILE_TAGS=("$DEFAULT_PROFILE_TAG")
+                  fi
+
+                  REQUIRED_CHECKS=()
+                  for profile in "''${PROFILE_TAGS[@]}"; do
+                    case "$profile" in
+                      check-profile-fast)
+                        ;;
+                      check-profile-router)
+                        add_check_target "router-checks"
+                        ;;
+                      check-profile-io-predeploy)
+                        add_check_target "predeploy-check"
+                        ;;
+              check-profile-io-final)
+                add_check_target "final-checks"
+                ;;
+              check-profile-garage)
+                add_check_target "garage-checks"
+                ;;
+              check-profile-politikerstod)
+                add_check_target "politikerstod-checks"
+                ;;
+              check-profile-wireguard)
+                add_check_target "wireguard-checks"
+                ;;
+              *)
+                echo "Error: unknown check profile '$profile' on machine '$machine'"
+                echo "Known profiles: check-profile-fast, check-profile-router, check-profile-io-predeploy, check-profile-io-final, check-profile-garage, check-profile-politikerstod, check-profile-wireguard"
+                exit 2
+                ;;
+            esac
+                  done
+                }
+
+                run_preflight_checks() {
+                  local check_target=""
+
+                  echo ""
+                  echo "--- Running nix fmt (auto-fix formatting) ---"
+                  nix fmt
+
+                  echo ""
+                  echo "--- Verifying treefmt check ---"
+                  nix build "path:.#checks.${system}.treefmt" --no-link --quiet
+
+                  if [[ ''${#REQUIRED_CHECKS[@]} -eq 0 ]]; then
+                    echo ""
+                    echo "--- No additional profile checks required ---"
+                    return
+                  fi
+
+                  echo ""
+                  echo "--- Resolved profile checks ---"
+                  for check_target in "''${REQUIRED_CHECKS[@]}"; do
+                    echo ""
+                    echo "--- Running $check_target ---"
+                    nix build "path:.#$check_target" --no-link --quiet
+                  done
                 }
 
                 while [[ $# -gt 0 ]]; do
@@ -225,17 +297,17 @@
                   exit 0
                 fi
 
-                refresh_machine_lists
+                if [[ -z "$MACHINE" ]]; then
+                  echo "Error: machine name is required"
+                  show_usage 1
+                fi
 
                 if [[ -n "$CHECKS_ONLY" && -n "$FORCE" ]]; then
                   echo "Error: --checks-only cannot be combined with --force"
                   exit 2
                 fi
 
-                if [[ -z "$MACHINE" ]]; then
-                  echo "Error: machine name is required"
-                  show_usage 1
-                fi
+                refresh_machine_lists
 
                 if ! is_known_machine "$MACHINE"; then
                   echo "Error: unknown machine '$MACHINE'"
@@ -243,29 +315,12 @@
                   exit 2
                 fi
 
+                resolve_profile_checks "$MACHINE"
+
                 echo "=== Machine Update: $MACHINE ==="
 
                 if [[ -z "$FORCE" ]]; then
-                  echo ""
-                  echo "--- Running nix fmt (auto-fix formatting) ---"
-                  nix fmt
-
-                  echo ""
-                  echo "--- Verifying treefmt check ---"
-                  nix build "path:.#checks.${system}.treefmt" --no-link --quiet
-
-                  if [[ "$MACHINE" == "io" ]]; then
-                    echo ""
-                    echo "--- Running final-checks (router + io-predeploy) ---"
-                    nix build "path:.#final-checks" --no-link --quiet
-                  elif is_router_machine "$MACHINE"; then
-                    echo ""
-                    echo "--- Running router-checks ---"
-                    nix build "path:.#router-checks" --no-link --quiet
-                  else
-                    echo ""
-                    echo "--- No additional checks required for '$MACHINE' ---"
-                  fi
+                  run_preflight_checks
                 else
                   echo ""
                   echo "--- FORCE mode: skipping all checks ---"
@@ -320,6 +375,12 @@
         machine-update = machineUpdateScript;
       };
 
-    checks = buildChecks // routerChecks // ioPredeployChecks;
+    checks =
+      buildChecks
+      // routerChecks
+      // ioPredeployChecks
+      // garageChecks
+      // politikerstodDistributedChecks
+      // wireguardSystemChecks;
   };
 }

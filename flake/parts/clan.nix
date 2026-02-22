@@ -23,22 +23,41 @@
       machines = {
         oumuamua = {
           deploy.buildHost = "root@charon.lan";
-          tags = ["server"];
+          tags = [
+            "server"
+            "check-profile-fast"
+          ];
         };
         io = {
           deploy.buildHost = "root@charon.lan";
-          tags = ["server"];
+          tags = [
+            "server"
+            "check-profile-io-final"
+          ];
         };
         makemake = {
           deploy.buildHost = "root@charon.lan";
-          tags = ["server"];
+          tags = [
+            "server"
+            "check-profile-fast"
+            "check-profile-garage"
+            "check-profile-politikerstod"
+          ];
         };
         charon = {
-          tags = ["client"];
+          tags = [
+            "client"
+            "check-profile-fast"
+            "check-profile-politikerstod"
+            "check-profile-wireguard"
+          ];
         };
         ariel = {
           deploy.buildHost = "root@charon.lan";
-          tags = ["client"];
+          tags = [
+            "client"
+            "check-profile-fast"
+          ];
         };
       };
 

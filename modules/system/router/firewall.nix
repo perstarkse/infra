@@ -56,6 +56,8 @@
 
     wgEnabled = cfg.wireguard.enable or false;
     wgPort = toString (cfg.wireguard.listenPort or 51820);
+    wanAllowedTcpRules = lib.concatStringsSep "\n" (map (port: "iifname \"${wan}\" tcp dport ${toString port} accept") (lib.unique cfg.wan.allowedTcpPorts));
+    wanAllowedUdpRules = lib.concatStringsSep "\n" (map (port: "iifname \"${wan}\" udp dport ${toString port} accept") (lib.unique cfg.wan.allowedUdpPorts));
 
     inputInternalRules = lib.concatStringsSep "\n" (map (zone: "iifname \"${zone.interface}\" accept") internalZones);
 
@@ -144,6 +146,8 @@
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" ip protocol icmp accept
                 iifname "${wan}" tcp dport { 80, 443 } accept
+                ${wanAllowedTcpRules}
+                ${wanAllowedUdpRules}
                 ${lib.optionalString wgEnabled "iifname \"${wan}\" udp dport ${wgPort} accept"}
               }
               chain forward {
