@@ -115,6 +115,8 @@ machine-update <machine> [options]
 | `check-profile-garage` | `garage-checks` |
 | `check-profile-politikerstod` | `politikerstod-checks` |
 | `check-profile-wireguard` | `wireguard-checks` |
+| `check-profile-paperless` | `paperless-checks` |
+| `check-profile-backups` | `backups-checks` |
 
 All machines always run `nix fmt` + treefmt verification first (unless `--force`).
 
@@ -122,6 +124,8 @@ All machines always run `nix fmt` + treefmt verification first (unless `--force`
 
 - `--force` — Skip all preflight checks and deploy immediately.
 - `--checks-only` — Run preflight checks only, skip deploy.
+- `--explain` — Print resolved profile/check plan and exit.
+- `--base-ref <ref>` — Baseline for dynamic lockfile detectors.
 - `--clan-help` — Show upstream `clan machines update` help and exit.
 - Extra Clan flags can be forwarded after `--`.
 
@@ -137,6 +141,9 @@ machine-update io --checks-only
 # Deploy io, skipping checks (fast)
 machine-update io --force
 
+# Explain plan only
+machine-update io --explain
+
 # Deploy makemake (fast check only)
 machine-update makemake
 
@@ -145,19 +152,30 @@ machine-update ariel -- --debug --host-key-check accept-new
 
 # Show upstream Clan update help
 machine-update --clan-help
+
+# Plan only (JSON)
+machine-update-plan io --json
 ```
 
 Notes:
 
 - `io` is configured with `clan.core.deployment.requireExplicitUpdate = true`, so broad updates do not include it by accident.
+- `io` always gets mandatory `check-profile-io-final` (router + io-predeploy) regardless of inventory tags.
+- `--force` is blocked for `io` to prevent bypassing critical safety checks.
 - `machine-update` validates machine names before running checks; unknown names fail fast.
 - Multiple `check-profile-*` tags on a machine run as a union of checks.
+- Dynamic lockfile detectors can append checks (e.g. `politikerstod` input changes add `politikerstod-checks`).
+- Detector warnings are non-blocking and shown before checks.
 
 Additional local check bundles:
 
 - `nix build path:.#garage-checks`
 - `nix build path:.#politikerstod-checks`
 - `nix build path:.#wireguard-checks`
+- `nix build path:.#paperless-checks`
+- `nix build path:.#backups-checks`
+- `nix build path:.#backups-multi-checks`
+- `nix build path:.#backups-failure-checks`
 
 ## Module: Router
 
