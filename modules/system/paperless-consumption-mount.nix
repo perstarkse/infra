@@ -91,6 +91,7 @@ _: {
             --s3-provider Other \
             --s3-endpoint ${cfg.endpoint} \
             --s3-region ${cfg.region} \
+            --s3-no-check-bucket \
             --vfs-cache-mode ${cfg.cacheMode} \
             --vfs-cache-max-size ${cfg.cacheMaxSize} \
             --allow-other \
