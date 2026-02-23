@@ -54,6 +54,11 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    mailserverSystemChecks = import ../../tests/mailserver-system.nix {
+      inherit lib;
+      inherit pkgs;
+      privateMailserverModule = inputs.private-infra.nixosModules.mailserver;
+    };
     mainTopology = import ../main-topology.nix {
       inherit lib;
       inherit pkgs;
@@ -91,6 +96,7 @@
       backups-failure-checks = mkCheckBundle "backups-failure-checks" {
         inherit (backupsSystemChecks) backups-failing-backend;
       };
+      mailserver-checks = mkCheckBundle "mailserver-checks" mailserverSystemChecks;
     };
 
     machineUpdatePlanResolverPy = pkgs.writeText "machine-update-plan-resolver.py" ''
@@ -108,6 +114,7 @@
       "check-profile-wireguard": ["wireguard-checks"],
       "check-profile-paperless": ["paperless-checks"],
       "check-profile-backups": ["backups-checks", "backups-multi-checks", "backups-failure-checks"],
+      "check-profile-mailserver": ["mailserver-checks"],
       }
 
       machine = os.environ["MU_PLAN_MACHINE"]
@@ -620,6 +627,7 @@
       // politikerstodDistributedChecks
       // wireguardSystemChecks
       // paperlessSystemChecks
-      // backupsSystemChecks;
+      // backupsSystemChecks
+      // mailserverSystemChecks;
   };
 }

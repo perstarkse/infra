@@ -44,6 +44,7 @@
             "check-profile-politikerstod"
             "check-profile-paperless"
             "check-profile-backups"
+            "check-profile-mailserver"
           ];
         };
         charon = {
