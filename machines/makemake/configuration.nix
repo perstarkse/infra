@@ -353,6 +353,12 @@
 
   time.timeZone = "Europe/Stockholm";
 
+  services.paperless.settings = {
+    # Consume dir is an rclone/FUSE mount from Garage S3; use polling instead of inotify.
+    PAPERLESS_CONSUMER_POLLING = 30;
+    PAPERLESS_CONSUMER_RECURSIVE = true;
+  };
+
   environment.systemPackages = with pkgs; [
     mergerfs
     unrar

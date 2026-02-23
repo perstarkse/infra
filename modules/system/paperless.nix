@@ -242,6 +242,7 @@ _: {
                 --s3-provider Other \
                 --s3-endpoint ${cfg.s3Consumption.endpoint} \
                 --s3-region ${cfg.s3Consumption.region} \
+                --s3-no-check-bucket \
                 --vfs-cache-mode writes \
                 --vfs-cache-max-size 1G \
                 --allow-other \
