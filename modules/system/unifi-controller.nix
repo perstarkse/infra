@@ -1,7 +1,5 @@
 {
-  config.flake.nixosModules.unifi-controller = {
-    ...
-  }: {
+  config.flake.nixosModules.unifi-controller = _: {
     services.unifi = {
       enable = true;
     };

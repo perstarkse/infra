@@ -20,6 +20,12 @@
 
     inventory = {
       machines = {
+        sedna = {
+          deploy.buildHost = "root@charon.lan";
+          tags = [
+            "server"
+          ];
+        };
         io = {
           deploy.buildHost = "root@charon.lan";
           tags = [
@@ -62,6 +68,9 @@
         internet = {
           roles.default = {
             machines = {
+              sedna = {
+                settings.host = "130.61.55.4";
+              };
               io = {
                 settings.host = "io.lan";
               };
