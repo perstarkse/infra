@@ -29,6 +29,8 @@
     // {
       router = routerModule;
       system-stylix = {};
+      # Avoid nixpkgs overlay mutations in NixOS test eval (read-only pkgs).
+      shared = {};
     };
 
   secretsStubModule = {lib, ...}: {

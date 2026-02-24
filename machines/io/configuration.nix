@@ -16,6 +16,7 @@
       options
       router
       wake-proxy
+      heartbeat
       home-assistant
       k3s
       unifi-controller
@@ -82,11 +83,13 @@
       ];
     };
 
+    heartbeat.push.enable = true;
+
     secrets = {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage" "wake-proxy"];
+        includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "heartbeat"];
       };
 
       generateManifest = false;

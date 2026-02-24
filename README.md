@@ -67,9 +67,9 @@ my.secrets.allowReadAccess = [
 ## Machines
 
 - `machines/io`: Router (LAN bridge, DHCP, DNS, WireGuard, nginx, monitoring)
-- `machines/makemake`: Server (Vaultwarden, OpenWebUI, SurrealDB, Minne, Minecraft)
-- `machines/charon`: Workstation
-- `machines/oumuamua`: Staging system
+- `machines/makemake`: Server (Vaultwarden, OpenWebUI, SurrealDB, Minne)
+- `machines/charon`: Workstation (Worker of distributed services)
+- `machines/sedna`: External monitor 
 
 Each machine imports shared modules via flake-parts, follows consistent patterns, and consumes secrets declaratively.
 
