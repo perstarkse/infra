@@ -375,7 +375,7 @@
     prismlauncher
     virt-manager
     gamescope
-    ctx.inputs.playwrightMcpLatest.legacyPackages.${pkgs.stdenv.hostPlatform.system}.playwright-mcp
+    pkgs.unstable.playwright-mcp
     bun
     google-cloud-sdk
     amp-cli

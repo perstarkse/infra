@@ -29,7 +29,7 @@
       fi
     '';
     meta = {
-      tags = ["oumuamua" "service" "minne"];
+      tags = ["makemake" "service" "minne"];
     };
   };
 }

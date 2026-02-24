@@ -30,7 +30,7 @@
       fi
     '';
     meta = {
-      tags = ["oumuamua" "service" "surrealdb"];
+      tags = ["makemake" "service" "surrealdb"];
     };
   };
 }

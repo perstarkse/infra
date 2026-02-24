@@ -111,10 +111,10 @@
           "check-profile-io-final": ["final-checks"],
           "check-profile-garage": ["garage-checks"],
           "check-profile-politikerstod": ["politikerstod-checks"],
-      "check-profile-wireguard": ["wireguard-checks"],
-      "check-profile-paperless": ["paperless-checks"],
-      "check-profile-backups": ["backups-checks", "backups-multi-checks", "backups-failure-checks"],
-      "check-profile-mailserver": ["mailserver-checks"],
+          "check-profile-wireguard": ["wireguard-checks"],
+          "check-profile-paperless": ["paperless-checks"],
+          "check-profile-backups": ["backups-checks", "backups-multi-checks", "backups-failure-checks"],
+          "check-profile-mailserver": ["mailserver-checks"],
       }
 
       machine = os.environ["MU_PLAN_MACHINE"]

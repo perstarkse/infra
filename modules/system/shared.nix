@@ -1,4 +1,4 @@
-{
+{inputs, ...}: {
   config.flake.nixosModules.shared = {
     config,
     pkgs,
@@ -7,6 +7,15 @@
     mainUser = config.my.mainUser.name;
   in {
     system.stateVersion = "25.11";
+
+    nixpkgs.overlays = [
+      (_final: prev: {
+        unstable = import inputs."nixpkgs-unstable" {
+          inherit (prev.stdenv.hostPlatform) system;
+          inherit (config.nixpkgs) config;
+        };
+      })
+    ];
 
     nix.gc = {
       automatic = true;
@@ -78,6 +87,9 @@
       enableIPv6 = true;
     };
 
-    nix.settings.trusted-users = ["root" mainUser];
+    nix.settings = {
+      trusted-users = ["root" mainUser];
+      "download-buffer-size" = 268435456;
+    };
   };
 }

@@ -5,11 +5,11 @@
 }:
 buildNpmPackage rec {
   pname = "codenomad";
-  version = "0.11.1";
+  version = "0.11.4";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@neuralnomads/codenomad/-/codenomad-${version}.tgz";
-    hash = "sha512-OUV1HWpl5z60O2KK1YTz6Dv9Nr+sZ1zvPfVrEZfyglx9PGQJJS4Cxpg3N1xwmrOV+x6VYJaU4WSYxz3Bkv5jtw==";
+    hash = "sha512-KFOhd/VAuKMLmLG4FVE8MiE9NxyoR608U1BQqAi9SufjrPe7VENmcFBpEwdiwY46kjRohifV15q4szqLwqFKIQ==";
   };
   sourceRoot = "package";
 

@@ -291,12 +291,12 @@
     };
 
     minecraft = {
-      enable = true;
+      enable = false;
       eula = true;
       openFirewall = true;
       servers = {
         berget-2 = {
-          enable = true;
+          enable = false;
           package = pkgs.fabricServers."fabric-1_21_1";
           openFirewall = true;
           mods = [
