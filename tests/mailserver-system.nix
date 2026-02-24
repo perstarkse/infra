@@ -37,7 +37,9 @@
 
   passwordHash = "$6$/z4n8AQl6K$kiOkBTWlZfBd7PvF5GsJ8PmPgdZsFGN1jPGZufxxr60PoR0oUsrvzm2oQiflyz5ir9fFJ.d/zKm/NgLXNUsNX/";
 
-  mailNode = {
+  mailNode = {options, ...}: let
+    hasX509Option = lib.hasAttrByPath ["mailserver" "x509" "useACMEHost"] options;
+  in {
     networking = {
       useNetworkd = true;
       useDHCP = false;
@@ -53,11 +55,22 @@
       backupsStubModule
     ];
 
-    mailserver.x509 = {
-      useACMEHost = lib.mkForce null;
-      certificateFile = "/etc/mailserver/cert.pem";
-      privateKeyFile = "/etc/mailserver/key.pem";
-    };
+    mailserver =
+      {
+        enable = true;
+      }
+      // lib.optionalAttrs hasX509Option {
+        x509 = {
+          useACMEHost = lib.mkForce null;
+          certificateFile = "/etc/mailserver/cert.pem";
+          privateKeyFile = "/etc/mailserver/key.pem";
+        };
+      }
+      // lib.optionalAttrs (!hasX509Option) {
+        certificateScheme = "manual";
+        certificateFile = "/etc/mailserver/cert.pem";
+        keyFile = "/etc/mailserver/key.pem";
+      };
 
     services.dovecot2 = {
       sslServerCert = lib.mkForce "/etc/mailserver/cert.pem";

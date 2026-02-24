@@ -12,7 +12,6 @@
         inputs = {
           privateInfra = inputs.private-infra;
           varsHelper = inputs.vars-helper;
-          playwrightMcpLatest = inputs."playwright-mcp-latest";
           inherit (inputs) nous;
           nixTopology = inputs.nix-topology;
         };
@@ -21,13 +20,6 @@
 
     inventory = {
       machines = {
-        oumuamua = {
-          deploy.buildHost = "root@charon.lan";
-          tags = [
-            "server"
-            "check-profile-fast"
-          ];
-        };
         io = {
           deploy.buildHost = "root@charon.lan";
           tags = [
@@ -104,7 +96,14 @@
             input = "clan-core";
           };
           roles = {
-            server.tags.all = {};
+            server = {
+              tags.all = {};
+              settings = {
+                authorizedKeys = {
+                  "p" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn";
+                };
+              };
+            };
             client.tags.all = {};
           };
         };
@@ -118,16 +117,6 @@
             settings = {
               user = "p";
               prompt = true;
-            };
-          };
-        };
-        admin = {
-          roles.default = {
-            tags.all = {};
-            settings = {
-              allowedKeys = {
-                "p" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn";
-              };
             };
           };
         };

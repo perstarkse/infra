@@ -95,12 +95,11 @@ in {
       deviceIcon = null;
       info = "Ubiquiti USW";
       image = null;
-      interfaceGroups = [["uplink" "port1" "port2" "port3" "port4"]];
+      interfaceGroups = [["uplink" "port1" "port2" "port4"]];
       connections = {
         uplink = mkConnection "io" "br-lan";
         port1 = mkConnection "charon" "enp4s0";
         port2 = mkConnection "ariel" "enp3s0f1";
-        port3 = mkConnection "oumuamua" "enp8s0";
         port4 = mkConnection "makemake" "lan";
       };
     };
@@ -124,17 +123,6 @@ in {
       hardware.info = "Laptop";
       interfaces = lib.mkForce {
         enp3s0f1 = {};
-      };
-    };
-
-    oumuamua = {
-      icon = null;
-      deviceIcon = null;
-      renderer.preferredType = "card";
-      hardware.image = null;
-      hardware.info = "Server";
-      interfaces = lib.mkForce {
-        enp8s0 = {};
       };
     };
 

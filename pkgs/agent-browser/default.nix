@@ -11,12 +11,12 @@
   cacert,
   nodejs,
 }: let
-  version = "0.4.3-unstable-main";
+  version = "0.14.0-unstable-2026-02-23";
   src = fetchFromGitHub {
     owner = "vercel-labs";
     repo = "agent-browser";
-    rev = "main";
-    hash = "sha256-zVnQBgu3ocq2Uf0tP+PAIuShJLmlqSifdsxs9pleFjk=";
+    rev = "2fe7394dbeb89efb00e56899dd71f32db5ec1dee";
+    hash = "sha256-oDgnxQ09e1IUd1kfgr75TNiYOf5VpMXG9DjfGG4OGwA=";
   };
 
   cli = rustPlatform.buildRustPackage {
@@ -32,7 +32,7 @@
       cp Cargo.lock ../Cargo.lock || true
     '';
 
-    cargoHash = "sha256-1f8V2ZKQcidUgAQ4xQics8Nr6ZWu7vwUZJ2iqG4wfy4=";
+    cargoHash = "sha256-94w9V+NZiWeQ3WbQnsKxVxlvsCaOJR0Wm6XVc85Lo88=";
 
     nativeBuildInputs = [pkg-config];
     buildInputs = [openssl];
@@ -44,7 +44,7 @@
     nativeBuildInputs = [pnpm cacert];
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-Qrp16h8vikta9YcPp+7qmZLni5E0Yply0q3zi/bbe+Y=";
+    outputHash = "sha256-QqW+zCYWSCm30+h//mRg+bqnT8hOSm2mPYpVB+kLCnA=";
 
     buildPhase = ''
       export HOME=$TMPDIR
@@ -64,9 +64,14 @@ in
 
     buildPhase = ''
       export HOME=$TMPDIR
+      export PNPM_STORE_DIR=$TMPDIR/pnpm-store
+
+      # Use a writable copy of the pre-fetched pnpm store
+      cp -r ${pnpmDeps} "$PNPM_STORE_DIR"
+      chmod -R +w "$PNPM_STORE_DIR"
 
       # Restore pnpm store
-      pnpm config set store-dir ${pnpmDeps}
+      pnpm config set store-dir "$PNPM_STORE_DIR"
       pnpm config set package-import-method copy
 
       # Install deps

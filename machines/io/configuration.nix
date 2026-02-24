@@ -608,6 +608,12 @@
     # };
   };
 
+  # Keep UniFi on unstable package set.
+  services.unifi = {
+    unifiPackage = pkgs.unstable.unifi;
+    mongodbPackage = pkgs.unstable.mongodb-7_0;
+  };
+
   # Custom nginx location for nous.fyi /app/ -> /assets/app/ rewrite
   services.nginx.virtualHosts."nous.fyi".locations = {
     "/app/" = {

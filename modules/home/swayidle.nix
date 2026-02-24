@@ -20,9 +20,12 @@
     config = lib.mkIf cfg.enable {
       services.swayidle = {
         enable = true;
-        events = {
-          before-sleep = "${pkgs.systemd}/bin/loginctl lock-session";
-        };
+        events = [
+          {
+            event = "before-sleep";
+            command = "${pkgs.systemd}/bin/loginctl lock-session";
+          }
+        ];
         timeouts = [
           {
             timeout = cfg.idleSeconds;
