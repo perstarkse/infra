@@ -14,6 +14,7 @@
       REQUIRED_CHECKS=${toString cfg.requiredIdleChecks}
       LOAD_THRESHOLD="${cfg.loadThreshold}"
       USER_IDLE_SECONDS=${toString cfg.userIdleSeconds}
+      ACTIVE_TCP_PORTS="${lib.concatStringsSep " " (map toString cfg.activeTcpPorts)}"
 
       mkdir -p /run/auto-suspend
 
@@ -46,6 +47,17 @@
         fi
       ''}
 
+      # Check for established TCP connections on configured ports (remote sessions)
+      tcp_active=0
+      if [ -n "$ACTIVE_TCP_PORTS" ]; then
+        for port in $ACTIVE_TCP_PORTS; do
+          if ${pkgs.iproute2}/bin/ss -Htan state established "( sport = :$port )" | ${pkgs.gawk}/bin/awk 'NF { found=1 } END { exit(found ? 0 : 1) }'; then
+            tcp_active=1
+            break
+          fi
+        done
+      fi
+
       # Build status string
       status=""
       [ "$load_idle" = "0" ] && status="$status load:ACTIVE($loadavg)"
@@ -53,11 +65,13 @@
       [ "$user_idle" = "0" ] && status="$status user:ACTIVE"
       [ "$user_idle" = "1" ] && status="$status user:idle"
       [ "$inhibited" = "1" ] && status="$status inhibitor:BLOCKING"
+      [ "$tcp_active" = "1" ] && status="$status tcp:ACTIVE"
+      [ "$tcp_active" = "0" ] && [ -n "$ACTIVE_TCP_PORTS" ] && status="$status tcp:idle"
 
       current=$(cat "$IDLE_FILE" 2>/dev/null || echo "0")
 
       # Determine if system is idle
-      if [ "$load_idle" = "1" ] && [ "$user_idle" = "1" ] && [ "$inhibited" = "0" ]; then
+      if [ "$load_idle" = "1" ] && [ "$user_idle" = "1" ] && [ "$inhibited" = "0" ] && [ "$tcp_active" = "0" ]; then
         new=$((current + 1))
         echo "$new" > "$IDLE_FILE"
         echo "$(date): IDLE $new/$REQUIRED_CHECKS —$status" >> /var/log/auto-suspend.log
@@ -104,6 +118,13 @@
         type = lib.types.bool;
         default = true;
         description = "Respect systemd inhibitors (audio, downloads, etc.)";
+      };
+
+      activeTcpPorts = lib.mkOption {
+        type = lib.types.listOf lib.types.port;
+        default = [];
+        example = [9898 22];
+        description = "Treat system as active when established TCP connections exist on these local ports (useful for remote dev sessions).";
       };
     };
 

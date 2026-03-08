@@ -32,6 +32,10 @@ _: {
       ]
       ++ lib.optionals cfg.skipAuth ["--dangerously-skip-auth"]
       ++ lib.optionals cfg.unrestrictedRoot ["--unrestricted-root"];
+    firewallSourceRules = lib.concatMapStringsSep "\n" (source:
+      if builtins.match ".*:.*" source != null
+      then "ip6 saddr ${source} tcp dport ${toString cfg.port} accept"
+      else "ip saddr ${source} tcp dport ${toString cfg.port} accept") cfg.allowedFirewallSources;
   in {
     options.my.codenomad = {
       enable = lib.mkEnableOption "CodeNomad server";
@@ -117,6 +121,13 @@ _: {
         default = false;
         description = "Open CodeNomad port in firewall.";
       };
+
+      allowedFirewallSources = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = ["10.0.0.1"];
+        description = "Source IPs/CIDRs allowed to access CodeNomad. When non-empty, only these sources are accepted.";
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -165,7 +176,13 @@ _: {
         };
       };
 
-      networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [cfg.port];
+      networking.firewall = {
+        allowedTCPPorts = lib.mkIf (cfg.openFirewall && cfg.allowedFirewallSources == []) [cfg.port];
+        extraInputRules = lib.mkIf (cfg.allowedFirewallSources != []) (lib.mkAfter ''
+          ${firewallSourceRules}
+          tcp dport ${toString cfg.port} drop
+        '');
+      };
     };
   };
 }
