@@ -417,15 +417,21 @@
         CLAN_HELP=""
         EXPLAIN=""
         BASE_REF=""
-        MACHINE=""
+        MACHINES_RAW=()
+        MACHINES=()
+        PLAN_FILES=()
+        REQUIRED_CHECKS=()
+        PLAN_WARNINGS=()
+        FORCE_BLOCKED_MACHINES=()
+        FORCE_BLOCK_REASONS=()
         EXTRA_CLAN_ARGS=()
 
         show_usage() {
           local exit_code="''${1:-1}"
-          echo "Usage: machine-update <machine> [options] [-- <extra clan flags>]"
+          echo "Usage: machine-update <machine> [<machine> ...] [options] [-- <extra clan flags>]"
           echo "       machine-update --clan-help"
           echo ""
-          echo "Deploy a machine with profile-driven preflight checks."
+          echo "Deploy one or more machines with profile-driven preflight checks."
           echo ""
           echo "Options:"
           echo "  --force           Skip all preflight checks and deploy immediately"
@@ -476,12 +482,7 @@
               show_usage 1
               ;;
             *)
-              if [[ -z "$MACHINE" ]]; then
-                MACHINE="$1"
-              else
-                echo "Unexpected argument: $1"
-                show_usage 1
-              fi
+              MACHINES_RAW+=("$1")
               shift
               ;;
           esac
@@ -492,8 +493,8 @@
           exit 0
         fi
 
-        if [[ -z "$MACHINE" ]]; then
-          echo "Error: machine name is required"
+        if [[ ''${#MACHINES_RAW[@]} -eq 0 ]]; then
+          echo "Error: at least one machine name is required"
           show_usage 1
         fi
 
@@ -502,35 +503,107 @@
           exit 2
         fi
 
-        PLAN_ARGS=(--json "$MACHINE")
-        if [[ -n "$BASE_REF" ]]; then
-          PLAN_ARGS+=(--base-ref "$BASE_REF")
-        fi
-        PLAN_JSON="$(machine-update-plan "''${PLAN_ARGS[@]}")"
-
-        FORCE_ALLOWED="$(printf '%s' "$PLAN_JSON" | ${pkgs.python3}/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); print("true" if data.get("forceAllowed", True) else "false")')"
-        FORCE_BLOCK_REASON="$(printf '%s' "$PLAN_JSON" | ${pkgs.python3}/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); print(data.get("forceBlockReason") or "")')"
-        if [[ -n "$FORCE" && "$FORCE_ALLOWED" != "true" ]]; then
-          echo "Error: --force is not allowed for machine '$MACHINE'"
-          if [[ -n "$FORCE_BLOCK_REASON" ]]; then
-            echo "Reason: $FORCE_BLOCK_REASON"
+        declare -A MACHINE_SEEN=()
+        for machine in "''${MACHINES_RAW[@]}"; do
+          if [[ -z "''${MACHINE_SEEN[$machine]-}" ]]; then
+            MACHINE_SEEN[$machine]=1
+            MACHINES+=("$machine")
           fi
+        done
+
+        declare -A CHECK_SEEN=()
+        declare -A WARNING_SEEN=()
+        PLAN_DIR="$(mktemp -d)"
+        PLAN_INDEX=0
+
+        cleanup() {
+          rm -rf "$PLAN_DIR"
+        }
+        trap cleanup EXIT
+
+        for machine in "''${MACHINES[@]}"; do
+          PLAN_ARGS=(--json "$machine")
+          if [[ -n "$BASE_REF" ]]; then
+            PLAN_ARGS+=(--base-ref "$BASE_REF")
+          fi
+
+          PLAN_JSON="$(machine-update-plan "''${PLAN_ARGS[@]}")"
+          PLAN_FILE="$PLAN_DIR/plan-$PLAN_INDEX.json"
+          PLAN_INDEX=$((PLAN_INDEX + 1))
+          printf '%s\n' "$PLAN_JSON" > "$PLAN_FILE"
+          PLAN_FILES+=("$PLAN_FILE")
+
+          if [[ -n "$FORCE" ]]; then
+            FORCE_ALLOWED="$(printf '%s' "$PLAN_JSON" | ${pkgs.python3}/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); print("true" if data.get("forceAllowed", True) else "false")')"
+            if [[ "$FORCE_ALLOWED" != "true" ]]; then
+              FORCE_BLOCKED_MACHINES+=("$machine")
+              FORCE_BLOCK_REASON="$(printf '%s' "$PLAN_JSON" | ${pkgs.python3}/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); print(data.get("forceBlockReason") or "")')"
+              if [[ -n "$FORCE_BLOCK_REASON" ]]; then
+                FORCE_BLOCK_REASONS+=("$machine: $FORCE_BLOCK_REASON")
+              fi
+            fi
+          fi
+
+          mapfile -t MACHINE_WARNINGS < <(printf '%s' "$PLAN_JSON" | ${pkgs.python3}/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); [print(w) for w in data.get("warnings", [])]')
+          for warning in "''${MACHINE_WARNINGS[@]}"; do
+            if [[ ''${#MACHINES[@]} -gt 1 ]]; then
+              warning_entry="[$machine] $warning"
+            else
+              warning_entry="$warning"
+            fi
+            if [[ -z "''${WARNING_SEEN[$warning_entry]-}" ]]; then
+              WARNING_SEEN[$warning_entry]=1
+              PLAN_WARNINGS+=("$warning_entry")
+            fi
+          done
+
+          mapfile -t MACHINE_CHECKS < <(printf '%s' "$PLAN_JSON" | ${pkgs.python3}/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); [print(c) for c in data.get("checksResolved", [])]')
+          for check_target in "''${MACHINE_CHECKS[@]}"; do
+            if [[ -z "''${CHECK_SEEN[$check_target]-}" ]]; then
+              CHECK_SEEN[$check_target]=1
+              REQUIRED_CHECKS+=("$check_target")
+            fi
+          done
+        done
+
+        if [[ -n "$FORCE" && ''${#FORCE_BLOCKED_MACHINES[@]} -gt 0 ]]; then
+          if [[ ''${#FORCE_BLOCKED_MACHINES[@]} -eq 1 ]]; then
+            machine_name="''${FORCE_BLOCKED_MACHINES[0]}"
+            echo "Error: --force is not allowed for machine '$machine_name'"
+          else
+            printf "Error: --force is not allowed for machines:"
+            for machine in "''${FORCE_BLOCKED_MACHINES[@]}"; do
+              printf " %s" "$machine"
+            done
+            printf "\n"
+          fi
+          for reason in "''${FORCE_BLOCK_REASONS[@]}"; do
+            echo "Reason: $reason"
+          done
           exit 2
         fi
 
         if [[ -n "$EXPLAIN" ]]; then
           echo ""
-          echo "--- Resolved update plan ---"
-          EXPLAIN_PLAN_ARGS=("$MACHINE")
-          if [[ -n "$BASE_REF" ]]; then
-            EXPLAIN_PLAN_ARGS+=(--base-ref "$BASE_REF")
+          echo "--- Resolved update plans ---"
+          for index in "''${!MACHINES[@]}"; do
+            machine="''${MACHINES[$index]}"
+            plan_file="''${PLAN_FILES[$index]}"
+            echo ""
+            echo "[$machine]"
+            ${pkgs.python3}/bin/python3 "${machineUpdatePlanRenderPy}" < "$plan_file"
+          done
+
+          if [[ ''${#MACHINES[@]} -gt 1 ]]; then
+            echo ""
+            echo "Combined checks (deduplicated):"
+            echo "- treefmt"
+            for check_target in "''${REQUIRED_CHECKS[@]}"; do
+              echo "- $check_target"
+            done
           fi
-          machine-update-plan "''${EXPLAIN_PLAN_ARGS[@]}"
           exit 0
         fi
-
-        mapfile -t PLAN_WARNINGS < <(printf '%s' "$PLAN_JSON" | ${pkgs.python3}/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); [print(w) for w in data.get("warnings", [])]')
-        mapfile -t REQUIRED_CHECKS < <(printf '%s' "$PLAN_JSON" | ${pkgs.python3}/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); [print(c) for c in data.get("checksResolved", [])]')
 
         if [[ ''${#PLAN_WARNINGS[@]} -gt 0 ]]; then
           echo ""
@@ -540,7 +613,11 @@
           done
         fi
 
-        echo "=== Machine Update: $MACHINE ==="
+        printf '=== Machine Update:'
+        for machine in "''${MACHINES[@]}"; do
+          printf ' %s' "$machine"
+        done
+        printf ' ===\n'
 
         if [[ -z "$FORCE" ]]; then
           echo ""
@@ -576,7 +653,108 @@
 
         echo ""
         echo "--- Deploying via clan machines update ---"
-        clan machines update "$MACHINE" "''${EXTRA_CLAN_ARGS[@]}"
+        for machine in "''${MACHINES[@]}"; do
+          echo ""
+          echo "--- Deploying $machine ---"
+          clan machines update "$machine" "''${EXTRA_CLAN_ARGS[@]}"
+        done
+      '';
+    };
+
+    pkgsUpdatePy = pkgs.writeText "pkgs-update.py" ''
+      #!/usr/bin/env python3
+      import argparse
+      import json
+      import re
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      PACKAGE = "@neuralnomads/codenomad"
+
+      def run(args):
+          return subprocess.run(args, check=True, text=True, capture_output=True).stdout.strip()
+
+      def parse_attr(text, name):
+          m = re.search(f"{re.escape(name)}\\s*=\\s*\"([^\"]+)\";", text)
+          return m.group(1) if m else None
+
+      def replace_attr(text, name, value):
+          pat = re.compile(f"({re.escape(name)}\\s*=\\s*\")[^\"]+(\";)")
+          out, n = pat.subn(f"\\g<1>{value}\\g<2>", text, count=1)
+          if n != 1:
+              raise RuntimeError(f"failed to update {name}")
+          return out
+
+      def main():
+          parser = argparse.ArgumentParser(description="Check/update codenomad pin in pkgs/codenomad/default.nix")
+          parser.add_argument("--write", action="store_true", help="Write version/hash changes to file")
+          parser.add_argument("--json", action="store_true", help="Print JSON output")
+          args = parser.parse_args()
+
+          root = Path.cwd()
+          nix_file = root / "pkgs/codenomad/default.nix"
+          if not nix_file.exists():
+              print(f"Error: expected {nix_file}", file=sys.stderr)
+              return 2
+
+          text = nix_file.read_text()
+          current_version = parse_attr(text, "version")
+          current_hash = parse_attr(text, "hash")
+          if not current_version or not current_hash:
+              print(f"Error: could not parse version/hash in {nix_file}", file=sys.stderr)
+              return 2
+
+          latest_version = run(["npm", "view", PACKAGE, "version"])
+          latest_hash = run(["npm", "view", PACKAGE, "dist.integrity"])
+
+          changed = False
+          if args.write and (current_version != latest_version or current_hash != latest_hash):
+              new_text = replace_attr(text, "version", latest_version)
+              new_text = replace_attr(new_text, "hash", latest_hash)
+              nix_file.write_text(new_text)
+              changed = True
+
+          payload = {
+              "package": "codenomad",
+              "nixFile": str(nix_file.relative_to(root)),
+              "currentVersion": current_version,
+              "latestVersion": latest_version,
+              "currentHash": current_hash,
+              "latestHash": latest_hash,
+              "upToDate": current_version == latest_version and current_hash == latest_hash,
+              "write": args.write,
+              "changed": changed,
+              "note": "if version changes, refresh pkgs/codenomad/package-lock.json and npmDepsHash",
+          }
+
+          if args.json:
+              print(json.dumps(payload, indent=2, sort_keys=True))
+          else:
+              status = "up-to-date" if payload["upToDate"] else "update available"
+              print(f"codenomad: {status} ({current_version} -> {latest_version})")
+              if args.write:
+                  if changed:
+                      print("updated pkgs/codenomad/default.nix (version/hash)")
+                  else:
+                      print("no file changes required")
+              print(payload["note"])
+
+          return 0
+
+      if __name__ == "__main__":
+          raise SystemExit(main())
+    '';
+
+    pkgsUpdateScript = pkgs.writeShellApplication {
+      name = "pkgs-update";
+      runtimeInputs = [
+        pkgs.python3
+        pkgs.nodejs
+      ];
+      text = ''
+        set -euo pipefail
+        exec ${pkgs.python3}/bin/python3 ${pkgsUpdatePy} "$@"
       '';
     };
   in {
@@ -599,6 +777,7 @@
         pkgs.deadnix
         machineUpdatePlanScript
         machineUpdateScript
+        pkgsUpdateScript
       ];
     };
 
@@ -617,6 +796,7 @@
         topology-diagrams = topologyDiagrams;
         machine-update-plan = machineUpdatePlanScript;
         machine-update = machineUpdateScript;
+        pkgs-update = pkgsUpdateScript;
       };
 
     checks =

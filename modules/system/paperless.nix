@@ -6,6 +6,10 @@ _: {
     ...
   }: let
     cfg = config.my.paperless;
+    firewallSourceRules = lib.concatMapStringsSep "\n" (source:
+      if builtins.match ".*:.*" source != null
+      then "ip6 saddr ${source} tcp dport ${toString cfg.port} accept"
+      else "ip saddr ${source} tcp dport ${toString cfg.port} accept") cfg.allowedFirewallSources;
   in {
     options.my.paperless = {
       enable = lib.mkEnableOption "Enable Paperless-ngx document management";
@@ -50,6 +54,13 @@ _: {
         type = lib.types.bool;
         default = false;
         description = "Open firewall for the service port";
+      };
+
+      allowedFirewallSources = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = ["10.0.0.1"];
+        description = "Source IPs/CIDRs allowed to access Paperless. When non-empty, only these sources are accepted.";
       };
 
       ocr = {
@@ -298,7 +309,13 @@ _: {
       };
 
       # Firewall
-      networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [cfg.port];
+      networking.firewall = {
+        allowedTCPPorts = lib.mkIf (cfg.openFirewall && cfg.allowedFirewallSources == []) [cfg.port];
+        extraInputRules = lib.mkIf (cfg.allowedFirewallSources != []) (lib.mkAfter ''
+          ${firewallSourceRules}
+          tcp dport ${toString cfg.port} drop
+        '');
+      };
 
       # PostgreSQL container (isolated like politikerstod)
       containers.paperless-db = lib.mkIf cfg.database.enableContainer {

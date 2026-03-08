@@ -21,6 +21,15 @@
         map (d: "@" + (escapeForSystemd (lib.strings.escapeRegex d)) + "$$") cfg.settings.authAllowedEmailDomains
       ))
       + ")";
+    serviceFirewallSourceRules = lib.concatMapStringsSep "\n" (source:
+      if builtins.match ".*:.*" source != null
+      then "ip6 saddr ${source} tcp dport ${toString cfg.port} accept"
+      else "ip saddr ${source} tcp dport ${toString cfg.port} accept") cfg.allowedFirewallSources;
+
+    dbProxyFirewallSourceRules = lib.concatMapStringsSep "\n" (source:
+      if builtins.match ".*:.*" source != null
+      then "ip6 saddr ${source} tcp dport 5432 accept"
+      else "ip saddr ${source} tcp dport 5432 accept") cfg.database.allowedHosts;
   in {
     options.my.politikerstod = {
       enable = lib.mkEnableOption "Enable Politikerstöd Service";
@@ -60,6 +69,13 @@
         type = lib.types.bool;
         default = true;
         description = "Open firewall for the service port";
+      };
+
+      allowedFirewallSources = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = ["10.0.0.1"];
+        description = "Source IPs/CIDRs allowed to access the service port. When non-empty, only these sources are accepted.";
       };
 
       database = {
@@ -269,11 +285,23 @@
       };
       users.groups.politikerstod = {};
 
-      # 5. Firewall - open service port and DB proxy port for remote workers
-      networking.firewall.allowedTCPPorts = lib.mkIf (cfg.openFirewall || (cfg.database.enableContainer && cfg.database.allowedHosts != [])) (
-        lib.optional cfg.openFirewall cfg.port
-        ++ lib.optionals (cfg.database.enableContainer && cfg.database.allowedHosts != []) [5432]
-      );
+      # 5. Firewall - optional open ports or explicit source ACLs
+      networking.firewall = {
+        allowedTCPPorts =
+          (lib.optional (cfg.openFirewall && cfg.allowedFirewallSources == []) cfg.port)
+          ++ (lib.optionals (cfg.database.enableContainer && cfg.database.allowedHosts == []) [5432]);
+
+        extraInputRules = lib.mkMerge [
+          (lib.mkIf (cfg.allowedFirewallSources != []) (lib.mkAfter ''
+            ${serviceFirewallSourceRules}
+            tcp dport ${toString cfg.port} drop
+          ''))
+          (lib.mkIf (cfg.database.enableContainer && cfg.database.allowedHosts != []) (lib.mkAfter ''
+            ${dbProxyFirewallSourceRules}
+            tcp dport 5432 drop
+          ''))
+        ];
+      };
 
       containers.politikerstod-db = lib.mkIf cfg.database.enableContainer {
         autoStart = true;

@@ -59,7 +59,46 @@
     wanAllowedTcpRules = lib.concatStringsSep "\n" (map (port: "iifname \"${wan}\" tcp dport ${toString port} accept") (lib.unique cfg.wan.allowedTcpPorts));
     wanAllowedUdpRules = lib.concatStringsSep "\n" (map (port: "iifname \"${wan}\" udp dport ${toString port} accept") (lib.unique cfg.wan.allowedUdpPorts));
 
-    inputInternalRules = lib.concatStringsSep "\n" (map (zone: "iifname \"${zone.interface}\" accept") internalZones);
+    mkInternalInputRulesV4 = zone:
+      if (zone.kind or "") == "vlan"
+      then
+        lib.concatStringsSep "\n" (
+          [
+            "iifname \"${zone.interface}\" ip protocol icmp accept"
+          ]
+          ++ lib.optionals cfg.dns.enable [
+            "iifname \"${zone.interface}\" udp dport 53 accept"
+            "iifname \"${zone.interface}\" tcp dport 53 accept"
+          ]
+          ++ lib.optionals (zone.dhcp.enable or false) [
+            "iifname \"${zone.interface}\" udp sport 68 udp dport 67 accept"
+          ]
+        )
+      else "iifname \"${zone.interface}\" accept";
+
+    inputInternalRulesV4 = lib.concatStringsSep "\n" (map mkInternalInputRulesV4 internalZones);
+
+    mkInternalInputRulesV6 = zone:
+      if (zone.kind or "") == "vlan"
+      then
+        lib.concatStringsSep "\n" (
+          [
+            ''
+              iifname "${zone.interface}" icmpv6 type {
+                destination-unreachable, packet-too-big, time-exceeded,
+                parameter-problem, nd-router-solicit, nd-router-advert,
+                nd-neighbor-solicit, nd-neighbor-advert, echo-request, echo-reply
+              } accept
+            ''
+          ]
+          ++ lib.optionals cfg.dns.enable [
+            "iifname \"${zone.interface}\" udp dport 53 accept"
+            "iifname \"${zone.interface}\" tcp dport 53 accept"
+          ]
+        )
+      else "iifname \"${zone.interface}\" accept";
+
+    inputInternalRulesV6 = lib.concatStringsSep "\n" (map mkInternalInputRulesV6 internalZones);
 
     dropLanBridgeTaggedDhcpRules =
       if lanZoneInterface == lanBridge
@@ -140,9 +179,10 @@
               chain input {
                 type filter hook input priority 0; policy drop;
                 iifname "lo" accept
+                ct state established,related accept
                 ${dropLanBridgeTaggedDhcpRules}
                 ${bridgeLanInputCompatRule}
-                ${inputInternalRules}
+                ${inputInternalRulesV4}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" ip protocol icmp accept
                 iifname "${wan}" tcp dport { 80, 443 } accept
@@ -176,8 +216,9 @@
               chain input {
                 type filter hook input priority 0; policy drop;
                 iifname "lo" accept
+                ct state established,related accept
                 ${bridgeLanInputCompatRule}
-                ${inputInternalRules}
+                ${inputInternalRulesV6}
                 iifname "zt*" accept
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" icmpv6 type {
