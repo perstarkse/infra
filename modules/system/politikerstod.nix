@@ -24,12 +24,14 @@
     serviceFirewallSourceRules = lib.concatMapStringsSep "\n" (source:
       if builtins.match ".*:.*" source != null
       then "ip6 saddr ${source} tcp dport ${toString cfg.port} accept"
-      else "ip saddr ${source} tcp dport ${toString cfg.port} accept") cfg.allowedFirewallSources;
+      else "ip saddr ${source} tcp dport ${toString cfg.port} accept")
+    cfg.allowedFirewallSources;
 
     dbProxyFirewallSourceRules = lib.concatMapStringsSep "\n" (source:
       if builtins.match ".*:.*" source != null
       then "ip6 saddr ${source} tcp dport 5432 accept"
-      else "ip saddr ${source} tcp dport 5432 accept") cfg.database.allowedHosts;
+      else "ip saddr ${source} tcp dport 5432 accept")
+    cfg.database.allowedHosts;
   in {
     options.my.politikerstod = {
       enable = lib.mkEnableOption "Enable Politikerstöd Service";
