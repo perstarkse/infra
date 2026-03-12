@@ -347,6 +347,8 @@
         '';
       };
     };
+
+    systemd.services.restic-backups-failing-bad.serviceConfig.TimeoutStartSec = "30s";
   };
 in {
   backups-create-restore = pkgs.testers.runNixOSTest {
@@ -433,7 +435,7 @@ in {
       machine.succeed("printf 'should-not-backup\\n' > /var/lib/testdata/failing-source/value.txt")
 
       machine.fail("systemctl start restic-backups-failing-bad.service")
-      machine.wait_until_succeeds("systemctl show -p Result --value restic-backups-failing-bad.service | grep -q '^exit-code$'", timeout=120)
+      machine.wait_until_succeeds("systemctl show -p ActiveState --value restic-backups-failing-bad.service | grep -q '^failed$'", timeout=60)
     '';
   };
 }
