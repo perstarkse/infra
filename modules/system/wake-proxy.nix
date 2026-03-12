@@ -11,7 +11,8 @@
     firewallSourceRules = lib.concatMapStringsSep "\n" (source:
       if builtins.match ".*:.*" source != null
       then "ip6 saddr ${source} tcp dport ${toString cfg.port} accept"
-      else "ip saddr ${source} tcp dport ${toString cfg.port} accept") cfg.allowedFirewallSources;
+      else "ip saddr ${source} tcp dport ${toString cfg.port} accept")
+    cfg.allowedFirewallSources;
   in {
     options.my.wake-proxy = {
       enable = lib.mkEnableOption "Wake-on-LAN authenticated reverse proxy";
