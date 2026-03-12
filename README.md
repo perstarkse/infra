@@ -99,7 +99,7 @@ Notes:
 Use the `machine-update` command for deploying machines with automatic preflight checks:
 
 ```bash
-machine-update <machine> [options]
+machine-update <machine> [<machine> ...] [options]
 ```
 
 ### Preflight checks by profile
@@ -127,6 +127,7 @@ All machines always run `nix fmt` + treefmt verification first (unless `--force`
 - `--explain` — Print resolved profile/check plan and exit.
 - `--base-ref <ref>` — Baseline for dynamic lockfile detectors.
 - `--clan-help` — Show upstream `clan machines update` help and exit.
+- Multiple machine names can be passed and will be deployed sequentially.
 - Extra Clan flags can be forwarded after `--`.
 
 ### Examples
@@ -147,6 +148,9 @@ machine-update io --explain
 # Deploy makemake (fast check only)
 machine-update makemake
 
+# Deploy two machines; overlapping checks run once
+machine-update ariel makemake
+
 # Deploy with extra Clan flags
 machine-update ariel -- --debug --host-key-check accept-new
 
@@ -162,8 +166,10 @@ Notes:
 - `io` is configured with `clan.core.deployment.requireExplicitUpdate = true`, so broad updates do not include it by accident.
 - `io` always gets mandatory `check-profile-io-final` (router + io-predeploy) regardless of inventory tags.
 - `--force` is blocked for `io` to prevent bypassing critical safety checks.
+- In multi-machine mode, `--force` must be allowed for every selected machine.
 - `machine-update` validates machine names before running checks; unknown names fail fast.
 - Multiple `check-profile-*` tags on a machine run as a union of checks.
+- Multiple machines run the deduplicated union of all required checks once before deploy.
 - Dynamic lockfile detectors can append checks (e.g. `politikerstod` input changes add `politikerstod-checks`).
 - Detector warnings are non-blocking and shown before checks.
 
