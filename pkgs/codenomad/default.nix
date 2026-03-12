@@ -5,11 +5,11 @@
 }:
 buildNpmPackage rec {
   pname = "codenomad";
-  version = "0.11.4";
+  version = "0.12.1";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@neuralnomads/codenomad/-/codenomad-${version}.tgz";
-    hash = "sha512-KFOhd/VAuKMLmLG4FVE8MiE9NxyoR608U1BQqAi9SufjrPe7VENmcFBpEwdiwY46kjRohifV15q4szqLwqFKIQ==";
+    hash = "sha512-L9f7YAXTiS7YUpUvLBGBtJcvy0nwjSKPeaGsMPmjdZl8bksFMuYtVZJ57Z18m3JGqhYXcB8H2WL2FR3jXuXZSw==";
   };
   sourceRoot = "package";
 
@@ -19,7 +19,7 @@ buildNpmPackage rec {
       --replace-fail '"dependencies": {' $'"dependencies": {\n    "@opencode-ai/plugin": "1.2.4",'
   '';
 
-  npmDepsHash = "sha256-KsPePf9/xLTk3z33d8kqaOPqHk8w7DUezfdtWcw4928=";
+  npmDepsHash = "sha256-szB6lYnJXu4l88q2E122IooHW/6vzmR6uRLzS/00+6M=";
   dontNpmBuild = true;
 
   meta = {
