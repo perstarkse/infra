@@ -30,6 +30,7 @@
       sunshine
       atuin
       codenomad
+      openchamber
       rclone-s3
       auto-suspend
       wireguard-tunnels
@@ -321,7 +322,7 @@
     atuin.enable = true;
 
     codenomad = {
-      enable = true;
+      enable = false;
       runAsMainUser = true;
       listenAddress = "0.0.0.0";
       port = 9898;
@@ -330,6 +331,17 @@
       workspaceRoot = "/home/p/repos";
       manageWorkspaceRoot = false;
       openFirewall = true;
+    };
+
+    openchamber = {
+      enable = true;
+      runAsMainUser = true;
+      listenAddress = "0.0.0.0";
+      port = 3000;
+      projectId = "charon";
+      projectPath = "/home/p/repos";
+      projectLabel = "charon";
+      allowedFirewallSources = ["10.0.0.1"];
     };
 
     # Auto-suspend when system is idle (load < threshold + no user input)

@@ -64,8 +64,8 @@
       port = 8091;
 
       upstreamHost = "10.0.0.15";
-      upstreamPort = 9898;
-      healthPath = "/api/meta";
+      upstreamPort = 3000;
+      healthPath = "/health";
 
       wolMac = "f0:2f:74:de:91:0a";
       wolBroadcastIp = "10.0.0.255";
