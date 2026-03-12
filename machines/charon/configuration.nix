@@ -347,7 +347,7 @@
     # Auto-suspend when system is idle (load < threshold + no user input)
     autoSuspend = {
       enable = true;
-      checkIntervalMinutes = 5;
+      checkIntervalMinutes = 6;
       requiredIdleChecks = 3;
       loadThreshold = "2.0";
       userIdleSeconds = 600;
