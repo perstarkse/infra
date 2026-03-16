@@ -9,7 +9,7 @@
     };
     prompts = {
       env = {
-        description = "Wake proxy env file (WOL_PROXY_PASSWORD_HASH=... and WOL_PROXY_SESSION_SECRET=...)";
+        description = "Wake proxy env file (WAKEPROXY_PASSWORD_HASH=... and WAKEPROXY_SESSION_SECRET=...)";
         persist = true;
         type = "hidden";
       };
@@ -26,9 +26,9 @@
               session_secret=$(head -c 32 /dev/urandom | base64 -w0)
               cat > "$out/env" <<EOF
       # Auto-generated template for wake-proxy.
-      # Replace WOL_PROXY_PASSWORD_HASH with a real Argon2 hash before deploy.
-      WOL_PROXY_PASSWORD_HASH=REPLACE_WITH_ARGON2_HASH
-      WOL_PROXY_SESSION_SECRET=$session_secret
+      # Replace WAKEPROXY_PASSWORD_HASH with a real Argon2 hash before deploy.
+      WAKEPROXY_PASSWORD_HASH=REPLACE_WITH_ARGON2_HASH
+      WAKEPROXY_SESSION_SECRET=$session_secret
       EOF
             fi
     '';

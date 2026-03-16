@@ -28,6 +28,7 @@
       atuin
       webdav-garage
       paperless
+      storage-alerts
     ]
     ++ [ctx.inputs.nixTopology.nixosModules.default]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
@@ -38,11 +39,28 @@
     };
 
     listenNetworkAddress = "10.0.0.10";
+
+    storage-alerts = {
+      enable = true;
+      mounts = [
+        "/mnt/18tb"
+        "/mnt/4tb"
+        "/storage"
+      ];
+      mdadm.enable = true;
+      ntfy = {
+        serverUrl = "http://10.0.0.1:2586";
+        topic = "storage-alerts";
+        tokenFile = config.my.secrets.getPath "ntfy" "storage-token";
+        tags = ["warning" "floppy_disk" "makemake"];
+      };
+    };
+
     secrets = {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage" "garage-s3" "paperless"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage" "garage-s3" "paperless" "ntfy"];
       };
 
       generateManifest = false;
