@@ -32,6 +32,24 @@
       then "ip6 saddr ${source} tcp dport 5432 accept"
       else "ip saddr ${source} tcp dport 5432 accept")
     cfg.database.allowedHosts;
+
+    mkFirewallExtraCommands = port: sources: let
+      allowRules =
+        map (
+          source:
+            if builtins.match ".*:.*" source != null
+            then "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp -s ${source} --dport ${toString port} -j ACCEPT"
+            else "${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp -s ${source} --dport ${toString port} -j ACCEPT"
+        )
+        sources;
+    in
+      lib.concatStringsSep "\n" (
+        allowRules
+        ++ [
+          "${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp --dport ${toString port} -j DROP"
+          "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp --dport ${toString port} -j DROP"
+        ]
+      );
   in {
     options.my.politikerstod = {
       enable = lib.mkEnableOption "Enable Politikerstöd Service";
@@ -301,6 +319,15 @@
           (lib.mkIf (cfg.database.enableContainer && cfg.database.allowedHosts != []) (lib.mkAfter ''
             ${dbProxyFirewallSourceRules}
             tcp dport 5432 drop
+          ''))
+        ];
+
+        extraCommands = lib.mkMerge [
+          (lib.mkIf (!config.networking.nftables.enable && cfg.allowedFirewallSources != []) (lib.mkAfter ''
+            ${mkFirewallExtraCommands cfg.port cfg.allowedFirewallSources}
+          ''))
+          (lib.mkIf (!config.networking.nftables.enable && cfg.database.enableContainer && cfg.database.allowedHosts != []) (lib.mkAfter ''
+            ${mkFirewallExtraCommands 5432 cfg.database.allowedHosts}
           ''))
         ];
       };

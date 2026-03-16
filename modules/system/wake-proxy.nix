@@ -21,7 +21,7 @@
         type = lib.types.package;
         default = defaultPackage;
         defaultText = lib.literalExpression "inputs.wol-web-proxy.packages.${pkgs.stdenv.hostPlatform.system}.default";
-        description = "Package containing the wol-web-proxy binary.";
+        description = "Package containing the wakeproxy binary.";
       };
 
       user = lib.mkOption {
@@ -99,10 +99,10 @@
         description = "Seconds to cache ready state to avoid redundant probes.";
       };
 
-      edgeWaitTimeout = lib.mkOption {
+      wakePollIntervalMs = lib.mkOption {
         type = lib.types.int;
-        default = 20;
-        description = "Max seconds to wait per request before returning still-waking page.";
+        default = 2000;
+        description = "Milliseconds between client-side wake status polls.";
       };
 
       sessionTtl = lib.mkOption {
@@ -204,25 +204,25 @@
           RestartSec = "5s";
 
           Environment = [
-            "WOL_PROXY_UPSTREAM_HOST=${cfg.upstreamHost}"
-            "WOL_PROXY_UPSTREAM_PORT=${toString cfg.upstreamPort}"
-            "WOL_PROXY_HEALTH_PATH=${cfg.healthPath}"
-            "WOL_PROXY_WOL_MAC=${cfg.wolMac}"
-            "WOL_PROXY_WOL_BROADCAST_IP=${cfg.wolBroadcastIp}"
-            "WOL_PROXY_WOL_BROADCAST_PORT=${toString cfg.wolBroadcastPort}"
-            "WOL_PROXY_WAKE_TIMEOUT=${toString cfg.wakeTimeout}"
-            "WOL_PROXY_POLL_INTERVAL=${toString cfg.pollInterval}"
-            "WOL_PROXY_READY_CACHE_TTL=${toString cfg.readyCacheTtl}"
-            "WOL_PROXY_EDGE_WAIT_TIMEOUT=${toString cfg.edgeWaitTimeout}"
-            "WOL_PROXY_BIND_ADDR=${cfg.listenAddress}:${toString cfg.port}"
-            "WOL_PROXY_SESSION_TTL_SECS=${toString cfg.sessionTtl}"
-            "WOL_PROXY_COOKIE_SECURE=${lib.boolToString cfg.cookieSecure}"
-            "WOL_PROXY_LOGIN_MAX_FAILURES=${toString cfg.loginMaxFailures}"
-            "WOL_PROXY_LOGIN_LOCKOUT_SECS=${toString cfg.loginLockoutSecs}"
-            "WOL_PROXY_LOGIN_WINDOW_SECS=${toString cfg.loginWindowSecs}"
-            "WOL_PROXY_LOGIN_MAX_TRACKED_IPS=${toString cfg.loginMaxTrackedIps}"
-            "WOL_PROXY_TRUST_PROXY_HEADERS=${lib.boolToString cfg.trustProxyHeaders}"
-            "WOL_PROXY_TRUSTED_PROXY_IPS=${lib.concatStringsSep "," cfg.trustedProxyIps}"
+            "WAKEPROXY_UPSTREAM_HOST=${cfg.upstreamHost}"
+            "WAKEPROXY_UPSTREAM_PORT=${toString cfg.upstreamPort}"
+            "WAKEPROXY_HEALTH_PATH=${cfg.healthPath}"
+            "WAKEPROXY_WOL_MAC=${cfg.wolMac}"
+            "WAKEPROXY_WOL_BROADCAST_IP=${cfg.wolBroadcastIp}"
+            "WAKEPROXY_WOL_BROADCAST_PORT=${toString cfg.wolBroadcastPort}"
+            "WAKEPROXY_WAKE_TIMEOUT=${toString cfg.wakeTimeout}"
+            "WAKEPROXY_POLL_INTERVAL=${toString cfg.pollInterval}"
+            "WAKEPROXY_READY_CACHE_TTL=${toString cfg.readyCacheTtl}"
+            "WAKEPROXY_WAKE_POLL_INTERVAL_MS=${toString cfg.wakePollIntervalMs}"
+            "WAKEPROXY_BIND_ADDR=${cfg.listenAddress}:${toString cfg.port}"
+            "WAKEPROXY_SESSION_TTL_SECS=${toString cfg.sessionTtl}"
+            "WAKEPROXY_COOKIE_SECURE=${lib.boolToString cfg.cookieSecure}"
+            "WAKEPROXY_LOGIN_MAX_FAILURES=${toString cfg.loginMaxFailures}"
+            "WAKEPROXY_LOGIN_LOCKOUT_SECS=${toString cfg.loginLockoutSecs}"
+            "WAKEPROXY_LOGIN_WINDOW_SECS=${toString cfg.loginWindowSecs}"
+            "WAKEPROXY_LOGIN_MAX_TRACKED_IPS=${toString cfg.loginMaxTrackedIps}"
+            "WAKEPROXY_TRUST_PROXY_HEADERS=${lib.boolToString cfg.trustProxyHeaders}"
+            "WAKEPROXY_TRUSTED_PROXY_IPS=${lib.concatStringsSep "," cfg.trustedProxyIps}"
           ];
           EnvironmentFile = [envFile];
 

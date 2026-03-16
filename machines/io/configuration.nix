@@ -19,6 +19,7 @@
       heartbeat
       home-assistant
       k3s
+      ntfy
       unifi-controller
       frigate
       garage
@@ -73,7 +74,7 @@
 
       wakeTimeout = 180;
       pollInterval = 2;
-      edgeWaitTimeout = 20;
+      wakePollIntervalMs = 2000;
       readyCacheTtl = 5;
       trustProxyHeaders = true;
       trustedProxyIps = [
@@ -85,11 +86,22 @@
 
     heartbeat.push.enable = true;
 
+    ntfy = {
+      enable = true;
+      address = "10.0.0.1";
+      baseUrl = "https://ntfy.lan.stark.pub";
+      secretName = "ntfy";
+      settings = {
+        behind-proxy = true;
+        upstream-base-url = "https://ntfy.sh";
+      };
+    };
+
     secrets = {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "heartbeat"];
+        includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "heartbeat" "ntfy"];
       };
 
       generateManifest = false;
@@ -317,6 +329,10 @@
           name = "wake.stark.pub";
           target = "10.0.0.1";
         }
+        {
+          name = "ntfy.lan.stark.pub";
+          target = "10.0.0.1";
+        }
       ];
 
       dhcp = {
@@ -538,6 +554,21 @@
               dnsProvider = "cloudflare";
               environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
             };
+          }
+          {
+            domain = "ntfy.lan.stark.pub";
+            target = "10.0.0.1";
+            port = 2586;
+            websockets = true;
+            lanOnly = true;
+            useWildcard = "lanstark";
+            extraConfig = ''
+              client_max_body_size 0;
+              proxy_buffering off;
+              proxy_request_buffering off;
+              proxy_read_timeout 1h;
+              proxy_send_timeout 1h;
+            '';
           }
         ];
       };

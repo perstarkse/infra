@@ -312,9 +312,8 @@
 
       "test-secrets/wake-proxy/env" = {
         text = ''
-          WOL_PROXY_ADMIN_USERNAME=admin
-          WOL_PROXY_ADMIN_PASSWORD=password
-          WOL_PROXY_SESSION_SECRET=0123456789abcdef0123456789abcdef
+          WAKEPROXY_PASSWORD_HASH=$argon2id$v=19$m=19456,t=2,p=1$dGVzdHRlc3R0ZXN0dGVzdA$0xDPfypM3Y76kJumWn95v9PoW7A1WeNseyX2VINeodQ
+          WAKEPROXY_SESSION_SECRET=0123456789abcdef0123456789abcdef
         '';
         mode = "0400";
       };
