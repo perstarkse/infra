@@ -1876,11 +1876,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1773148936,
-        "narHash": "sha256-uU2mUcx6zamjEoWo83FMxBV+u/qw7KyB1LSxsDw40oA=",
+        "lastModified": 1774260015,
+        "narHash": "sha256-sj8oZc4i4NuGPrxqRSViBLVvRPly07vCzJZxXE5XP7U=",
         "ref": "refs/heads/main",
-        "rev": "6fde308c42f070a71b0310ea774128ec5a9ba23c",
-        "revCount": 19,
+        "rev": "5340dd4b8fafc8dd4b0eb63e730f8b1d748080ec",
+        "revCount": 21,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/wol-web-proxy.git"
       },

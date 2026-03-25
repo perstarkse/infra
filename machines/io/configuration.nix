@@ -37,6 +37,32 @@
   time.timeZone = "Europe/Stockholm";
   nixpkgs.config.allowUnfree = true;
 
+  services.wakeproxy = {
+    enable = true;
+    listenAddress = "10.0.0.1";
+    port = 8091;
+
+    upstreamHost = "10.0.0.15";
+    upstreamPort = 3000;
+    healthPath = "/health";
+
+    wolMac = "f0:2f:74:de:91:0a";
+    wolBroadcastIp = "10.0.0.255";
+    wolBroadcastPort = 9;
+
+    wakeTimeout = 180;
+    pollInterval = 2;
+    wakePollIntervalMs = 2000;
+    readyCacheTtl = 5;
+    trustProxyHeaders = true;
+    trustedProxyIps = [
+      "127.0.0.1"
+      "::1"
+      "10.0.0.1"
+    ];
+    passwordHashFile = config.my.secrets.getPath "wake-proxy" "env";
+  };
+
   my = {
     listenNetworkAddress = "10.0.0.1"; # Internal LAN IP
 
@@ -57,31 +83,6 @@
     atuin = {
       enable = true;
       syncAddress = "http://10.0.0.10:8888";
-    };
-
-    wake-proxy = {
-      enable = true;
-      listenAddress = "10.0.0.1";
-      port = 8091;
-
-      upstreamHost = "10.0.0.15";
-      upstreamPort = 3000;
-      healthPath = "/health";
-
-      wolMac = "f0:2f:74:de:91:0a";
-      wolBroadcastIp = "10.0.0.255";
-      wolBroadcastPort = 9;
-
-      wakeTimeout = 180;
-      pollInterval = 2;
-      wakePollIntervalMs = 2000;
-      readyCacheTtl = 5;
-      trustProxyHeaders = true;
-      trustedProxyIps = [
-        "127.0.0.1"
-        "::1"
-        "10.0.0.1"
-      ];
     };
 
     heartbeat.push.enable = true;
@@ -106,6 +107,10 @@
 
       generateManifest = false;
       allowReadAccess = [
+        {
+          readers = ["wake-proxy"];
+          path = config.my.secrets.getPath "wake-proxy" "env";
+        }
         {
           readers = ["systemd-network"];
           path = config.my.secrets.getPath "wireguard-server" "private-key";
