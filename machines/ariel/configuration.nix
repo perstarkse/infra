@@ -134,7 +134,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "openai" "openrouter" "user" "b2"];
+        includeTags = ["aws" "openai" "openrouter" "user" "b2" "wifi"];
       };
 
       exposeUserSecrets = [
@@ -198,17 +198,34 @@
     firewall.trustedInterfaces = ["zt+"];
     networkmanager.enable = lib.mkForce true;
 
-    wireless.enable = true;
-    wireless.networks = {
-      "gärdestorp-2" = {
-        psk = "denna-kod-for-wifi";
-        priority = 5;
-      };
-      "gärdestorp" = {
-        psk = "denna-kod-for-wifi";
-        priority = 10;
-      };
-    };
+    # wpa_supplicant managed at runtime to keep PSK out of Nix store
+    wireless.enable = false;
+  };
+
+  # Generate wpa_supplicant.conf at runtime from secrets
+  systemd.services.generate-wpa-conf = {
+    description = "Generate wpa_supplicant.conf from secrets";
+    wantedBy = ["multi-user.target"];
+    before = ["wpa-supplicant.service"];
+    script = ''
+      PSK=$(cat ${config.my.secrets.getPath "wifi-psk" "psk"})
+      cat > /etc/wpa_supplicant.conf <<EOF
+      ctrl_interface=/run/wpa_supplicant
+      update_config=1
+      network={
+        ssid="g\xe5rdestorp"
+        psk="$PSK"
+        priority=10
+      }
+      network={
+        ssid="g\xe5rdestorp-2"
+        psk="$PSK"
+        priority=5
+      }
+      EOF
+      chmod 600 /etc/wpa_supplicant.conf
+    '';
+    serviceConfig.Type = "oneshot";
   };
 
   nixpkgs.config.nvidia.acceptLicense = true;
