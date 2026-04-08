@@ -84,7 +84,6 @@
 
     networking = {
       networkmanager.enable = false;
-      enableIPv6 = true;
     };
 
     nix.settings = {
