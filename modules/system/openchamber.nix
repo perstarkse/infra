@@ -140,8 +140,8 @@ _: {
       allowedFirewallSources = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [];
-        example = ["10.0.0.1"];
-        description = "Source IPs/CIDRs allowed to access OpenChamber. When non-empty, only these sources are accepted.";
+        example = ["10.0.0.10" "10.0.0.0/24"];
+        description = "Source IPs/CIDRs allowed to access OpenChamber. Leave empty to allow all sources allowed by openFirewall; entries are matched literally, so use CIDRs like 10.0.0.0/24 rather than 0.0.0.0 when you mean a whole network.";
       };
 
       extraEnvironment = lib.mkOption {
