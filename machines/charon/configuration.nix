@@ -24,8 +24,8 @@
       intel-gpu
       # nvidia
       docker
+      attic-cache
       steam
-      k3s
       backups
       sunshine
       atuin
@@ -203,11 +203,20 @@
   my = {
     listenNetworkAddress = "10.0.0.15";
 
+    attic-cache.client = {
+      enable = true;
+      endpoint = "http://10.0.0.10:8092";
+      serverName = "makemake";
+      cacheName = "heliosphere";
+      autoPush = true;
+      tokenFileName = "charon-token";
+    };
+
     secrets = {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "wake-proxy"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "wake-proxy" "attic-cache"];
       };
 
       exposeUserSecrets = [
@@ -254,7 +263,7 @@
         }
       ];
 
-      generateManifest = true;
+      generateManifest = false;
     };
 
     rclone-s3 = {
@@ -338,13 +347,6 @@
       kvmfrStaticSizeMb = 128;
     };
 
-    k3s = {
-      enable = false;
-      initServer = false;
-      serverAddrs = ["https://10.0.0.1:6443"];
-      tlsSan = "10.0.0.1";
-    };
-
     greetd = {
       enable = true;
       greeting = "Enter the heliosphere via charon!";
@@ -378,7 +380,7 @@
       projectId = "charon";
       projectPath = "/home/p/repos";
       projectLabel = "charon";
-      allowedFirewallSources = ["10.0.0.1"];
+      openFirewall = true;
     };
 
     # Auto-suspend when system is idle (load < threshold + no user input)
@@ -427,7 +429,7 @@
     pkgs.unstable.playwright-mcp
     bun
     google-cloud-sdk
-    amp-cli
+    unstable.amp-cli
   ];
 
   networking = {
@@ -435,7 +437,7 @@
     firewall.allowPing = true;
     # Allow localsend receive port
     # Allow 3000/1 and 5000/1 for dev server and tooling
-    firewall.allowedTCPPorts = [53317 3000 3001 5000 5001];
+    firewall.allowedTCPPorts = [53317 3001 5000 5001];
 
     interfaces.enp4s0.ipv4.routes = [
       {
@@ -460,6 +462,13 @@
       };
     };
   };
+
+  hardware.graphics.extraPackages = lib.mkForce (with pkgs.unstable; [
+    intel-media-driver
+    intel-compute-runtime
+    vpl-gpu-rt
+    level-zero
+  ]);
 
   security = {
     polkit.enable = true;
