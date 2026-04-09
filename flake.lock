@@ -1422,6 +1422,7 @@
         "sway-focus-flash": "sway-focus-flash",
         "treefmt-nix": "treefmt-nix_2",
         "vars-helper": "vars-helper",
+        "vpn-confinement": "vpn-confinement",
         "wol-web-proxy": "wol-web-proxy"
       }
     },
@@ -1854,6 +1855,21 @@
         "type": "github"
       }
     },
+    "vpn-confinement": {
+      "locked": {
+        "lastModified": 1767604552,
+        "narHash": "sha256-FddhMxnc99KYOZ/S3YNqtDSoxisIhVtJ7L4s8XD2u0A=",
+        "owner": "Maroka-chan",
+        "repo": "VPN-Confinement",
+        "rev": "a6b2da727853886876fd1081d6bb2880752937f3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Maroka-chan",
+        "repo": "VPN-Confinement",
+        "type": "github"
+      }
+    },
     "vpnconfinement": {
       "locked": {
         "lastModified": 1767604552,
@@ -1876,11 +1892,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1774260015,
-        "narHash": "sha256-sj8oZc4i4NuGPrxqRSViBLVvRPly07vCzJZxXE5XP7U=",
+        "lastModified": 1774862350,
+        "narHash": "sha256-3LymmMSNHUVtttonaIy9rlC//KgvVoPZv7JhVABqlQA=",
         "ref": "refs/heads/main",
-        "rev": "5340dd4b8fafc8dd4b0eb63e730f8b1d748080ec",
-        "revCount": 21,
+        "rev": "635d72a04ed679687df6d40d10248da747fdfb0f",
+        "revCount": 22,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/wol-web-proxy.git"
       },

@@ -8,4 +8,11 @@
   ];
 
   systems = ["x86_64-linux"];
+
+  # Wrap vpn-confinement to set networking.enableIPv6 before it accesses it
+  # (vpn-confinement has a bug: it reads config.networking.enableIPv6 at module load time)
+  flake.nixosModules.vpn-confinement = {
+    imports = [inputs.vpn-confinement.nixosModules.default];
+    networking.enableIPv6 = true;
+  };
 }

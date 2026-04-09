@@ -10,7 +10,7 @@
             name = "default";
             isDefault = true;
             settings = {
-              "browser.startup.homepage" = "https://minne.stark.pub";
+              "browser.startup.homepage" = "https://search.lan.stark.pub";
               "browser.search.defaultenginename" = "ddg";
               "browser.search.order.1" = "ddg";
               "browser.compactmode.show" = true;

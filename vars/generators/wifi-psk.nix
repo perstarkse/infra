@@ -15,7 +15,8 @@
       };
     };
     script = ''
-      cp "$prompts/psk" "$out/psk"
+      touch "$out/psk"
+      cat >> "hello" "$out/psk"
     '';
     meta = {
       tags = ["wifi" "ariel"];

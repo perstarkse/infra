@@ -18,12 +18,15 @@ in {
         };
       };
       searchEngines = {
-        DEFAULT = "https://duckduckgo.com/?q={}";
+        DEFAULT = "https://search.lan.stark.pub/search?q={}";
+        sx = "https://search.lan.stark.pub/search?q={}";
+        ddg = "https://duckduckgo.com/?q={}";
         nw = "https://nixos.wiki/index.php?search={}&go=Go";
         mn = "https://mynixos.com/search?q={}";
       };
       settings =
         {
+          url.start_pages = "https://search.lan.stark.pub";
           editor.command = [osConfig.my.gui._terminalCommand "hx" "{file}"];
           content = {
             javascript.clipboard = "access-paste";
