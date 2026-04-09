@@ -13,6 +13,7 @@
       interception-tools
       system-stylix
       docker
+      attic-cache
       vaultwarden
       openwebui
       surrealdb
@@ -20,7 +21,6 @@
       minne-saas
       minecraft
       backups
-      k3s
       garage
       nous
       politikerstod
@@ -29,11 +29,22 @@
       webdav-garage
       paperless
       storage-alerts
+      searxng
+      wireguard-tunnels
     ]
     ++ [ctx.inputs.nixTopology.nixosModules.default]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
   my = {
+    attic-cache.server = {
+      enable = true;
+      listenAddress = "10.0.0.10";
+      port = 8092;
+      stateDir = "/var/lib/atticd";
+      storageDir = "/storage/attic/storage";
+      cacheName = "heliosphere";
+    };
+
     mainUser = {
       name = "p";
     };
@@ -60,7 +71,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage" "garage-s3" "paperless" "ntfy"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "searx" "wireguard-tunnels"];
       };
 
       generateManifest = false;
@@ -112,15 +123,6 @@
           type = "garage-s3";
         };
       };
-    };
-
-    k3s = {
-      enable = false;
-      initServer = true;
-      tlsSan = "10.0.0.10";
-      # disable = ["servicelb" "traefik"];
-      extraFlags = [
-      ];
     };
 
     vaultwarden = {
@@ -308,6 +310,40 @@
       };
     };
 
+    # SearXNG metasearch engine (VPN-routed)
+    searxng = {
+      enable = true;
+      port = 8088;
+      address = "127.0.0.1";
+      baseUrl = "https://search.lan.stark.pub";
+      # address = "10.0.0.10";
+      vpn = {
+        enable = true;
+        wireguardConfigFile = config.my.secrets.getPath "wireguard-tunnels-genome-worktree-zenith" "wg.conf";
+        accessibleFrom = [
+          "10.0.0.0/24"
+          "192.168.0.0/24"
+          "127.0.0.0/8"
+        ];
+        portMappings = [
+          {
+            from = 8088;
+            to = 8088;
+          }
+        ];
+      };
+    };
+
+    # WireGuard tunnels (declares the secret used by searxng)
+    wireguardTunnels = {
+      enable = true;
+      tunnels = {
+        genome-worktree-zenith = {
+          activationPolicy = "manual";
+        };
+      };
+    };
+
     minecraft = {
       enable = false;
       eula = true;
@@ -414,6 +450,10 @@
     ip saddr 10.0.0.1 tcp dport 8081 accept
     tcp dport 8081 drop
   '';
+
+  networking = {
+    firewall.allowedTCPPorts = [8088];
+  };
 
   # Centralized logging to router for fail2ban
   services.journald.upload = {

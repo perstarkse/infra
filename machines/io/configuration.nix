@@ -14,11 +14,11 @@
       system-stylix
       shared
       options
+      attic-cache
       router
       wake-proxy
       heartbeat
       home-assistant
-      k3s
       ntfy
       unifi-controller
       frigate
@@ -66,6 +66,13 @@
   my = {
     listenNetworkAddress = "10.0.0.1"; # Internal LAN IP
 
+    attic-cache.client = {
+      enable = true;
+      endpoint = "http://10.0.0.10:8092";
+      serverName = "makemake";
+      cacheName = "heliosphere";
+    };
+
     mainUser = {
       name = "p";
     };
@@ -102,7 +109,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["ddclient" "k3s" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "heartbeat" "ntfy"];
+        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "heartbeat" "ntfy" "attic-cache"];
       };
 
       generateManifest = false;
@@ -336,6 +343,10 @@
         }
         {
           name = "ntfy.lan.stark.pub";
+          target = "10.0.0.1";
+        }
+        {
+          name = "search.lan.stark.pub";
           target = "10.0.0.1";
         }
       ];
@@ -574,6 +585,14 @@
               proxy_read_timeout 1h;
               proxy_send_timeout 1h;
             '';
+          }
+          {
+            domain = "search.lan.stark.pub";
+            target = "makemake";
+            port = 8088;
+            websockets = false;
+            lanOnly = true;
+            useWildcard = "lanstark";
           }
         ];
       };

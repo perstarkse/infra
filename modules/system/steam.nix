@@ -3,7 +3,7 @@
     config = {
       programs.steam = {
         enable = true;
-        extraCompatPackages = with pkgs; [
+        extraCompatPackages = with pkgs.unstable; [
           proton-ge-bin
         ];
         # remotePlay.openFirewall = true;
