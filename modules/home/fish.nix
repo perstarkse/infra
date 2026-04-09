@@ -74,6 +74,269 @@
           end
           nix shell $refs
         '';
+        ctllm-rs = ''
+          # Usage: ctllm LOCATION [FILETYPE] [--strip-rust-tests]
+          if test (count $argv) -lt 1
+            echo "Usage: ctllm LOCATION [FILETYPE] [--strip-rust-tests]"
+            echo "Examples:"
+            echo "  ctllm ."
+            echo "  ctllm ./src nix"
+            echo "  ctllm . rs --strip-rust-tests"
+            echo "  ctllm . --strip-rust-tests"
+            return 1
+          end
+
+          set location ""
+          set filetype "*"
+          set strip_rust_tests 0
+
+          for arg in $argv
+            switch $arg
+              case --strip-rust-tests
+                set strip_rust_tests 1
+              case '*'
+                if test -z "$location"
+                  set location $arg
+                else if test "$filetype" = "*"
+                  set filetype $arg
+                else
+                  echo "Unexpected argument: $arg"
+                  return 1
+                end
+            end
+          end
+
+          if test -z "$location"
+            echo "Missing LOCATION"
+            return 1
+          end
+
+          if test "$filetype" = "*"
+            set find_pattern '*'
+            set auto_detect 1
+          else
+            set find_pattern "*.$filetype"
+            set auto_detect 0
+            set fence_lang $filetype
+          end
+
+          function __ctllm_detect_lang --argument-names path
+            set fname (basename $path)
+            set parts (string split -r -m1 . $fname)
+            set ext (string lower $parts[-1])
+
+            switch $ext
+              case nix
+                echo nix
+              case py
+                echo python
+              case js
+                echo javascript
+              case ts
+                echo typescript
+              case json
+                echo json
+              case yaml yml
+                echo yaml
+              case sh bash zsh fish
+                echo shell
+              case md
+                echo markdown
+              case html
+                echo html
+              case css
+                echo css
+              case go
+                echo go
+              case rs
+                echo rust
+              case c
+                echo c
+              case h
+                echo c
+              case cpp cxx cc
+                echo cpp
+              case java
+                echo java
+              case '*'
+                echo text
+            end
+          end
+
+          function __ctllm_strip_rust_tests --argument-names file
+            begin
+              printf "%s\n" \
+                "import sys" \
+                "from pathlib import Path" \
+                "" \
+                "path = Path(sys.argv[1])" \
+                "text = path.read_text(encoding=\"utf-8\", errors=\"replace\")" \
+                "" \
+                "def find_matching_brace(s, start):" \
+                "    depth = 0" \
+                "    i = start" \
+                "    in_string = False" \
+                "    string_char = \"\"" \
+                "    in_line_comment = False" \
+                "    in_block_comment = 0" \
+                "" \
+                "    while i < len(s):" \
+                "        ch = s[i]" \
+                "        nxt = s[i + 1] if i + 1 < len(s) else \"\"" \
+                "" \
+                "        if in_line_comment:" \
+                "            if ch == \"\\n\":" \
+                "                in_line_comment = False" \
+                "            i += 1" \
+                "            continue" \
+                "" \
+                "        if in_block_comment:" \
+                "            if ch == \"/\" and nxt == \"*\":" \
+                "                in_block_comment += 1" \
+                "                i += 2" \
+                "                continue" \
+                "            if ch == \"*\" and nxt == \"/\":" \
+                "                in_block_comment -= 1" \
+                "                i += 2" \
+                "                continue" \
+                "            i += 1" \
+                "            continue" \
+                "" \
+                "        if in_string:" \
+                "            if ch == \"\\\\\":" \
+                "                i += 2" \
+                "                continue" \
+                "            if ch == string_char:" \
+                "                in_string = False" \
+                "            i += 1" \
+                "            continue" \
+                "" \
+                "        if ch == \"/\" and nxt == \"/\":" \
+                "            in_line_comment = True" \
+                "            i += 2" \
+                "            continue" \
+                "" \
+                "        if ch == \"/\" and nxt == \"*\":" \
+                "            in_block_comment = 1" \
+                "            i += 2" \
+                "            continue" \
+                "" \
+                "        if ch == \"'\" or ch == '\"':" \
+                "            in_string = True" \
+                "            string_char = ch" \
+                "            i += 1" \
+                "            continue" \
+                "" \
+                "        if ch == \"{\":" \
+                "            depth += 1" \
+                "        elif ch == \"}\":" \
+                "            depth -= 1" \
+                "            if depth == 0:" \
+                "                return i" \
+                "" \
+                "        i += 1" \
+                "" \
+                "    return -1" \
+                "" \
+                "def strip_test_modules(s):" \
+                "    out = []" \
+                "    i = 0" \
+                "    needle = \"#[cfg(test)]\"" \
+                "" \
+                "    while i < len(s):" \
+                "        cfg = s.find(needle, i)" \
+                "        if cfg == -1:" \
+                "            out.append(s[i:])" \
+                "            break" \
+                "" \
+                "        line_start = s.rfind(\"\\n\", 0, cfg)" \
+                "        if line_start == -1:" \
+                "            line_start = 0" \
+                "        else:" \
+                "            line_start += 1" \
+                "" \
+                "        j = cfg + len(needle)" \
+                "        while j < len(s) and s[j] in \" \\t\\r\\n\":" \
+                "            j += 1" \
+                "" \
+                "        if s.startswith(\"pub mod tests\", j):" \
+                "            mod_start = j" \
+                "        elif s.startswith(\"mod tests\", j):" \
+                "            mod_start = j" \
+                "        else:" \
+                "            out.append(s[i:cfg + len(needle)])" \
+                "            i = cfg + len(needle)" \
+                "            continue" \
+                "" \
+                "        brace = s.find(\"{\", mod_start)" \
+                "        if brace == -1:" \
+                "            out.append(s[i:])" \
+                "            break" \
+                "" \
+                "        end = find_matching_brace(s, brace)" \
+                "        if end == -1:" \
+                "            out.append(s[i:])" \
+                "            break" \
+                "" \
+                "        end += 1" \
+                "        while end < len(s) and s[end] in \" \\t\":" \
+                "            end += 1" \
+                "        if end < len(s) and s[end] == \"\\n\":" \
+                "            end += 1" \
+                "" \
+                "        out.append(s[i:line_start])" \
+                "        i = end" \
+                "" \
+                "    return \"\".join(out)" \
+                "" \
+                "sys.stdout.write(strip_test_modules(text))"
+            end | python3 - "$file"
+          end
+
+          function __ctllm_print_file --argument-names file ext strip_rust_tests
+            if test "$ext" = "rs"; and test $strip_rust_tests -eq 1
+              __ctllm_strip_rust_tests $file
+            else
+              cat -- $file
+            end
+          end
+
+          find $location -type f -name "$find_pattern" -print0 | while read -z file
+            if string match -q "*/.git/*" $file
+              continue
+            end
+            if string match -q "*/node_modules/*" $file
+              continue
+            end
+            if string match -q "*/.direnv/*" $file
+              continue
+            end
+
+            set parts (string split -r -m1 . $file)
+            set ext (string lower $parts[-1])
+
+            switch $ext
+              case png jpg jpeg gif webp pdf
+                continue
+            end
+
+            if test (stat -c%s $file) -gt 1048576
+              continue
+            end
+
+            if test $auto_detect -eq 1
+              set fence_lang (__ctllm_detect_lang $file)
+            end
+
+            printf '\n# %s\n\n```%s\n' $file $fence_lang
+            __ctllm_print_file $file $ext $strip_rust_tests
+            printf '\n```\n'
+          end
+
+          functions -e __ctllm_detect_lang
+          functions -e __ctllm_strip_rust_tests
+          functions -e __ctllm_print_file
+        '';
         ctllm = ''
           # Usage: ctllm LOCATION [FILETYPE]
           if test (count $argv) -lt 1
