@@ -60,7 +60,11 @@ _: {
       realPodman=${lib.escapeShellArg "${config.virtualisation.podman.package}/bin/.podman-wrapped"}
       networkName=${lib.escapeShellArg macvlanCfg.networkName}
       containerIp=${lib.escapeShellArg macvlanCfg.ip}
-      hostAccessEnabled=${if hostAccessEnabled then "1" else "0"}
+      hostAccessEnabled=${
+        if hostAccessEnabled
+        then "1"
+        else "0"
+      }
       hostAccessIp=${lib.escapeShellArg (macvlanCfg.hostAccess.hostAddress or "")}
 
       cmd="''${1-}"
@@ -190,6 +194,44 @@ _: {
 
       exec ${config.security.wrapperDir}/su "''${orig[@]}"
     '';
+
+    installerRuntimePath = [
+      config.virtualisation.podman.package
+      pkgs.shadow
+      pkgs.coreutils
+      pkgs.gnugrep
+      pkgs.gnused
+      pkgs.iproute2
+    ];
+
+    installerRuntimeBindReadOnlyPaths = [
+      "${installerPodmanWrapper}:/usr/bin/podman"
+      "${installerSuWrapper}:/usr/bin/su"
+    ];
+
+    installerRuntimeEnvironment = [
+      "HOME=/home/uosserver"
+      "XDG_CONFIG_HOME=/home/uosserver/.config"
+      "XDG_RUNTIME_DIR=/run/user/${toString config.users.users.uosserver.uid}"
+      "DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null"
+      "CONTAINERS_CONF=/home/uosserver/.config/containers/containers.conf"
+      "DISCOVERY_CLIENT_LOG_PATH=/var/log/unifi-os"
+    ];
+
+    mkSocatProxyService = {
+      description,
+      execStart,
+      after ? ["network-online.target"],
+      wants ? after,
+    }: {
+      inherit description after wants;
+      wantedBy = ["multi-user.target"];
+      serviceConfig = {
+        ExecStart = execStart;
+        Restart = "always";
+        RestartSec = 1;
+      };
+    };
   in {
     options.services.unifi-os-server = {
       enable = mkEnableOption "UniFi OS Server container (podman)";
@@ -263,9 +305,7 @@ _: {
           parentInterface = mkOption {
             type = types.nullOr types.str;
             default =
-              if routerHelpers ? lanInterface
-              then routerHelpers.lanInterface
-              else routerHelpers.lanBridge or null;
+              routerHelpers.lanInterface or (routerHelpers.lanBridge or null);
             defaultText = lib.literalExpression "config.routerHelpers.lanInterface or config.routerHelpers.lanBridge or null";
             description = ''
               Parent interface or bridge for the macvlan network.
@@ -432,10 +472,7 @@ _: {
         after = ["network-online.target"];
         wants = ["network-online.target"];
         serviceConfig = {
-          ExecStart =
-            if useInstallerRuntime
-            then "${installerStateDir}/bin/discovery"
-            else "${cfg.package}/discovery";
+          ExecStart = "${cfg.package}/discovery";
           Restart = "always";
           RestartSec = 1;
           Environment = [
@@ -444,9 +481,8 @@ _: {
         };
       };
 
-      systemd.services.unifi-os-discovery-proxy = mkIf hostAccessEnabled {
+      systemd.services.unifi-os-discovery-proxy = mkIf hostAccessEnabled (mkSocatProxyService {
         description = "Expose UniFi discovery helper on host access IP";
-        wantedBy = ["multi-user.target"];
         after =
           ["network-online.target"]
           ++ lib.optionals useInstallerRuntime ["uosserver-runtime.service"]
@@ -454,12 +490,26 @@ _: {
         wants =
           ["network-online.target"]
           ++ lib.optionals (!useInstallerRuntime) ["unifi-os-discovery.service"];
-        serviceConfig = {
-          ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:11002,bind=${macvlanCfg.hostAccess.hostAddress},fork,reuseaddr TCP:127.0.0.1:11002";
-          Restart = "always";
-          RestartSec = 1;
-        };
-      };
+        execStart = "${pkgs.socat}/bin/socat TCP-LISTEN:11002,bind=${macvlanCfg.hostAccess.hostAddress},fork,reuseaddr TCP:127.0.0.1:11002";
+      });
+
+      systemd.services.uosserver-supervisor-proxy = mkIf (useInstallerRuntime && hostAccessEnabled) (mkSocatProxyService {
+        description = "Expose UniFi supervisor websocket on localhost";
+        after = [
+          "network-online.target"
+          "podman-unifi-os-server-network.service"
+        ];
+        execStart = "${pkgs.socat}/bin/socat TCP-LISTEN:11084,bind=127.0.0.1,fork,reuseaddr TCP:${macvlanCfg.ip}:11084";
+      });
+
+      systemd.services.uosserver-discovery-target-proxy = mkIf (useInstallerRuntime && hostAccessEnabled) (mkSocatProxyService {
+        description = "Expose UniFi discovery target on localhost";
+        after = [
+          "network-online.target"
+          "podman-unifi-os-server-network.service"
+        ];
+        execStart = "${pkgs.socat}/bin/socat UDP4-RECVFROM:10003,bind=127.0.0.1,fork UDP4-SENDTO:${macvlanCfg.ip}:10003";
+      });
 
       systemd.services.podman-unifi-os-server = mkIf (!useInstallerRuntime) {
         restartTriggers = [cfg.package];
@@ -520,7 +570,7 @@ _: {
       systemd.services.podman-unifi-os-server-network = {
         description = "Create UniFi OS Podman macvlan network";
         wantedBy = ["multi-user.target"];
-        before = ["podman-unifi-os-server.service"];
+        before = lib.optionals (!useInstallerRuntime) ["podman-unifi-os-server.service"];
         path = [config.virtualisation.podman.package];
         serviceConfig = {
           Type = "oneshot";
@@ -639,21 +689,18 @@ _: {
         after = [
           "network-online.target"
           "podman-unifi-os-server-network.service"
+          "uosserver-discovery-target-proxy.service"
+          "uosserver-supervisor-proxy.service"
           "uosserver-updater.service"
         ];
         wants = [
           "network-online.target"
           "podman-unifi-os-server-network.service"
+          "uosserver-discovery-target-proxy.service"
+          "uosserver-supervisor-proxy.service"
           "uosserver-updater.service"
         ];
-        path = [
-          config.virtualisation.podman.package
-          pkgs.shadow
-          pkgs.coreutils
-          pkgs.gnugrep
-          pkgs.gnused
-          pkgs.iproute2
-        ];
+        path = installerRuntimePath;
         preStart = ''
           uuid_file="${stateDir}/data/uos_uuid"
           if ! grep -qP '^[0-9a-f]{8}-[0-9a-f]{4}-5' "$uuid_file" 2>/dev/null; then
@@ -697,6 +744,40 @@ _: {
           if ! ${config.virtualisation.podman.package}/bin/podman image exists ${lib.escapeShellArg cfg.imageTag}; then
             ${config.virtualisation.podman.package}/bin/podman load -i ${installerStateDir}/image.tar
           fi
+
+          if ! /usr/bin/podman container exists uosserver; then
+            /usr/bin/podman create \
+              --name uosserver \
+              --restart unless-stopped \
+              --pids-limit 65536 \
+              --cgroups disabled \
+              --health-cmd "curl --fail http://127.0.0.1/api/ping || exit 1" \
+              --health-interval 60s \
+              --health-timeout 5s \
+              --health-retries 3 \
+              -e UOS_UUID="$uos_uuid" \
+              -e UOS_SERVER_VERSION=${lib.escapeShellArg cfg.package.version} \
+              -e FIRMWARE_PLATFORM=${lib.escapeShellArg (
+            if pkgs.stdenv.hostPlatform.isAarch64
+            then "linux-arm64"
+            else "linux-x64"
+          )} \
+              -v ${lib.escapeShellArg "${stateDir}/persistent:/persistent"} \
+              -v ${lib.escapeShellArg "/var/log/unifi-os:/var/log"} \
+              -v ${lib.escapeShellArg "${stateDir}/data:/data"} \
+              -v ${lib.escapeShellArg "${stateDir}/srv:/srv"} \
+              -v ${lib.escapeShellArg "${stateDir}/unifi:/var/lib/unifi"} \
+              -v ${lib.escapeShellArg "${stateDir}/mongodb:/var/lib/mongodb"} \
+              -v ${lib.escapeShellArg "${ucoreDebug}:/etc/systemd/system/unifi-core.service.d/debug.conf:ro"} \
+              -v ${lib.escapeShellArg "${ucorePreStartFix}:/etc/systemd/system/unifi-core.service.d/prestart-fix.conf:ro"} \
+              -v ${lib.escapeShellArg "${mongoPreStartFix}:/etc/systemd/system/mongodb.service.d/prestart-fix.conf:ro"} \
+              -v ${lib.escapeShellArg "${dbusStartFix}:/etc/dbus-1/system.d/start-fix.conf:ro"} \
+              -v ${lib.escapeShellArg "${dbusStartFix}:/etc/dbus-1/session.d/start-fix.conf:ro"} \
+              ${lib.concatMapStringsSep " \\\n+              " (name: "-e ${lib.escapeShellArg "${name}=${cfg.environment.${name}}"}") (lib.attrNames cfg.environment)} \
+              ${lib.concatMapStringsSep " \\\n+              " (volume: "-v ${lib.escapeShellArg volume}") cfg.extraVolumes} \
+              ${lib.concatMapStringsSep " \\\n+              " lib.escapeShellArg cfg.extraOptions} \
+              ${lib.escapeShellArg cfg.imageTag}
+          fi
         '';
         serviceConfig = {
           ExecStart = "${installerStateDir}/uosserver-service";
@@ -704,18 +785,8 @@ _: {
           RestartSec = 2;
           User = "root";
           WorkingDirectory = installerStateDir;
-          BindReadOnlyPaths = [
-            "${installerPodmanWrapper}:/usr/bin/podman"
-            "${installerSuWrapper}:/usr/bin/su"
-          ];
-          Environment = [
-            "HOME=/home/uosserver"
-            "XDG_CONFIG_HOME=/home/uosserver/.config"
-            "XDG_RUNTIME_DIR=/run/user/${toString config.users.users.uosserver.uid}"
-            "DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null"
-            "CONTAINERS_CONF=/home/uosserver/.config/containers/containers.conf"
-            "DISCOVERY_CLIENT_LOG_PATH=/var/log/unifi-os"
-          ];
+          BindReadOnlyPaths = installerRuntimeBindReadOnlyPaths;
+          Environment = installerRuntimeEnvironment;
         };
       };
 
@@ -724,11 +795,14 @@ _: {
         wantedBy = ["multi-user.target"];
         after = ["network-online.target"];
         wants = ["network-online.target"];
+        path = installerRuntimePath;
         serviceConfig = {
           ExecStart = "${installerStateDir}/updater-service";
           Restart = "always";
           RestartSec = 2;
           WorkingDirectory = installerStateDir;
+          BindReadOnlyPaths = installerRuntimeBindReadOnlyPaths;
+          Environment = installerRuntimeEnvironment;
         };
       };
     };
