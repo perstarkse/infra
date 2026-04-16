@@ -13,7 +13,6 @@
           privateInfra = inputs.private-infra;
           varsHelper = inputs.vars-helper;
           inherit (inputs) nous;
-          nixTopology = inputs.nix-topology;
         };
       };
     };

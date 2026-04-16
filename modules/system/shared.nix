@@ -12,7 +12,10 @@
       (_final: prev: {
         unstable = import inputs."nixpkgs-unstable" {
           inherit (prev.stdenv.hostPlatform) system;
-          inherit (config.nixpkgs) config;
+          config = {
+            allowUnfree = true;
+            nvidia.acceptLicense = true;
+          };
         };
       })
     ];

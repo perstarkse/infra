@@ -114,20 +114,40 @@ _: {
       };
 
       opencodeHost = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
+        type = with lib.types; nullOr (addCheck str (_: !cfg.sharedOpencode.enable));
         default = null;
-        description = "Optional external OpenCode base URL to connect to instead of starting a local one.";
+        description = "Optional external OpenCode base URL to connect to instead of starting a local one. Cannot be used when sharedOpencode.enable is true.";
       };
 
       opencodePort = lib.mkOption {
-        type = lib.types.nullOr lib.types.port;
+        type = with lib.types; nullOr (addCheck port (_: !cfg.sharedOpencode.enable));
         default = null;
-        description = "Optional external OpenCode port when using OPENCODE_SKIP_START without opencodeHost.";
+        description = "Optional external OpenCode port when using OPENCODE_SKIP_START without opencodeHost. Cannot be used when sharedOpencode.enable is true.";
+      };
+
+      sharedOpencode = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = cfg.opencodeHost == null && cfg.opencodePort == null;
+          description = "Run a shared local OpenCode daemon and point OpenChamber at it.";
+        };
+
+        port = lib.mkOption {
+          type = lib.types.port;
+          default = 4096;
+          description = "Loopback port for the shared OpenCode daemon.";
+        };
+
+        listenAddress = lib.mkOption {
+          type = lib.types.str;
+          default = "127.0.0.1";
+          description = "Listen address for the shared OpenCode daemon.";
+        };
       };
 
       opencodeSkipStart = lib.mkOption {
         type = lib.types.bool;
-        default = cfg.opencodeHost != null || cfg.opencodePort != null;
+        default = cfg.sharedOpencode.enable || cfg.opencodeHost != null || cfg.opencodePort != null;
         description = "Skip starting the bundled OpenCode server and connect to an external one instead.";
       };
 
@@ -169,11 +189,52 @@ _: {
         "d ${cfg.dataDir} 0750 ${serviceUser} ${serviceGroup} -"
       ];
 
-      systemd.services.openchamber = {
-        description = "OpenChamber Web UI";
+      systemd.services.openchamber-opencode = lib.mkIf cfg.sharedOpencode.enable {
+        description = "Shared OpenCode daemon for OpenChamber";
         wantedBy = ["multi-user.target"];
         after = ["network-online.target"];
         wants = ["network-online.target"];
+
+        path = with pkgs; [
+          git
+          openssh
+          opencode
+          bun
+          cloudflared
+          nodejs
+          nix
+          devenv
+        ];
+
+        serviceConfig = {
+          Type = "simple";
+          User = serviceUser;
+          Group = serviceGroup;
+          WorkingDirectory =
+            if cfg.projectPath != null
+            then cfg.projectPath
+            else cfg.dataDir;
+          ExecStart = lib.concatStringsSep " " [
+            (lib.getExe pkgs.opencode)
+            "serve"
+            "--hostname"
+            cfg.sharedOpencode.listenAddress
+            "--port"
+            (toString cfg.sharedOpencode.port)
+          ];
+          Restart = "always";
+          RestartSec = "5s";
+
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+        };
+      };
+
+      systemd.services.openchamber = {
+        description = "OpenChamber Web UI";
+        wantedBy = ["multi-user.target"];
+        after = ["network-online.target"] ++ lib.optionals cfg.sharedOpencode.enable ["openchamber-opencode.service"];
+        wants = ["network-online.target"] ++ lib.optionals cfg.sharedOpencode.enable ["openchamber-opencode.service"];
 
         environment =
           {
@@ -183,10 +244,13 @@ _: {
           // lib.optionalAttrs cfg.opencodeSkipStart {
             OPENCHAMBER_SKIP_OPENCODE_START = "true";
           }
-          // lib.optionalAttrs (cfg.opencodeHost != null) {
-            OPENCODE_HOST = cfg.opencodeHost;
+          // lib.optionalAttrs (cfg.sharedOpencode.enable || cfg.opencodeHost != null) {
+            OPENCODE_HOST =
+              if cfg.sharedOpencode.enable
+              then "http://${cfg.sharedOpencode.listenAddress}:${toString cfg.sharedOpencode.port}"
+              else cfg.opencodeHost;
           }
-          // lib.optionalAttrs (cfg.opencodePort != null) {
+          // lib.optionalAttrs (!cfg.sharedOpencode.enable && cfg.opencodePort != null) {
             OPENCODE_PORT = toString cfg.opencodePort;
           }
           // cfg.extraEnvironment;
@@ -198,6 +262,8 @@ _: {
           bun
           cloudflared
           nodejs
+          nix
+          devenv
         ];
 
         serviceConfig = {

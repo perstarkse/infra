@@ -32,7 +32,6 @@
       searxng
       wireguard-tunnels
     ]
-    ++ [ctx.inputs.nixTopology.nixosModules.default]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
   my = {
@@ -442,8 +441,6 @@
       end
     '';
   };
-
-  nixpkgs.config.allowUnfree = true;
 
   # Restrict WebDAV port to router only (auth handled by nginx on io)
   networking.firewall.extraInputRules = ''

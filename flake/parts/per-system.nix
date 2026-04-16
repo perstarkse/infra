@@ -59,28 +59,6 @@
       inherit pkgs;
       privateMailserverModule = inputs.private-infra.nixosModules.mailserver;
     };
-    mainTopology = import ../main-topology.nix {
-      inherit lib;
-      inherit pkgs;
-      inherit (inputs.self.topology.${system}.config) nodes;
-    };
-    networkTopology = import ../network-topology.nix {
-      inherit lib;
-      inherit pkgs;
-      inherit (inputs.self.topology.${system}.config) nodes;
-      inherit (inputs.self.topology.${system}.config) networks;
-    };
-    servicesTopology = import ../services-topology.nix {
-      inherit lib;
-      inherit pkgs;
-      inherit (inputs.self.topology.${system}.config) nodes;
-    };
-    topologyDiagrams = pkgs.runCommand "topology-diagrams" {} ''
-      mkdir -p "$out"
-      cp "${mainTopology}/main.svg" "$out/main.svg"
-      cp "${networkTopology}/network.svg" "$out/network.svg"
-      cp "${servicesTopology}/services.svg" "$out/services.svg"
-    '';
     localCheckTargets = {
       router-checks = mkCheckBundle "router-checks" routerChecks;
       predeploy-check = ioPredeployChecks.io-predeploy;
@@ -758,6 +736,14 @@
       '';
     };
   in {
+    clan.pkgs = import inputs.nixpkgs {
+      inherit system;
+      config = {
+        allowUnfree = true;
+        nvidia.acceptLicense = true;
+      };
+    };
+
     treefmt = {
       projectRootFile = "flake.nix";
       programs = {
@@ -781,19 +767,9 @@
       ];
     };
 
-    topology.modules = [
-      (import ../topology.nix {
-        inherit lib;
-      })
-    ];
-
     packages =
       localCheckTargets
       // {
-        services-topology = servicesTopology;
-        main-topology = mainTopology;
-        network-topology = networkTopology;
-        topology-diagrams = topologyDiagrams;
         machine-update-plan = machineUpdatePlanScript;
         machine-update = machineUpdateScript;
         pkgs-update = pkgsUpdateScript;

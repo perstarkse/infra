@@ -5,6 +5,7 @@
     ...
   }: let
     cfg = config.my.router;
+    unifiOsCfg = config.services.unifi-os-server or null;
     helpers = config.routerHelpers or {};
     lanVlanId = helpers.lanVlanId or 1;
     lanInterface = helpers.lanInterface or "vlan${toString lanVlanId}";
@@ -128,6 +129,13 @@
       ''
       else "";
 
+    unifiDiscoveryInputRule =
+      if unifiOsCfg != null && unifiOsCfg.enable && (unifiOsCfg.network.macvlan.hostAccess.enable or false)
+      then ''
+        iifname "${unifiOsCfg.network.macvlan.hostAccess.interfaceName}" tcp dport 11002 accept
+      ''
+      else "";
+
     bridgeLanForwardCompatRules =
       if lanZone != null && lanZone.interface != lanBridge
       then let
@@ -182,6 +190,7 @@
                 ct state established,related accept
                 ${dropLanBridgeTaggedDhcpRules}
                 ${bridgeLanInputCompatRule}
+                ${unifiDiscoveryInputRule}
                 ${inputInternalRulesV4}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" ip protocol icmp accept
@@ -218,6 +227,7 @@
                 iifname "lo" accept
                 ct state established,related accept
                 ${bridgeLanInputCompatRule}
+                ${unifiDiscoveryInputRule}
                 ${inputInternalRulesV6}
                 iifname "zt*" accept
                 iifname "${wan}" ct state established,related accept

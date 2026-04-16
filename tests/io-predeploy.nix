@@ -76,13 +76,6 @@
     nixosModules.default = secretsStubModule;
   };
 
-  nixTopologyStubModule = {lib, ...}: {
-    options.topology.extractors.kea.enable = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-    };
-  };
-
   clanDeploymentStubModule = {lib, ...}: {
     options.clan.core.deployment.requireExplicitUpdate = lib.mkOption {
       type = lib.types.bool;
@@ -232,7 +225,6 @@
                 flake.nixosModules = testNixosModules;
                 inputs = {
                   varsHelper = varsHelperStub;
-                  nixTopology.nixosModules.default = nixTopologyStubModule;
                 };
               };
             });
