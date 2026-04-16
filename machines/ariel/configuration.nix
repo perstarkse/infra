@@ -20,7 +20,6 @@
       niri
       vfio
     ]
-    ++ [ctx.inputs.nixTopology.nixosModules.default]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
 
@@ -97,8 +96,6 @@
 
     home.stateVersion = "25.11";
   };
-
-  nixpkgs.config.allowUnfree = true;
 
   time.timeZone = "Europe/Stockholm";
 
@@ -227,6 +224,4 @@
     '';
     serviceConfig.Type = "oneshot";
   };
-
-  nixpkgs.config.nvidia.acceptLicense = true;
 }

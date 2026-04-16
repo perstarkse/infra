@@ -20,7 +20,8 @@
       heartbeat
       home-assistant
       ntfy
-      unifi-controller
+      # unifi-controller # keep this for now, until unifi-os stable
+      unifi-os
       frigate
       garage
       atuin
@@ -28,14 +29,9 @@
       # oumu-vm
       # go2rtc
     ]
-    ++ [
-      ctx.inputs.nixTopology.nixosModules.default
-      {topology.extractors.kea.enable = false;}
-    ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default]);
 
   time.timeZone = "Europe/Stockholm";
-  nixpkgs.config.allowUnfree = true;
 
   services.wakeproxy = {
     enable = true;
@@ -425,9 +421,9 @@
           }
           {
             domain = "unifi.lan.stark.pub";
-            target = "10.0.0.1";
+            target = "10.0.0.21";
             targetScheme = "https";
-            port = 8443;
+            port = 443;
             websockets = true;
             lanOnly = true;
             useWildcard = "lanstark";
@@ -670,6 +666,21 @@
   services.unifi = {
     unifiPackage = pkgs.unstable.unifi;
     mongodbPackage = pkgs.mongodb-7_0;
+  };
+
+  services.unifi-os-server = {
+    enable = true;
+    lanAddress = "10.0.0.21";
+    runtime = "installer";
+    network = {
+      macvlan = {
+        ip = "10.0.0.21";
+        hostAccess = {
+          enable = true;
+          hostAddress = "10.0.0.22";
+        };
+      };
+    };
   };
 
   # Custom nginx location for nous.fyi /app/ -> /assets/app/ rewrite

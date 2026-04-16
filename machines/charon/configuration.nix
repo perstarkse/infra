@@ -39,7 +39,6 @@
       politikerstod-remote-worker
       # steam-gamescope
     ]
-    ++ [ctx.inputs.nixTopology.nixosModules.default]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
 
@@ -388,7 +387,7 @@
       enable = true;
       checkIntervalMinutes = 6;
       requiredIdleChecks = 3;
-      loadThreshold = "2.0";
+      loadThreshold = "6.0";
       userIdleSeconds = 600;
     };
 
@@ -411,8 +410,6 @@
       };
     };
   };
-
-  nixpkgs.config.allowUnfree = true;
 
   time.timeZone = "Europe/Stockholm";
 
