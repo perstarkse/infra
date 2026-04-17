@@ -7,13 +7,10 @@
   findutils,
   gnugrep,
   version ? "5.0.6",
-  # url ? "https://fw-download.ubnt.com/data/unifi-os-server/df5b-linux-arm64-5.0.6-f35e944c-f4b6-4190-93a8-be61b96c58f4.6-arm64",
   url ? "https://fw-download.ubnt.com/data/unifi-os-server/1856-linux-x64-5.0.6-33f4990f-6c68-4e72-9d9c-477496c22450.6-x64",
   sha256,
 }:
 stdenvNoCC.mkDerivation rec {
-  # reverse engineered via
-  # https://www.unihosted.com/blog/running-unifi-os-server-in-docker
   pname = "unifi-os-server-image";
   inherit version;
 
@@ -52,6 +49,10 @@ stdenvNoCC.mkDerivation rec {
       echo "Could not find embedded image.tar in UniFi OS installer" >&2
       exit 1
     fi
+    if [ -z "$discovery_bin" ] || [ -z "$uosserver_bin" ] || [ -z "$uosserver_service_bin" ] || [ -z "$updater_service_bin" ]; then
+      echo "UniFi OS installer is missing one or more required runtime binaries" >&2
+      exit 1
+    fi
 
     mkdir -p "$out"
     cp "$image_tar" "$out/image.tar"
@@ -76,6 +77,25 @@ stdenvNoCC.mkDerivation rec {
       fi
     done
   '';
+
+  passthru.unifiOs = {
+    containerName = "uosserver";
+    imageTag = "uosserver:0.0.54";
+    ports = {
+      discoveryHelper = 11002;
+      discoveryTarget = 10003;
+      supervisorWebsocket = 11084;
+    };
+    binaries = {
+      imageTar = "image.tar";
+      discovery = "discovery";
+      runtime = "uosserver";
+      runtimeService = "uosserver-service";
+      updaterService = "updater-service";
+      pasta = "pasta";
+      purge = "purge";
+    };
+  };
 
   meta = with lib; {
     description = "Extracted OCI image archive from the UniFi OS Server installer";

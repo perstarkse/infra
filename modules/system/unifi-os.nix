@@ -7,23 +7,50 @@ _: {
   }: let
     inherit
       (lib)
+      literalExpression
       mkEnableOption
       mkIf
       mkOption
+      optionalString
+      optionals
       types
       ;
 
     cfg = config.services.unifi-os-server;
-    stateDir = "/var/lib/unifi-os";
-    installerStateDir = "/var/lib/uosserver";
+    package = cfg.package;
     routerHelpers = config.routerHelpers or {};
-    macvlanCfg = cfg.network.macvlan;
-    hostAccessEnabled = macvlanCfg.hostAccess.enable;
-    useInstallerRuntime = cfg.runtime == "installer";
+    networkCfg = cfg.network;
+    hostAccessEnabled = networkCfg.hostAccess.enable;
+
+    installerMetadata = package.passthru.unifiOs or {};
+    packageBinaries = {
+      imageTar = "${package}/${installerMetadata.binaries.imageTar or "image.tar"}";
+      discovery = "${package}/${installerMetadata.binaries.discovery or "discovery"}";
+      runtime = "${package}/${installerMetadata.binaries.runtime or "uosserver"}";
+      runtimeService = "${package}/${installerMetadata.binaries.runtimeService or "uosserver-service"}";
+      updaterService = "${package}/${installerMetadata.binaries.updaterService or "updater-service"}";
+      pasta = if builtins.pathExists "${package}/pasta" then "${package}/pasta" else null;
+      purge = if builtins.pathExists "${package}/purge" then "${package}/purge" else null;
+    };
+
+    vendorPorts = {
+      discoveryHelper = installerMetadata.ports.discoveryHelper or 11002;
+      discoveryTarget = installerMetadata.ports.discoveryTarget or 10003;
+      supervisorWebsocket = installerMetadata.ports.supervisorWebsocket or 11084;
+    };
+
+    runtimeUnitName = "unifi-os-runtime";
+    updaterUnitName = "uosserver-updater";
+    prepareUnitName = "unifi-os-prepare";
+    networkUnitName = "unifi-os-macvlan-network";
+    discoveryHelperBridgeUnitName = "unifi-os-discovery-helper-bridge";
+    supervisorBridgeUnitName = "unifi-os-supervisor-bridge";
+    discoveryTargetBridgeUnitName = "unifi-os-discovery-target-bridge";
+
     parentNetworkUnitName =
-      if macvlanCfg.parentInterface == (routerHelpers.lanInterface or null)
-      then "35-${macvlanCfg.parentInterface}"
-      else "10-${macvlanCfg.parentInterface}";
+      if networkCfg.parentInterface == (routerHelpers.lanInterface or null)
+      then "35-${networkCfg.parentInterface}"
+      else "10-${networkCfg.parentInterface}";
 
     defaultPackage = pkgs.callPackage ../../pkgs/unifi-os {
       sha256 = "sha256-IPoWR5GTiy7J1WgMEYdTxGo26qM2nO+U1c742pRo354=";
@@ -58,14 +85,10 @@ _: {
       set -euo pipefail
 
       realPodman=${lib.escapeShellArg "${config.virtualisation.podman.package}/bin/.podman-wrapped"}
-      networkName=${lib.escapeShellArg macvlanCfg.networkName}
-      containerIp=${lib.escapeShellArg macvlanCfg.ip}
-      hostAccessEnabled=${
-        if hostAccessEnabled
-        then "1"
-        else "0"
-      }
-      hostAccessIp=${lib.escapeShellArg (macvlanCfg.hostAccess.hostAddress or "")}
+      networkName=${lib.escapeShellArg networkCfg.networkName}
+      containerIp=${lib.escapeShellArg cfg.advertisedAddress}
+      hostAccessEnabled=${if hostAccessEnabled then "1" else "0"}
+      hostAccessIp=${lib.escapeShellArg (networkCfg.hostAccess.address or "")}
 
       cmd="''${1-}"
       if [[ "$cmd" == "run" || "$cmd" == "create" ]]; then
@@ -195,7 +218,7 @@ _: {
       exec ${config.security.wrapperDir}/su "''${orig[@]}"
     '';
 
-    installerRuntimePath = [
+    runtimePath = [
       config.virtualisation.podman.package
       pkgs.shadow
       pkgs.coreutils
@@ -204,65 +227,118 @@ _: {
       pkgs.iproute2
     ];
 
-    installerRuntimeBindReadOnlyPaths = [
+    runtimeBindReadOnlyPaths = [
       "${installerPodmanWrapper}:/usr/bin/podman"
       "${installerSuWrapper}:/usr/bin/su"
     ];
 
-    installerRuntimeEnvironment = [
-      "HOME=/home/uosserver"
-      "XDG_CONFIG_HOME=/home/uosserver/.config"
-      "XDG_RUNTIME_DIR=/run/user/${toString config.users.users.uosserver.uid}"
+    runtimeEnvironment = [
+      "HOME=${cfg.serviceUser.home}"
+      "XDG_CONFIG_HOME=${cfg.serviceUser.home}/.config"
+      "XDG_RUNTIME_DIR=/run/user/${toString cfg.serviceUser.uid}"
       "DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null"
-      "CONTAINERS_CONF=/home/uosserver/.config/containers/containers.conf"
-      "DISCOVERY_CLIENT_LOG_PATH=/var/log/unifi-os"
+      "CONTAINERS_CONF=${cfg.serviceUser.home}/.config/containers/containers.conf"
+      "DISCOVERY_CLIENT_LOG_PATH=${cfg.logsDirectory}"
     ];
 
-    mkSocatProxyService = {
-      description,
-      execStart,
-      after ? ["network-online.target"],
-      wants ? after,
-    }: {
-      inherit description after wants;
-      wantedBy = ["multi-user.target"];
-      serviceConfig = {
-        ExecStart = execStart;
-        Restart = "always";
-        RestartSec = 1;
-      };
-    };
+    containerEnv = {
+      UOS_SERVER_VERSION = package.version;
+      FIRMWARE_PLATFORM =
+        if pkgs.stdenv.hostPlatform.isAarch64
+        then "linux-arm64"
+        else "linux-x64";
+    } // cfg.container.environment;
+
+    containerVolumes = [
+      "${cfg.dataDirectory.persistent}:/persistent"
+      "${cfg.logsDirectory}:/var/log"
+      "${cfg.dataDirectory.data}:/data"
+      "${cfg.dataDirectory.srv}:/srv"
+      "${cfg.dataDirectory.unifi}:/var/lib/unifi"
+      "${cfg.dataDirectory.mongodb}:/var/lib/mongodb"
+      "${ucoreDebug}:/etc/systemd/system/unifi-core.service.d/debug.conf:ro"
+      "${ucorePreStartFix}:/etc/systemd/system/unifi-core.service.d/prestart-fix.conf:ro"
+      "${mongoPreStartFix}:/etc/systemd/system/mongodb.service.d/prestart-fix.conf:ro"
+      "${dbusStartFix}:/etc/dbus-1/system.d/start-fix.conf:ro"
+      "${dbusStartFix}:/etc/dbus-1/session.d/start-fix.conf:ro"
+    ] ++ cfg.container.extraVolumes;
+
+    renderMultilineArgs = render:
+      values: lib.concatMapStringsSep " \\\n                " render values;
+
+    renderEnvArgs = env:
+      renderMultilineArgs (name: "-e ${lib.escapeShellArg "${name}=${env.${name}}"}") (lib.attrNames env);
+
+    renderVolumeArgs = volumes:
+      renderMultilineArgs (volume: "-v ${lib.escapeShellArg volume}") volumes;
+
+    renderExtraArgs = args:
+      renderMultilineArgs lib.escapeShellArg args;
+
+    bridgeServices = builtins.listToAttrs (map (
+      bridge: {
+        name = bridge.unitName;
+        value = {
+          description = bridge.description;
+          wantedBy = ["multi-user.target"];
+          after = bridge.after;
+          wants = bridge.wants;
+          serviceConfig = {
+            ExecStart = bridge.execStart;
+            Restart = "always";
+            RestartSec = 1;
+          };
+        };
+      }
+    ) (optionals hostAccessEnabled [
+      {
+        unitName = supervisorBridgeUnitName;
+        description = "Expose UniFi supervisor websocket on localhost";
+        after = ["network-online.target" "${networkUnitName}.service"];
+        wants = ["network-online.target" "${networkUnitName}.service"];
+        execStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${toString vendorPorts.supervisorWebsocket},bind=127.0.0.1,fork,reuseaddr TCP:${cfg.advertisedAddress}:${toString vendorPorts.supervisorWebsocket}";
+      }
+      {
+        unitName = discoveryTargetBridgeUnitName;
+        description = "Expose UniFi discovery target on localhost";
+        after = ["network-online.target" "${networkUnitName}.service"];
+        wants = ["network-online.target" "${networkUnitName}.service"];
+        execStart = "${pkgs.socat}/bin/socat UDP4-RECVFROM:${toString vendorPorts.discoveryTarget},bind=127.0.0.1,fork UDP4-SENDTO:${cfg.advertisedAddress}:${toString vendorPorts.discoveryTarget}";
+      }
+      {
+        unitName = discoveryHelperBridgeUnitName;
+        description = "Expose UniFi discovery helper on host access IP";
+        after = ["network-online.target" "${runtimeUnitName}.service"];
+        wants = ["network-online.target"];
+        execStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${toString vendorPorts.discoveryHelper},bind=${networkCfg.hostAccess.address},fork,reuseaddr TCP:127.0.0.1:${toString vendorPorts.discoveryHelper}";
+      }
+    ]));
+
+    prepareBridgeDependencies = optionals hostAccessEnabled [
+      "${supervisorBridgeUnitName}.service"
+      "${discoveryTargetBridgeUnitName}.service"
+    ];
   in {
     options.services.unifi-os-server = {
-      enable = mkEnableOption "UniFi OS Server container (podman)";
+      enable = mkEnableOption "UniFi OS Server installer runtime";
 
       package = mkOption {
         type = types.package;
         default = defaultPackage;
-        defaultText = lib.literalExpression "pkgs.callPackage ../../pkgs/unifi-os { sha256 = \"…\"; }";
+        defaultText = literalExpression "pkgs.callPackage ../../pkgs/unifi-os { sha256 = \"…\"; }";
         description = ''
-          Package containing the extracted UniFi OS Server OCI archive at
-          `image.tar`.
+          Package containing the extracted UniFi OS Server installer assets and
+          package metadata.
         '';
       };
 
-      imageTag = mkOption {
+      advertisedAddress = mkOption {
         type = types.str;
-        default = "uosserver:0.0.54";
+        default = config.my.listenNetworkAddress;
+        defaultText = literalExpression "config.my.listenNetworkAddress";
         description = ''
-          Exact image name:tag embedded in `image.tar`.
-          Must match the repository:tag inside the archive.
-        '';
-        example = "uosserver:0.0.54";
-      };
-
-      runtime = mkOption {
-        type = types.enum ["container" "installer"];
-        default = "container";
-        description = ''
-          Runtime implementation to use. `container` keeps the custom Podman
-          wrapper. `installer` uses the host-side runtime binaries shipped in the
-          official UniFi OS installer.
+          LAN-reachable IPv4 address assigned to the UniFi container and
+          advertised to UniFi devices for discovery and adoption.
         '';
       };
 
@@ -270,178 +346,209 @@ _: {
         type = types.bool;
         default = false;
         description = ''
-          Whether or not to open the minimum required ports on the firewall.
-
-          This is necessary to allow firmware upgrades and device discovery to
-          work. For remote login, you should additionally open (or forward) port
-          8443.
+          Whether or not to open the minimum required firewall ports for UniFi
+          discovery, adoption, and management.
         '';
       };
 
-      environment = mkOption {
-        type = types.attrsOf types.str;
-        default = {};
-        description = "Additional environment variables for the container.";
-      };
-
-      lanAddress = mkOption {
+      stateDir = mkOption {
         type = types.str;
-        default = config.my.listenNetworkAddress;
-        defaultText = lib.literalExpression "config.my.listenNetworkAddress";
-        description = ''
-          LAN-reachable address advertised to UniFi devices for discovery and
-          adoption.
-        '';
+        default = "/var/lib/unifi-os";
+        description = "Persistent host state directory for UniFi OS data.";
+      };
+
+      runtimeDir = mkOption {
+        type = types.str;
+        default = "/var/lib/uosserver";
+        description = "Working directory used by the vendor installer runtime binaries.";
+      };
+
+      logsDirectory = mkOption {
+        type = types.str;
+        default = "/var/log/unifi-os";
+        description = "Host directory used for UniFi OS logs.";
+      };
+
+      dataDirectory = {
+        persistent = mkOption {
+          type = types.str;
+          default = "${cfg.stateDir}/persistent";
+          description = "Host directory mounted to /persistent in the UniFi container.";
+        };
+        data = mkOption {
+          type = types.str;
+          default = "${cfg.stateDir}/data";
+          description = "Host directory mounted to /data in the UniFi container.";
+        };
+        srv = mkOption {
+          type = types.str;
+          default = "${cfg.stateDir}/srv";
+          description = "Host directory mounted to /srv in the UniFi container.";
+        };
+        unifi = mkOption {
+          type = types.str;
+          default = "${cfg.stateDir}/unifi";
+          description = "Host directory mounted to /var/lib/unifi in the UniFi container.";
+        };
+        mongodb = mkOption {
+          type = types.str;
+          default = "${cfg.stateDir}/mongodb";
+          description = "Host directory mounted to /var/lib/mongodb in the UniFi container.";
+        };
+      };
+
+      serviceUser = {
+        name = mkOption {
+          type = types.str;
+          default = "uosserver";
+          description = "System user name used for vendor runtime state.";
+        };
+        uid = mkOption {
+          type = types.int;
+          default = 980;
+          description = "UID for the UniFi OS installer runtime user.";
+        };
+        group = mkOption {
+          type = types.str;
+          default = "uosserver";
+          description = "Primary group for the UniFi OS installer runtime user.";
+        };
+        gid = mkOption {
+          type = types.int;
+          default = 972;
+          description = "GID for the UniFi OS installer runtime group.";
+        };
+        home = mkOption {
+          type = types.str;
+          default = "/home/uosserver";
+          description = "Home directory for the UniFi OS installer runtime user.";
+        };
       };
 
       network = {
-        macvlan = {
-          networkName = mkOption {
-            type = types.str;
-            default = "unifi-os-lan";
-            description = "Podman network name used for the UniFi macvlan network.";
-          };
+        networkName = mkOption {
+          type = types.str;
+          default = "unifi-os-lan";
+          description = "Podman macvlan network name used for the UniFi container.";
+        };
 
-          parentInterface = mkOption {
-            type = types.nullOr types.str;
-            default =
-              routerHelpers.lanInterface or (routerHelpers.lanBridge or null);
-            defaultText = lib.literalExpression "config.routerHelpers.lanInterface or config.routerHelpers.lanBridge or null";
+        parentInterface = mkOption {
+          type = types.nullOr types.str;
+          default = routerHelpers.lanInterface or (routerHelpers.lanBridge or null);
+          defaultText = literalExpression "config.routerHelpers.lanInterface or (config.routerHelpers.lanBridge or null)";
+          description = "Parent interface or bridge for the UniFi macvlan network.";
+        };
+
+        subnet = mkOption {
+          type = types.nullOr types.str;
+          default = routerHelpers.lanCidr or null;
+          defaultText = literalExpression "config.routerHelpers.lanCidr or null";
+          description = "IPv4 subnet assigned to the UniFi macvlan network.";
+        };
+
+        gateway = mkOption {
+          type = types.nullOr types.str;
+          default = routerHelpers.routerIp or null;
+          defaultText = literalExpression "config.routerHelpers.routerIp or null";
+          description = "IPv4 gateway assigned to the UniFi macvlan network.";
+        };
+
+        hostAccess = {
+          enable = mkOption {
+            type = types.bool;
+            default = false;
             description = ''
-              Parent interface or bridge for the macvlan network.
+              Create a host-side macvlan shim so the host can directly reach the
+              UniFi container IP and expose vendor localhost services onto the LAN.
             '';
           };
-
-          subnet = mkOption {
-            type = types.nullOr types.str;
-            default = routerHelpers.lanCidr or null;
-            defaultText = lib.literalExpression "config.routerHelpers.lanCidr or null";
-            description = "IPv4 subnet assigned to the macvlan network.";
+          interfaceName = mkOption {
+            type = types.str;
+            default = "unifi-os-host";
+            description = "Host-side macvlan interface name used for UniFi host access.";
           };
-
-          gateway = mkOption {
-            type = types.nullOr types.str;
-            default = routerHelpers.routerIp or null;
-            defaultText = lib.literalExpression "config.routerHelpers.routerIp or null";
-            description = "IPv4 gateway assigned to the macvlan network.";
-          };
-
-          ip = mkOption {
+          address = mkOption {
             type = types.nullOr types.str;
             default = null;
-            example = "10.0.0.21";
-            description = ''
-              Static IPv4 address assigned to the UniFi container on the LAN.
-            '';
-          };
-
-          hostAccess = {
-            enable = mkOption {
-              type = types.bool;
-              default = false;
-              description = ''
-                Create a host-side macvlan shim so the host can reach the UniFi
-                container IP directly.
-              '';
-            };
-
-            interfaceName = mkOption {
-              type = types.str;
-              default = "unifi-os-host";
-              description = "Host-side macvlan interface name used for host access.";
-            };
-
-            hostAddress = mkOption {
-              type = types.nullOr types.str;
-              default = null;
-              example = "10.0.0.22";
-              description = ''
-                /32 address assigned to the host-side macvlan shim interface.
-              '';
-            };
+            example = "10.0.0.22";
+            description = "Host-side /32 address assigned to the UniFi macvlan shim interface.";
           };
         };
       };
 
-      extraVolumes = mkOption {
-        type = types.listOf types.str;
-        default = [];
-        example = ["/etc/ssl/certs:/etc/rabbitmq/ssl:ro"];
-        description = "Additional bind mounts beyond the defaults.";
-      };
-
-      extraOptions = mkOption {
-        type = types.listOf types.str;
-        default = [];
-        description = "Extra arguments passed to podman.";
+      container = {
+        name = mkOption {
+          type = types.str;
+          default = installerMetadata.containerName or "uosserver";
+          description = "Container name expected by the vendor runtime.";
+        };
+        imageTag = mkOption {
+          type = types.str;
+          default = installerMetadata.imageTag or "uosserver:0.0.54";
+          description = "Exact container image name:tag embedded in the vendor installer.";
+        };
+        environment = mkOption {
+          type = types.attrsOf types.str;
+          default = {};
+          description = "Additional environment variables applied when creating the UniFi container.";
+        };
+        extraVolumes = mkOption {
+          type = types.listOf types.str;
+          default = [];
+          example = ["/etc/ssl/certs:/etc/rabbitmq/ssl:ro"];
+          description = "Additional bind mounts beyond the default UniFi container mounts.";
+        };
+        extraOptions = mkOption {
+          type = types.listOf types.str;
+          default = [];
+          description = "Additional low-level Podman arguments appended to vendor container creation.";
+        };
       };
     };
 
     config = mkIf cfg.enable {
       assertions = [
         {
-          assertion = macvlanCfg.parentInterface != null;
-          message = "services.unifi-os-server.network.macvlan.parentInterface must be set";
+          assertion = networkCfg.parentInterface != null;
+          message = "services.unifi-os-server.network.parentInterface must be set";
         }
         {
-          assertion = macvlanCfg.subnet != null;
-          message = "services.unifi-os-server.network.macvlan.subnet must be set";
+          assertion = networkCfg.subnet != null;
+          message = "services.unifi-os-server.network.subnet must be set";
         }
         {
-          assertion = macvlanCfg.gateway != null;
-          message = "services.unifi-os-server.network.macvlan.gateway must be set";
+          assertion = networkCfg.gateway != null;
+          message = "services.unifi-os-server.network.gateway must be set";
         }
         {
-          assertion = macvlanCfg.ip != null;
-          message = "services.unifi-os-server.network.macvlan.ip must be set";
-        }
-        {
-          assertion = !(macvlanCfg.hostAccess.enable && macvlanCfg.hostAccess.hostAddress == null);
-          message = "services.unifi-os-server.network.macvlan.hostAccess.hostAddress must be set when hostAccess is enabled";
-        }
-        {
-          assertion = !hostAccessEnabled || builtins.pathExists "${cfg.package}/discovery";
-          message = "services.unifi-os-server requires a packaged discovery helper when hostAccess is enabled";
-        }
-        {
-          assertion = !useInstallerRuntime || builtins.pathExists "${cfg.package}/uosserver-service";
-          message = "services.unifi-os-server runtime=installer requires uosserver-service in the package";
-        }
-        {
-          assertion = !useInstallerRuntime || builtins.pathExists "${cfg.package}/uosserver";
-          message = "services.unifi-os-server runtime=installer requires uosserver in the package";
+          assertion = !(hostAccessEnabled && networkCfg.hostAccess.address == null);
+          message = "services.unifi-os-server.network.hostAccess.address must be set when hostAccess is enabled";
         }
       ];
 
       virtualisation.podman.enable = true;
-      virtualisation.oci-containers.backend = "podman";
 
       systemd.network = mkIf hostAccessEnabled {
-        netdevs."40-${macvlanCfg.hostAccess.interfaceName}" = {
+        netdevs."40-${networkCfg.hostAccess.interfaceName}" = {
           netdevConfig = {
-            Name = macvlanCfg.hostAccess.interfaceName;
+            Name = networkCfg.hostAccess.interfaceName;
             Kind = "macvlan";
           };
           macvlanConfig.Mode = "bridge";
         };
 
         networks = {
-          # Reuse the parent interface's primary network unit name so the macvlan
-          # attachment merges into the existing router config instead of losing to
-          # an earlier match.
           "${parentNetworkUnitName}" = {
-            matchConfig.Name = macvlanCfg.parentInterface;
-            macvlan = [macvlanCfg.hostAccess.interfaceName];
+            matchConfig.Name = networkCfg.parentInterface;
+            macvlan = [networkCfg.hostAccess.interfaceName];
           };
 
-          "90-${macvlanCfg.hostAccess.interfaceName}" = {
-            matchConfig.Name = macvlanCfg.hostAccess.interfaceName;
-            address = [
-              "${macvlanCfg.hostAccess.hostAddress}/32"
-            ];
+          "90-${networkCfg.hostAccess.interfaceName}" = {
+            matchConfig.Name = networkCfg.hostAccess.interfaceName;
+            address = ["${networkCfg.hostAccess.address}/32"];
             routes = [
               {
-                Destination = "${macvlanCfg.ip}/32";
+                Destination = "${cfg.advertisedAddress}/32";
                 Scope = "link";
               }
             ];
@@ -452,207 +559,194 @@ _: {
       };
 
       networking.firewall = mkIf cfg.openFirewall {
-        allowedTCPPorts = [
-          443
-          8080
-          8443
-          8843
-          8880
-          6789
-        ];
-        allowedUDPPorts = [
-          3478
-          10001
-        ];
+        allowedTCPPorts = [443 8080 8443 8843 8880 6789];
+        allowedUDPPorts = [3478 10001];
       };
 
-      systemd.services.unifi-os-discovery = mkIf (hostAccessEnabled && !useInstallerRuntime) {
-        description = "UniFi OS discovery helper";
-        wantedBy = ["multi-user.target"];
-        after = ["network-online.target"];
-        wants = ["network-online.target"];
-        serviceConfig = {
-          ExecStart = "${cfg.package}/discovery";
-          Restart = "always";
-          RestartSec = 1;
-          Environment = [
-            "DISCOVERY_CLIENT_LOG_PATH=/var/log/unifi-os"
-          ];
-        };
-      };
+      systemd.services = bridgeServices // {
+        ${networkUnitName} = {
+          description = "Create UniFi OS macvlan Podman network";
+          wantedBy = ["multi-user.target"];
+          path = [config.virtualisation.podman.package];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = ''
+            set -euo pipefail
 
-      systemd.services.unifi-os-discovery-proxy = mkIf hostAccessEnabled (mkSocatProxyService {
-        description = "Expose UniFi discovery helper on host access IP";
-        after =
-          ["network-online.target"]
-          ++ lib.optionals useInstallerRuntime ["uosserver-runtime.service"]
-          ++ lib.optionals (!useInstallerRuntime) ["unifi-os-discovery.service"];
-        wants =
-          ["network-online.target"]
-          ++ lib.optionals (!useInstallerRuntime) ["unifi-os-discovery.service"];
-        execStart = "${pkgs.socat}/bin/socat TCP-LISTEN:11002,bind=${macvlanCfg.hostAccess.hostAddress},fork,reuseaddr TCP:127.0.0.1:11002";
-      });
-
-      systemd.services.uosserver-supervisor-proxy = mkIf (useInstallerRuntime && hostAccessEnabled) (mkSocatProxyService {
-        description = "Expose UniFi supervisor websocket on localhost";
-        after = [
-          "network-online.target"
-          "podman-unifi-os-server-network.service"
-        ];
-        execStart = "${pkgs.socat}/bin/socat TCP-LISTEN:11084,bind=127.0.0.1,fork,reuseaddr TCP:${macvlanCfg.ip}:11084";
-      });
-
-      systemd.services.uosserver-discovery-target-proxy = mkIf (useInstallerRuntime && hostAccessEnabled) (mkSocatProxyService {
-        description = "Expose UniFi discovery target on localhost";
-        after = [
-          "network-online.target"
-          "podman-unifi-os-server-network.service"
-        ];
-        execStart = "${pkgs.socat}/bin/socat UDP4-RECVFROM:10003,bind=127.0.0.1,fork UDP4-SENDTO:${macvlanCfg.ip}:10003";
-      });
-
-      systemd.services.podman-unifi-os-server = mkIf (!useInstallerRuntime) {
-        restartTriggers = [cfg.package];
-
-        requires =
-          ["podman-unifi-os-server-network.service"]
-          ++ lib.optionals hostAccessEnabled [
-            "unifi-os-discovery.service"
-            "unifi-os-discovery-proxy.service"
-          ];
-        after =
-          ["podman-unifi-os-server-network.service"]
-          ++ lib.optionals hostAccessEnabled [
-            "unifi-os-discovery.service"
-            "unifi-os-discovery-proxy.service"
-          ];
-
-        serviceConfig = {
-          Delegate = true;
-          StateDirectory = [
-            "unifi-os"
-            "unifi-os/persistent"
-            "unifi-os/data"
-            "unifi-os/srv"
-            "unifi-os/unifi"
-            "unifi-os/mongodb"
-          ];
-          LogsDirectory = "unifi-os";
-        };
-
-        preStart = lib.mkAfter ''
-          ${pkgs.coreutils}/bin/mkdir -p \
-            ${stateDir}/{persistent,data,srv,unifi,mongodb} \
-            ${stateDir}/data/unifi-core/{config,logs} \
-            /var/log/unifi-os
-
-          ${lib.optionalString macvlanCfg.hostAccess.enable ''
-            current_parent="$(${pkgs.iproute2}/bin/ip -o link show ${macvlanCfg.hostAccess.interfaceName} 2>/dev/null | ${pkgs.gnused}/bin/sed -n 's/^[0-9]*: [^@]*@\([^:]*\):.*/\1/p')"
-            if [ -n "$current_parent" ] && [ "$current_parent" != ${lib.escapeShellArg macvlanCfg.parentInterface} ]; then
-              ${pkgs.iproute2}/bin/ip link delete dev ${macvlanCfg.hostAccess.interfaceName}
-              ${pkgs.systemd}/bin/networkctl reload
-              ${pkgs.systemd}/bin/networkctl reconfigure ${macvlanCfg.parentInterface}
+            if podman network exists ${lib.escapeShellArg networkCfg.networkName}; then
+              current_parent="$(podman network inspect ${lib.escapeShellArg networkCfg.networkName} --format '{{.NetworkInterface}}')"
+              if [ "$current_parent" != ${lib.escapeShellArg networkCfg.parentInterface} ]; then
+                podman network rm ${lib.escapeShellArg networkCfg.networkName}
+              fi
             fi
-          ''}
 
-          uuid_file="${stateDir}/data/uos_uuid"
-          if ! grep -qP '^[0-9a-f]{8}-[0-9a-f]{4}-5' "$uuid_file" 2>/dev/null; then
-            ${pkgs.util-linux}/bin/uuidgen -s -n @dns -N "$(cat /etc/machine-id)" > "$uuid_file"
-          fi
-
-          system_properties="${stateDir}/unifi/system.properties"
-          ${pkgs.gnugrep}/bin/grep -q '^system_ip=' "$system_properties" 2>/dev/null \
-            && ${pkgs.gnused}/bin/sed -i 's/^system_ip=.*/system_ip=${cfg.lanAddress}/' "$system_properties" \
-            || printf '\nsystem_ip=%s\n' '${cfg.lanAddress}' >> "$system_properties"
-        '';
-      };
-
-      systemd.services.podman-unifi-os-server-network = {
-        description = "Create UniFi OS Podman macvlan network";
-        wantedBy = ["multi-user.target"];
-        before = lib.optionals (!useInstallerRuntime) ["podman-unifi-os-server.service"];
-        path = [config.virtualisation.podman.package];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-        };
-        script = ''
-          set -euo pipefail
-
-          if podman network exists ${lib.escapeShellArg macvlanCfg.networkName}; then
-            current_parent="$(podman network inspect ${lib.escapeShellArg macvlanCfg.networkName} --format '{{.NetworkInterface}}')"
-            if [ "$current_parent" != ${lib.escapeShellArg macvlanCfg.parentInterface} ]; then
-              podman network rm ${lib.escapeShellArg macvlanCfg.networkName}
+            if ! podman network exists ${lib.escapeShellArg networkCfg.networkName}; then
+              podman network create \
+                -d macvlan \
+                --subnet ${lib.escapeShellArg networkCfg.subnet} \
+                --gateway ${lib.escapeShellArg networkCfg.gateway} \
+                -o mode=bridge \
+                -o parent=${lib.escapeShellArg networkCfg.parentInterface} \
+                ${lib.escapeShellArg networkCfg.networkName}
             fi
-          fi
+          '';
+        };
 
-          if ! podman network exists ${lib.escapeShellArg macvlanCfg.networkName}; then
-            podman network create \
-              -d macvlan \
-              --subnet ${lib.escapeShellArg macvlanCfg.subnet} \
-              --gateway ${lib.escapeShellArg macvlanCfg.gateway} \
-              -o mode=bridge \
-              -o parent=${lib.escapeShellArg macvlanCfg.parentInterface} \
-              ${lib.escapeShellArg macvlanCfg.networkName}
-          fi
-        '';
+        ${prepareUnitName} = {
+          description = "Prepare UniFi OS installer runtime state";
+          wantedBy = ["multi-user.target"];
+          requires = ["${networkUnitName}.service"];
+          after = [
+            "network-online.target"
+            "${networkUnitName}.service"
+          ] ++ prepareBridgeDependencies;
+          wants = [
+            "network-online.target"
+            "${networkUnitName}.service"
+          ] ++ prepareBridgeDependencies;
+          path = runtimePath;
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            User = "root";
+            WorkingDirectory = cfg.runtimeDir;
+            BindReadOnlyPaths = runtimeBindReadOnlyPaths;
+            Environment = runtimeEnvironment;
+          };
+          script = ''
+            set -euo pipefail
+
+            ${optionalString hostAccessEnabled ''
+              current_parent="$(${pkgs.iproute2}/bin/ip -o link show ${networkCfg.hostAccess.interfaceName} 2>/dev/null | ${pkgs.gnused}/bin/sed -n 's/^[0-9]*: [^@]*@\([^:]*\):.*/\1/p')"
+              if [ -n "$current_parent" ] && [ "$current_parent" != ${lib.escapeShellArg networkCfg.parentInterface} ]; then
+                ${pkgs.iproute2}/bin/ip link delete dev ${networkCfg.hostAccess.interfaceName}
+                ${pkgs.systemd}/bin/networkctl reload
+                ${pkgs.systemd}/bin/networkctl reconfigure ${networkCfg.parentInterface}
+              fi
+            ''}
+
+            mkdir -p \
+              ${cfg.dataDirectory.persistent} \
+              ${cfg.dataDirectory.data} \
+              ${cfg.dataDirectory.srv} \
+              ${cfg.dataDirectory.unifi} \
+              ${cfg.dataDirectory.mongodb} \
+              ${cfg.logsDirectory} \
+              ${cfg.dataDirectory.data}/unifi-core/config \
+              ${cfg.dataDirectory.data}/unifi-core/logs \
+              ${cfg.runtimeDir}/bin \
+              ${cfg.runtimeDir}/logs
+
+            uuid_file="${cfg.dataDirectory.data}/uos_uuid"
+            if ! grep -qP '^[0-9a-f]{8}-[0-9a-f]{4}-5' "$uuid_file" 2>/dev/null; then
+              ${pkgs.util-linux}/bin/uuidgen -s -n @dns -N "$(cat /etc/machine-id)" > "$uuid_file"
+            fi
+            uos_uuid="$(cat "$uuid_file")"
+
+            install -d -m700 -o ${cfg.serviceUser.name} -g ${cfg.serviceUser.group} /run/user/${toString cfg.serviceUser.uid}
+            install -d -m700 -o ${cfg.serviceUser.name} -g ${cfg.serviceUser.group} ${cfg.serviceUser.home}/.config/containers
+
+            cat > ${cfg.serviceUser.home}/.config/containers/containers.conf <<EOF
+            [engine]
+            cgroup_manager="cgroupfs"
+            events_logger="file"
+            EOF
+            chown ${cfg.serviceUser.name}:${cfg.serviceUser.group} ${cfg.serviceUser.home}/.config/containers/containers.conf
+
+            install -C -m755 ${packageBinaries.discovery} ${cfg.runtimeDir}/bin/discovery
+            install -C -m755 ${packageBinaries.runtime} ${cfg.runtimeDir}/uosserver
+            install -C -m755 ${packageBinaries.runtimeService} ${cfg.runtimeDir}/uosserver-service
+            install -C -m755 ${packageBinaries.updaterService} ${cfg.runtimeDir}/updater-service
+            ${optionalString (packageBinaries.pasta != null) "install -C -m755 ${packageBinaries.pasta} ${cfg.runtimeDir}/pasta"}
+            ${optionalString (packageBinaries.purge != null) "install -C -m755 ${packageBinaries.purge} ${cfg.runtimeDir}/purge"}
+            install -C -m644 ${packageBinaries.imageTar} ${cfg.runtimeDir}/image.tar
+
+            cat > ${cfg.runtimeDir}/server.conf <<EOF
+            NETWORK_MODE=pasta
+            CONTAINER_IMAGE_NAME=${cfg.container.imageTag}
+            CONTAINER_VERSION=${package.version}
+            UOS_SERVER_VERSION=${package.version}
+            UOS_UUID=$uos_uuid
+            EOF
+
+            system_properties="${cfg.dataDirectory.unifi}/system.properties"
+            ${pkgs.gnugrep}/bin/grep -q '^system_ip=' "$system_properties" 2>/dev/null \
+              && ${pkgs.gnused}/bin/sed -i 's/^system_ip=.*/system_ip=${cfg.advertisedAddress}/' "$system_properties" \
+              || printf '\nsystem_ip=%s\n' '${cfg.advertisedAddress}' >> "$system_properties"
+
+            if ! ${config.virtualisation.podman.package}/bin/podman image exists ${lib.escapeShellArg cfg.container.imageTag}; then
+              ${config.virtualisation.podman.package}/bin/podman load -i ${cfg.runtimeDir}/image.tar
+            fi
+
+            if ! /usr/bin/podman container exists ${lib.escapeShellArg cfg.container.name}; then
+              /usr/bin/podman create \
+                --name ${lib.escapeShellArg cfg.container.name} \
+                --restart unless-stopped \
+                --pids-limit 65536 \
+                --cgroups disabled \
+                --health-cmd "curl --fail http://127.0.0.1/api/ping || exit 1" \
+                --health-interval 60s \
+                --health-timeout 5s \
+                --health-retries 3 \
+                -e UOS_UUID="$uos_uuid" \
+                ${renderEnvArgs containerEnv} \
+                ${renderVolumeArgs containerVolumes} \
+                ${renderExtraArgs cfg.container.extraOptions} \
+                ${lib.escapeShellArg cfg.container.imageTag}
+            fi
+          '';
+        };
+
+        ${updaterUnitName} = {
+          description = "UniFi OS installer updater runtime";
+          wantedBy = ["multi-user.target"];
+          after = ["network-online.target" "${prepareUnitName}.service"];
+          wants = ["network-online.target" "${prepareUnitName}.service"];
+          path = runtimePath;
+          serviceConfig = {
+            ExecStart = "${cfg.runtimeDir}/updater-service";
+            Restart = "always";
+            RestartSec = 2;
+            WorkingDirectory = cfg.runtimeDir;
+            BindReadOnlyPaths = runtimeBindReadOnlyPaths;
+            Environment = runtimeEnvironment;
+          };
+        };
+
+        ${runtimeUnitName} = {
+          description = "UniFi OS installer runtime supervisor";
+          wantedBy = ["multi-user.target"];
+          requires = ["${prepareUnitName}.service"];
+          after = [
+            "network-online.target"
+            "${prepareUnitName}.service"
+            "${updaterUnitName}.service"
+          ];
+          wants = [
+            "network-online.target"
+            "${prepareUnitName}.service"
+            "${updaterUnitName}.service"
+          ];
+          path = runtimePath;
+          serviceConfig = {
+            ExecStart = "${cfg.runtimeDir}/uosserver-service";
+            Restart = "always";
+            RestartSec = 2;
+            User = "root";
+            WorkingDirectory = cfg.runtimeDir;
+            BindReadOnlyPaths = runtimeBindReadOnlyPaths;
+            Environment = runtimeEnvironment;
+          };
+        };
       };
 
-      virtualisation.oci-containers.containers.unifi-os-server = mkIf (!useInstallerRuntime) {
-        image = cfg.imageTag;
-        imageFile = pkgs.runCommand "unifi-os-image.tar" {} ''
-          ln -s ${cfg.package}/image.tar $out
-        '';
-        autoStart = true;
-        privileged = true;
-
-        ports = [];
-
-        extraOptions =
-          [
-            "--systemd=always"
-            "--network=${macvlanCfg.networkName}"
-            "--ip=${macvlanCfg.ip}"
-          ]
-          ++ lib.optionals hostAccessEnabled [
-            "--add-host=host.docker.internal:${macvlanCfg.hostAccess.hostAddress}"
-            "--add-host=host.containers.internal:${macvlanCfg.hostAccess.hostAddress}"
-          ]
-          ++ cfg.extraOptions;
-
-        environment =
-          {
-            UOS_SYSTEM_IP = cfg.lanAddress;
-            UOS_SERVER_VERSION = cfg.package.version;
-            FIRMWARE_PLATFORM =
-              if pkgs.stdenv.hostPlatform.isAarch64
-              then "linux-arm64"
-              else "linux-x64";
-          }
-          // cfg.environment;
-
-        volumes =
-          [
-            "${stateDir}/persistent:/persistent"
-            "/var/log/unifi-os:/var/log"
-            "${stateDir}/data:/data"
-            "${stateDir}/srv:/srv"
-            "${stateDir}/unifi:/var/lib/unifi"
-            "${stateDir}/mongodb:/var/lib/mongodb"
-            "${ucoreDebug}:/etc/systemd/system/unifi-core.service.d/debug.conf:ro"
-            "${ucorePreStartFix}:/etc/systemd/system/unifi-core.service.d/prestart-fix.conf:ro"
-            "${mongoPreStartFix}:/etc/systemd/system/mongodb.service.d/prestart-fix.conf:ro"
-            "${dbusStartFix}:/etc/dbus-1/system.d/start-fix.conf:ro"
-            "${dbusStartFix}:/etc/dbus-1/session.d/start-fix.conf:ro"
-          ]
-          ++ cfg.extraVolumes;
-      };
-
-      users.users.uosserver = mkIf useInstallerRuntime {
+      users.users.${cfg.serviceUser.name} = {
         isSystemUser = true;
-        uid = 980;
-        group = "uosserver";
-        home = "/home/uosserver";
+        uid = cfg.serviceUser.uid;
+        group = cfg.serviceUser.group;
+        home = cfg.serviceUser.home;
         createHome = true;
         shell = pkgs.runtimeShell;
         subUidRanges = [
@@ -669,142 +763,18 @@ _: {
         ];
       };
 
-      users.groups.uosserver = mkIf useInstallerRuntime {
-        gid = 972;
+      users.groups.${cfg.serviceUser.group} = {
+        gid = cfg.serviceUser.gid;
       };
 
-      systemd.tmpfiles.rules = lib.optionals useInstallerRuntime [
-        "d ${installerStateDir} 0755 root root -"
-        "d ${installerStateDir}/bin 0755 root root -"
-        "d ${installerStateDir}/logs 0755 root root -"
-        "d /home/uosserver 0755 uosserver uosserver -"
-        "d /run/user/${toString config.users.users.uosserver.uid} 0700 uosserver uosserver -"
+      systemd.tmpfiles.rules = [
+        "d ${cfg.runtimeDir} 0755 root root -"
+        "d ${cfg.runtimeDir}/bin 0755 root root -"
+        "d ${cfg.runtimeDir}/logs 0755 root root -"
+        "d ${cfg.serviceUser.home} 0755 ${cfg.serviceUser.name} ${cfg.serviceUser.group} -"
+        "d /run/user/${toString cfg.serviceUser.uid} 0700 ${cfg.serviceUser.name} ${cfg.serviceUser.group} -"
         "L+ /usr/bin/podman - - - - ${config.virtualisation.podman.package}/bin/podman"
       ];
-
-      systemd.services.uosserver-runtime = mkIf useInstallerRuntime {
-        description = "UniFi OS installer runtime supervisor";
-        wantedBy = ["multi-user.target"];
-        requires = ["podman-unifi-os-server-network.service"];
-        after = [
-          "network-online.target"
-          "podman-unifi-os-server-network.service"
-          "uosserver-discovery-target-proxy.service"
-          "uosserver-supervisor-proxy.service"
-          "uosserver-updater.service"
-        ];
-        wants = [
-          "network-online.target"
-          "podman-unifi-os-server-network.service"
-          "uosserver-discovery-target-proxy.service"
-          "uosserver-supervisor-proxy.service"
-          "uosserver-updater.service"
-        ];
-        path = installerRuntimePath;
-        preStart = ''
-          uuid_file="${stateDir}/data/uos_uuid"
-          if ! grep -qP '^[0-9a-f]{8}-[0-9a-f]{4}-5' "$uuid_file" 2>/dev/null; then
-            ${pkgs.util-linux}/bin/uuidgen -s -n @dns -N "$(cat /etc/machine-id)" > "$uuid_file"
-          fi
-          uos_uuid="$(cat "$uuid_file")"
-
-          install -d -m700 -o uosserver -g uosserver /run/user/980
-          install -d -m700 -o uosserver -g uosserver /home/uosserver/.config/containers
-
-          cat > /home/uosserver/.config/containers/containers.conf <<EOF
-          [engine]
-          cgroup_manager="cgroupfs"
-          events_logger="file"
-          EOF
-          chown uosserver:uosserver /home/uosserver/.config/containers/containers.conf
-
-          install -C -m755 ${cfg.package}/discovery ${installerStateDir}/bin/discovery
-          install -C -m755 ${cfg.package}/uosserver ${installerStateDir}/uosserver
-          install -C -m755 ${cfg.package}/uosserver-service ${installerStateDir}/uosserver-service
-          ${lib.optionalString (builtins.pathExists "${cfg.package}/updater-service") "install -C -m755 ${cfg.package}/updater-service ${installerStateDir}/updater-service"}
-          ${lib.optionalString (builtins.pathExists "${cfg.package}/pasta") "install -C -m755 ${cfg.package}/pasta ${installerStateDir}/pasta"}
-          ${lib.optionalString (builtins.pathExists "${cfg.package}/purge") "install -C -m755 ${cfg.package}/purge ${installerStateDir}/purge"}
-          install -C -m644 ${cfg.package}/image.tar ${installerStateDir}/image.tar
-
-          cat > ${installerStateDir}/server.conf <<EOF
-          NETWORK_MODE=pasta
-          CONTAINER_IMAGE_NAME=${cfg.imageTag}
-          CONTAINER_VERSION=${cfg.package.version}
-          UOS_SERVER_VERSION=${cfg.package.version}
-          UOS_UUID=$uos_uuid
-          EOF
-
-          mkdir -p ${stateDir}/{persistent,data,srv,unifi,mongodb} ${installerStateDir}/logs
-
-          system_properties="${stateDir}/unifi/system.properties"
-          ${pkgs.gnugrep}/bin/grep -q '^system_ip=' "$system_properties" 2>/dev/null \
-            && ${pkgs.gnused}/bin/sed -i 's/^system_ip=.*/system_ip=${cfg.lanAddress}/' "$system_properties" \
-            || printf '\nsystem_ip=%s\n' '${cfg.lanAddress}' >> "$system_properties"
-
-          if ! ${config.virtualisation.podman.package}/bin/podman image exists ${lib.escapeShellArg cfg.imageTag}; then
-            ${config.virtualisation.podman.package}/bin/podman load -i ${installerStateDir}/image.tar
-          fi
-
-          if ! /usr/bin/podman container exists uosserver; then
-            /usr/bin/podman create \
-              --name uosserver \
-              --restart unless-stopped \
-              --pids-limit 65536 \
-              --cgroups disabled \
-              --health-cmd "curl --fail http://127.0.0.1/api/ping || exit 1" \
-              --health-interval 60s \
-              --health-timeout 5s \
-              --health-retries 3 \
-              -e UOS_UUID="$uos_uuid" \
-              -e UOS_SERVER_VERSION=${lib.escapeShellArg cfg.package.version} \
-              -e FIRMWARE_PLATFORM=${lib.escapeShellArg (
-            if pkgs.stdenv.hostPlatform.isAarch64
-            then "linux-arm64"
-            else "linux-x64"
-          )} \
-              -v ${lib.escapeShellArg "${stateDir}/persistent:/persistent"} \
-              -v ${lib.escapeShellArg "/var/log/unifi-os:/var/log"} \
-              -v ${lib.escapeShellArg "${stateDir}/data:/data"} \
-              -v ${lib.escapeShellArg "${stateDir}/srv:/srv"} \
-              -v ${lib.escapeShellArg "${stateDir}/unifi:/var/lib/unifi"} \
-              -v ${lib.escapeShellArg "${stateDir}/mongodb:/var/lib/mongodb"} \
-              -v ${lib.escapeShellArg "${ucoreDebug}:/etc/systemd/system/unifi-core.service.d/debug.conf:ro"} \
-              -v ${lib.escapeShellArg "${ucorePreStartFix}:/etc/systemd/system/unifi-core.service.d/prestart-fix.conf:ro"} \
-              -v ${lib.escapeShellArg "${mongoPreStartFix}:/etc/systemd/system/mongodb.service.d/prestart-fix.conf:ro"} \
-              -v ${lib.escapeShellArg "${dbusStartFix}:/etc/dbus-1/system.d/start-fix.conf:ro"} \
-              -v ${lib.escapeShellArg "${dbusStartFix}:/etc/dbus-1/session.d/start-fix.conf:ro"} \
-              ${lib.concatMapStringsSep " \\\n+              " (name: "-e ${lib.escapeShellArg "${name}=${cfg.environment.${name}}"}") (lib.attrNames cfg.environment)} \
-              ${lib.concatMapStringsSep " \\\n+              " (volume: "-v ${lib.escapeShellArg volume}") cfg.extraVolumes} \
-              ${lib.concatMapStringsSep " \\\n+              " lib.escapeShellArg cfg.extraOptions} \
-              ${lib.escapeShellArg cfg.imageTag}
-          fi
-        '';
-        serviceConfig = {
-          ExecStart = "${installerStateDir}/uosserver-service";
-          Restart = "always";
-          RestartSec = 2;
-          User = "root";
-          WorkingDirectory = installerStateDir;
-          BindReadOnlyPaths = installerRuntimeBindReadOnlyPaths;
-          Environment = installerRuntimeEnvironment;
-        };
-      };
-
-      systemd.services.uosserver-updater = mkIf useInstallerRuntime {
-        description = "UniFi OS installer updater runtime";
-        wantedBy = ["multi-user.target"];
-        after = ["network-online.target"];
-        wants = ["network-online.target"];
-        path = installerRuntimePath;
-        serviceConfig = {
-          ExecStart = "${installerStateDir}/updater-service";
-          Restart = "always";
-          RestartSec = 2;
-          WorkingDirectory = installerStateDir;
-          BindReadOnlyPaths = installerRuntimeBindReadOnlyPaths;
-          Environment = installerRuntimeEnvironment;
-        };
-      };
     };
   };
 }
