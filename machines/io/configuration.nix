@@ -670,15 +670,11 @@
 
   services.unifi-os-server = {
     enable = true;
-    lanAddress = "10.0.0.21";
-    runtime = "installer";
+    advertisedAddress = "10.0.0.21";
     network = {
-      macvlan = {
-        ip = "10.0.0.21";
-        hostAccess = {
-          enable = true;
-          hostAddress = "10.0.0.22";
-        };
+      hostAccess = {
+        enable = true;
+        address = "10.0.0.22";
       };
     };
   };
