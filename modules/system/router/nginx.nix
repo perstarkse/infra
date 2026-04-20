@@ -8,10 +8,12 @@
     cfg = config.my.router;
     nginxCfg = cfg.nginx;
     helpers = config.routerHelpers or {};
-    lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
-    inherit (cfg) machines;
+    primarySegment = helpers.primarySegment or null;
+    lanSubnet = if primarySegment != null then primarySegment.subnet else cfg.segments.${cfg.primarySegment}.subnet;
+    machineMap = helpers.machineMap or {};
     enabled = cfg.enable && nginxCfg.enable;
-    lanCidr = helpers.lanCidr or "${lanSubnet}.0/24";
+    lanCidr = if primarySegment != null then primarySegment.subnetCidr else "${lanSubnet}.0/24";
+    internalCidrs = map (segment: segment.subnetCidr) (helpers.segments or []);
     ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     wgSubnet = (cfg.wireguard or {}).subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/24";
@@ -95,7 +97,7 @@
           # LAN + ULA64 + WireGuard membership based on (possibly realip) $remote_addr
           geo $lan_wg {
             default 0;
-            ${lanCidr} 1;
+            ${lib.concatMapStringsSep "\n            " (cidr: "${cidr} 1;") internalCidrs}
             ${ulaPrefix}::/64 1;
             ${wgCidr} 1;
           }
@@ -129,19 +131,20 @@
                   if lib.hasPrefix "${lanSubnet}." vhost.target
                   then vhost.target
                   else let
-                    machine = lib.findFirst (m: m.name == vhost.target) null machines;
+                    machine = lib.attrByPath [vhost.target] null machineMap;
                   in
                     if machine != null
-                    then "${lanSubnet}.${machine.ip}"
+                    then machine.fullIp
                     else vhost.target;
 
                 targetUrl = "${vhost.targetScheme}://${targetIp}:${toString vhost.port}";
 
-                lanAllow = ''
-                  allow ${lanCidr};
-                  allow ${ulaPrefix}::/64;
-                  allow ${wgCidr};
-                '';
+                 lanAllow = ''
+                   ${lib.concatMapStringsSep "\n" (cidr: "allow ${cidr};") internalCidrs}
+                   allow ${ulaPrefix}::/64;
+                   allow ${wgCidr};
+                 '';
+
 
                 acl =
                   if (vhost.cloudflareOnly or false)

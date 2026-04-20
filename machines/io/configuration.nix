@@ -166,34 +166,57 @@
     router = {
       enable = true;
       hostname = "io";
-      lan = {
-        subnet = "10.0.0";
-        dhcpRange = {
-          start = 100;
-          end = 200;
+      primarySegment = "trusted";
+      ports = {
+        enp2s0 = {
+          mode = "trunk";
+          nativeSegment = "trusted";
+          taggedSegments = ["cameras"];
         };
-        interfaces = ["enp2s0" "enp3s0" "enp4s0"];
+        enp3s0 = {
+          mode = "trunk";
+          nativeSegment = "trusted";
+          taggedSegments = ["cameras"];
+        };
+        enp4s0 = {
+          mode = "trunk";
+          nativeSegment = "trusted";
+          taggedSegments = ["cameras"];
+        };
       };
-      vlans = [
-        {
-          name = "cameras";
-          id = 30;
-          subnet = "10.0.30";
-          cidrPrefix = 24;
-          dhcpRange = {
-            start = 10;
-            end = 50;
+      segments = {
+        trusted = {
+          vlan.id = 1;
+          subnet = "10.0.0";
+          dhcp = {
+            range = {
+              start = 100;
+              end = 200;
+            };
           };
-          wanEgress = false;
-          reservations = [
-            {
-              name = "reolink-p330";
-              ip = "10";
-              mac = "ec:71:db:01:64:fd";
-            }
-          ];
-        }
-      ];
+        };
+        cameras = {
+          vlan.id = 30;
+          subnet = "10.0.30";
+          dhcp = {
+            range = {
+              start = 10;
+              end = 50;
+            };
+            reservations = [
+              {
+                name = "reolink-p330";
+                ip = "10";
+                mac = "ec:71:db:01:64:fd";
+              }
+            ];
+          };
+          policy = {
+            internet = false;
+            canReach = [];
+          };
+        };
+      };
       wan = {
         interface = "enp1s0";
         allowedUdpPorts =

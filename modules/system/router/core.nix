@@ -5,14 +5,68 @@
     ...
   }: let
     cfg = config.my.router;
-    inherit (lib) mkEnableOption mkOption types;
+    inherit (lib) all attrByPath attrNames concatMap concatStringsSep filter hasAttr isAttrs listToAttrs mapAttrs mapAttrsToList mkEnableOption mkOption nameValuePair optional optionalString optionals types unique;
+
     isHostOctet = s: builtins.match "^([2-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-4])$" s != null;
+    isIPv4Base = s: builtins.match "^[0-9]{1,3}(\.[0-9]{1,3}){2}$" s != null;
+    reservedZoneNames = ["wan" "wireguard" "cni" "libvirt"];
+
+    reservationSubmodule = types.submodule {
+      options = {
+        name = mkOption {
+          type = types.str;
+          description = "Device label";
+        };
+        ip = mkOption {
+          type = types.str;
+          description = "Static IP address (last octet)";
+        };
+        mac = mkOption {
+          type = types.str;
+          description = "MAC address for DHCP reservation";
+        };
+      };
+    };
+
+    reachRuleSubmodule = types.submodule {
+      options = {
+        segment = mkOption {
+          type = types.str;
+          description = "Target segment or special zone name";
+        };
+        all = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Allow all traffic to the target";
+        };
+        icmp = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Allow ICMP/ICMPv6 to the target";
+        };
+        tcpPorts = mkOption {
+          type = types.listOf types.int;
+          default = [];
+          description = "Allowed TCP destination ports to the target";
+        };
+        udpPorts = mkOption {
+          type = types.listOf types.int;
+          default = [];
+          description = "Allowed UDP destination ports to the target";
+        };
+      };
+    };
 
     machineSubmodule = types.submodule {
       options = {
         name = mkOption {
           type = types.str;
           description = "Machine hostname";
+        };
+        segment = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Segment this machine belongs to; defaults to my.router.primarySegment";
         };
         ip = mkOption {
           type = types.str;
@@ -55,66 +109,172 @@
       };
     };
 
-    vlanReservationSubmodule = types.submodule {
+    dnsProfileSubmodule = types.submodule {
       options = {
-        name = mkOption {
-          type = types.str;
-          description = "Device label";
+        blocklistSources = mkOption {
+          type = types.listOf types.str;
+          default = [];
+          description = "Blocky denylist sources for this DNS profile (URLs, file paths, or inline multiline strings).";
         };
-        ip = mkOption {
-          type = types.str;
-          description = "Static IP address (last octet)";
+        allowlistSources = mkOption {
+          type = types.listOf types.str;
+          default = [];
+          description = "Reserved for future per-profile allowlist sources.";
         };
-        mac = mkOption {
-          type = types.str;
-          description = "MAC address for DHCP reservation";
+        denyDomains = mkOption {
+          type = types.listOf types.str;
+          default = [];
+          description = "Inline domains or wildcard entries to block for this profile.";
+        };
+        allowDomains = mkOption {
+          type = types.listOf types.str;
+          default = [];
+          description = "Reserved for future inline allow-domain overrides.";
         };
       };
     };
 
-    vlanSubmodule = types.submodule {
+    segmentSubmodule = types.submodule ({name, ...}: {
       options = {
-        name = mkOption {
-          type = types.str;
-          description = "VLAN label (e.g., camera)";
+        description = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Optional human description for this segment";
         };
-        id = mkOption {
+
+        vlan.id = mkOption {
           type = types.int;
-          description = "802.1Q VLAN ID";
+          description = "802.1Q VLAN ID for this segment";
         };
+
         subnet = mkOption {
           type = types.str;
-          description = "IPv4 subnet base without CIDR (e.g., 10.0.30)";
+          description = "IPv4 subnet base without CIDR (e.g. 10.0.30)";
         };
+
         cidrPrefix = mkOption {
           type = types.int;
           default = 24;
-          description = "CIDR prefix length for subnet";
+          description = "CIDR prefix length for the subnet";
         };
-        dhcpRange = {
-          start = mkOption {
-            type = types.int;
-            default = 10;
-            description = "DHCP start range (last octet)";
+
+        dhcp = {
+          enable = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Enable DHCP service for this segment";
           };
-          end = mkOption {
-            type = types.int;
-            default = 200;
-            description = "DHCP end range (last octet)";
+          range = {
+            start = mkOption {
+              type = types.int;
+              default = 10;
+              description = "DHCP start range (last octet)";
+            };
+            end = mkOption {
+              type = types.int;
+              default = 200;
+              description = "DHCP end range (last octet)";
+            };
+          };
+          reservations = mkOption {
+            type = types.listOf reservationSubmodule;
+            default = [];
+            description = "Static DHCP reservations declared directly on the segment";
+          };
+          domainName = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Optional DHCP domain for this segment; defaults to my.router.dhcp.domainName";
           };
         };
-        wanEgress = mkOption {
-          type = types.bool;
-          default = true;
-          description = "Allow this VLAN to reach WAN";
+
+        dns.profile = mkOption {
+          type = types.str;
+          default = "default";
+          description = "Reserved for future per-segment DNS policy selection";
         };
-        reservations = mkOption {
-          type = types.listOf vlanReservationSubmodule;
+
+        policy = {
+          internet = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Allow this segment to reach WAN";
+          };
+          isolateClients = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Block forwarding between clients within the same segment";
+          };
+          routerAccessLevel = mkOption {
+            type = types.nullOr (types.enum ["none" "infra" "full"]);
+            default = null;
+            description = "Router-host access profile; defaults to full for the primary segment and infra for others";
+          };
+          routerAllowedTcpPorts = mkOption {
+            type = types.listOf types.int;
+            default = [];
+            description = "Additional router TCP ports reachable from this segment when routerAccessLevel is not full";
+          };
+          routerAllowedUdpPorts = mkOption {
+            type = types.listOf types.int;
+            default = [];
+            description = "Additional router UDP ports reachable from this segment when routerAccessLevel is not full";
+          };
+          canReach = mkOption {
+            type = types.listOf (types.oneOf [types.str reachRuleSubmodule]);
+            default = [];
+            description = "Segments or special zones this segment may reach";
+          };
+          canBeReachedFrom = mkOption {
+            type = types.listOf (types.oneOf [types.str reachRuleSubmodule]);
+            default = [];
+            description = "Reverse rules allowing named segments or special zones to initiate traffic into this segment";
+          };
+        };
+      };
+    });
+
+    portSubmodule = types.submodule {
+      options = {
+        mode = mkOption {
+          type = types.enum ["trunk" "access"];
+          default = "trunk";
+          description = "Bridge port mode";
+        };
+        nativeSegment = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Native/untagged segment for trunk ports";
+        };
+        taggedSegments = mkOption {
+          type = types.listOf types.str;
           default = [];
-          description = "DHCP reservations within this VLAN";
+          description = "Tagged segments allowed on trunk ports";
+        };
+        accessSegment = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Single untagged segment for access ports";
         };
       };
     };
+
+    normalizeReachRule = rule:
+      if builtins.isString rule
+      then {
+        segment = rule;
+        all = true;
+        icmp = true;
+        tcpPorts = [];
+        udpPorts = [];
+      }
+      else {
+        segment = rule.segment;
+        all = rule.all;
+        icmp = rule.icmp;
+        tcpPorts = unique rule.tcpPorts;
+        udpPorts = unique rule.udpPorts;
+      };
   in {
     options = {
       my.router = {
@@ -125,29 +285,22 @@
           description = "Router hostname";
         };
 
-        lan = {
-          subnet = mkOption {
-            type = types.str;
-            default = "10.0.0";
-            description = "LAN subnet base (e.g., 10.0.0)";
-          };
-          dhcpRange = {
-            start = mkOption {
-              type = types.int;
-              default = 100;
-              description = "DHCP start range (last octet)";
-            };
-            end = mkOption {
-              type = types.int;
-              default = 200;
-              description = "DHCP end range (last octet)";
-            };
-          };
-          interfaces = mkOption {
-            type = types.listOf types.str;
-            default = ["enp2s0" "enp3s0" "enp4s0"];
-            description = "LAN interfaces to bridge";
-          };
+        primarySegment = mkOption {
+          type = types.str;
+          default = "trusted";
+          description = "Primary internal segment used for router identity, IPv6 ULA, and defaults";
+        };
+
+        ports = mkOption {
+          type = types.attrsOf portSubmodule;
+          default = {};
+          description = "Bridge-facing router ports and their VLAN membership";
+        };
+
+        segments = mkOption {
+          type = types.attrsOf segmentSubmodule;
+          default = {};
+          description = "Named routed network segments";
         };
 
         wan = {
@@ -171,19 +324,13 @@
         ipv6.ulaPrefix = mkOption {
           type = types.str;
           default = "fd00:711a:edcd:7e75";
-          description = "ULA prefix for IPv6";
-        };
-
-        vlans = mkOption {
-          type = types.listOf vlanSubmodule;
-          default = [];
-          description = "Additional IPv4-only VLAN segments";
+          description = "ULA prefix for IPv6 on the primary segment";
         };
 
         machines = mkOption {
           type = types.listOf machineSubmodule;
           default = [];
-          description = "List of machines with static IPs and port forwarding";
+          description = "List of machines with static IPs and optional port forwarding";
         };
 
         services = mkOption {
@@ -217,12 +364,12 @@
           domainName = mkOption {
             type = types.str;
             default = "lan";
-            description = "Domain name for DHCP clients";
+            description = "Default domain name for DHCP clients";
           };
         };
 
         dns = {
-          enable = mkEnableOption "Enable DNS server (Unbound)";
+          enable = mkEnableOption "Enable router DNS stack";
           upstreamServers = mkOption {
             type = types.listOf types.str;
             default = [
@@ -237,6 +384,83 @@
             type = types.listOf types.str;
             default = ["lan."];
             description = "Local DNS zones this router should be authoritative for (include trailing dot).";
+          };
+          profiles = mkOption {
+            type = types.attrsOf dnsProfileSubmodule;
+            default = {
+              default = {};
+            };
+            description = "Per-segment DNS filtering profiles rendered into Blocky client groups.";
+          };
+          blocking = {
+            blockType = mkOption {
+              type = types.str;
+              default = "zeroIp";
+              description = "Global Blocky block type, for example zeroIp or nxDomain.";
+            };
+            blockTTL = mkOption {
+              type = types.str;
+              default = "6h";
+              description = "TTL for blocked DNS responses.";
+            };
+            loadingStrategy = mkOption {
+              type = types.enum ["blocking" "failOnError" "fast"];
+              default = "blocking";
+              description = "How Blocky initializes block/allow lists.";
+            };
+            refreshPeriod = mkOption {
+              type = types.str;
+              default = "24h";
+              description = "Refresh interval for downloaded DNS blocklists.";
+            };
+          };
+          enforcement = {
+            redirectPort53 = mkOption {
+              type = types.bool;
+              default = true;
+              description = "Redirect outbound DNS from non-exempt segments to the router DNS frontend.";
+            };
+            exemptSegments = mkOption {
+              type = types.listOf types.str;
+              default = [];
+              description = "Segments exempt from forced DNS redirection.";
+            };
+          };
+          dohBlocking = {
+            enable = mkOption {
+              type = types.bool;
+              default = true;
+              description = "Block known public encrypted-DNS endpoints and transports for non-exempt segments.";
+            };
+            exemptSegments = mkOption {
+              type = types.listOf types.str;
+              default = [];
+              description = "Segments exempt from DoH/DoT/DoQ blocking; trusted should usually live here.";
+            };
+            denyDomains = mkOption {
+              type = types.listOf types.str;
+              default = [
+                "cloudflare-dns.com"
+                "mozilla.cloudflare-dns.com"
+                "dns.google"
+                "dns.quad9.net"
+                "dns10.quad9.net"
+                "dns11.quad9.net"
+                "dns.nextdns.io"
+                "dns.adguard-dns.com"
+              ];
+              description = "Known public DoH hostnames to block via DNS for protected segments.";
+            };
+            blockTcpPorts = mkOption {
+              type = types.listOf types.int;
+              default = [853];
+              description = "Encrypted DNS TCP ports to block for protected segments.";
+            };
+            blockUdpPorts = mkOption {
+              type = types.listOf types.int;
+              default = [853 784 8853];
+              description = "Encrypted DNS UDP ports to block for protected segments.";
+            };
           };
         };
 
@@ -331,7 +555,7 @@
                 lanOnly = mkOption {
                   type = types.bool;
                   default = false;
-                  description = "Restrict access to LAN subnets using nginx ACLs";
+                  description = "Restrict access to internal routed networks using nginx ACLs";
                 };
                 cloudflareOnly = mkOption {
                   type = types.bool;
@@ -399,9 +623,9 @@
           netdata = {
             enable = mkEnableOption "Enable Netdata monitoring";
             bindAddress = mkOption {
-              type = types.str;
-              default = "${cfg.lan.subnet}.1";
-              description = "Address to bind Netdata to";
+              type = types.nullOr types.str;
+              default = null;
+              description = "Address to bind Netdata to; defaults to the primary segment gateway";
             };
           };
           ntopng = {
@@ -413,16 +637,16 @@
             };
             interfaces = mkOption {
               type = types.listOf types.str;
-              default = ["br-lan" cfg.wan.interface];
-              description = "Interfaces to monitor";
+              default = [];
+              description = "Interfaces to monitor; defaults to the bridge plus WAN";
             };
           };
           grafana = {
             enable = mkEnableOption "Enable Grafana dashboard";
             httpAddr = mkOption {
-              type = types.str;
-              default = "${cfg.lan.subnet}.1";
-              description = "Grafana HTTP bind address";
+              type = types.nullOr types.str;
+              default = null;
+              description = "Grafana HTTP bind address; defaults to the primary segment gateway";
             };
             httpPort = mkOption {
               type = types.int;
@@ -502,7 +726,7 @@
           routeToLan = mkOption {
             type = types.bool;
             default = true;
-            description = "Add route/forwarding between VPN and LAN";
+            description = "Add route/forwarding between VPN and the primary segment";
           };
           peers = mkOption {
             type = types.listOf (types.submodule {
@@ -538,7 +762,7 @@
                 dns = mkOption {
                   type = types.nullOr types.str;
                   default = null;
-                  description = "DNS server to place in generated peer config; defaults to router LAN IP.";
+                  description = "DNS server to place in generated peer config; defaults to router primary gateway.";
                 };
                 clientAllowedIPs = mkOption {
                   type = types.listOf types.str;
@@ -558,12 +782,11 @@
           defaultDns = mkOption {
             type = types.nullOr types.str;
             default = null;
-            description = "Default DNS for generated peer configs; defaults to router LAN IP.";
+            description = "Default DNS for generated peer configs; defaults to the primary segment gateway.";
           };
         };
       };
 
-      # Internal helpers for router submodules
       routerHelpers = mkOption {
         type = types.attrs;
         default = {};
@@ -573,190 +796,304 @@
     };
 
     config = lib.mkIf cfg.enable {
-      assertions = [
+      assertions = let
+        segmentNames = attrNames cfg.segments;
+        machineSegments = map (m: if m.segment != null then m.segment else cfg.primarySegment) cfg.machines;
+        normalizedPolicyTargets = segmentNames ++ reservedZoneNames;
+        allReachRules = concatMap (
+          seg: map normalizeReachRule (seg.policy.canReach ++ seg.policy.canBeReachedFrom)
+        ) (builtins.attrValues cfg.segments);
+        allReservationIps = concatMap (
+          name: let
+            segment = cfg.segments.${name};
+            directReservations = map (r: "${segment.subnet}.${r.ip}") segment.dhcp.reservations;
+            machineReservations = map (m: "${segment.subnet}.${m.ip}") (filter (machine: (if machine.segment != null then machine.segment else cfg.primarySegment) == name) cfg.machines);
+          in directReservations ++ machineReservations
+        ) segmentNames;
+        allReservationMacs =
+          (map (m: m.mac) cfg.machines)
+          ++ concatMap (name: map (r: r.mac) cfg.segments.${name}.dhcp.reservations) segmentNames;
+      in [
         {
-          assertion = cfg.lan.interfaces != [];
-          message = "my.router.lan.interfaces must include at least one LAN interface";
+          assertion = cfg.ports != {};
+          message = "my.router.ports must declare at least one bridge-facing port";
         }
         {
-          assertion = !(lib.elem cfg.wan.interface cfg.lan.interfaces);
-          message = "my.router.wan.interface must not also be present in my.router.lan.interfaces";
+          assertion = hasAttr cfg.primarySegment cfg.segments;
+          message = "my.router.primarySegment must refer to a declared segment";
         }
         {
-          assertion = lib.all (port: port >= 1 && port <= 65535) cfg.wan.allowedTcpPorts;
+          assertion = !(lib.elem cfg.primarySegment reservedZoneNames);
+          message = "my.router.primarySegment must not use a reserved special-zone name";
+        }
+        {
+          assertion = !(lib.elem cfg.wan.interface (attrNames cfg.ports));
+          message = "my.router.wan.interface must not also be declared under my.router.ports";
+        }
+        {
+          assertion = all (port: port >= 1 && port <= 65535) cfg.wan.allowedTcpPorts;
           message = "my.router.wan.allowedTcpPorts must only contain ports in range 1..65535";
         }
         {
-          assertion = lib.all (port: port >= 1 && port <= 65535) cfg.wan.allowedUdpPorts;
+          assertion = all (port: port >= 1 && port <= 65535) cfg.wan.allowedUdpPorts;
           message = "my.router.wan.allowedUdpPorts must only contain ports in range 1..65535";
         }
         {
-          assertion = (lib.length cfg.lan.interfaces) == (lib.length (lib.unique cfg.lan.interfaces));
-          message = "my.router.lan.interfaces must not contain duplicates";
+          assertion = (lib.length segmentNames) == (lib.length (unique (map (name: cfg.segments.${name}.vlan.id) segmentNames)));
+          message = "my.router.segments.*.vlan.id must be unique";
         }
         {
-          assertion =
-            cfg.lan.dhcpRange.start
-            >= 2
-            && cfg.lan.dhcpRange.end <= 254
-            && cfg.lan.dhcpRange.start <= cfg.lan.dhcpRange.end;
-          message = "my.router.lan.dhcpRange must be within 2..254 and start <= end";
+          assertion = (lib.length segmentNames) == (lib.length (unique (map (name: cfg.segments.${name}.subnet) segmentNames)));
+          message = "my.router.segments.*.subnet must be unique";
         }
         {
-          assertion = (lib.length cfg.machines) == (lib.length (lib.unique (map (m: m.name) cfg.machines)));
+          assertion = all (name: !(lib.elem name reservedZoneNames)) segmentNames;
+          message = "my.router.segments must not use reserved names: wan, wireguard, cni, libvirt";
+        }
+        {
+          assertion = all (name: cfg.segments.${name}.vlan.id >= 1 && cfg.segments.${name}.vlan.id <= 4094) segmentNames;
+          message = "my.router.segments.*.vlan.id must be in range 1..4094";
+        }
+        {
+          assertion = all (name: isIPv4Base cfg.segments.${name}.subnet) segmentNames;
+          message = "my.router.segments.*.subnet must be an IPv4 base like 10.0.30";
+        }
+        {
+          assertion = all (
+            name:
+              let
+                segment = cfg.segments.${name};
+              in
+                segment.dhcp.range.start >= 2
+                && segment.dhcp.range.end <= 254
+                && segment.dhcp.range.start <= segment.dhcp.range.end
+          ) segmentNames;
+          message = "my.router.segments.*.dhcp.range must be within 2..254 and start <= end";
+        }
+        {
+          assertion = all (
+            port:
+              if port.mode == "trunk"
+              then port.nativeSegment != null && port.accessSegment == null && !(lib.elem port.nativeSegment port.taggedSegments) && (lib.length port.taggedSegments) == (lib.length (unique port.taggedSegments))
+              else port.accessSegment != null && port.nativeSegment == null && port.taggedSegments == []
+          ) (builtins.attrValues cfg.ports);
+          message = "Router ports must be well-formed: trunk ports need nativeSegment only, access ports need accessSegment only";
+        }
+        {
+          assertion = all (
+            port:
+              let
+                refs =
+                  if port.mode == "trunk"
+                  then [port.nativeSegment] ++ port.taggedSegments
+                  else [port.accessSegment];
+              in
+                all (segmentName: segmentName != null && hasAttr segmentName cfg.segments) refs
+          ) (builtins.attrValues cfg.ports);
+          message = "Router ports must only reference declared segments";
+        }
+        {
+          assertion = (lib.length cfg.machines) == (lib.length (unique (map (m: m.name) cfg.machines)));
           message = "my.router.machines names must be unique";
         }
         {
-          assertion = (lib.length cfg.machines) == (lib.length (lib.unique (map (m: m.mac) cfg.machines)));
-          message = "my.router.machines MAC addresses must be unique";
+          assertion = (lib.length allReservationMacs) == (lib.length (unique allReservationMacs));
+          message = "Router machine and reservation MAC addresses must be unique";
         }
         {
-          assertion = lib.all (m: isHostOctet m.ip) cfg.machines;
-          message = "my.router.machines.<name>.ip must be a numeric host octet in the range 2..254";
+          assertion = all (m: isHostOctet m.ip) cfg.machines;
+          message = "my.router.machines.*.ip must be a numeric host octet in the range 2..254";
         }
         {
-          assertion =
-            (lib.length (map (m: m.ip) cfg.machines))
-            == (lib.length (lib.unique (map (m: m.ip) cfg.machines)));
-          message = "my.router.machines IP host octets must be unique";
+          assertion = all (segmentName: hasAttr segmentName cfg.segments) machineSegments;
+          message = "my.router.machines.*.segment must refer to a declared segment";
         }
         {
-          assertion = lib.all (m: lib.all (pf: pf.port >= 1 && pf.port <= 65535) m.portForwards) cfg.machines;
+          assertion = (lib.length allReservationIps) == (lib.length (unique allReservationIps));
+          message = "Router machine and reservation IPs must be unique across segments";
+        }
+        {
+          assertion = all (m: all (pf: pf.port >= 1 && pf.port <= 65535) m.portForwards) cfg.machines;
           message = "my.router.machines.*.portForwards.*.port must be in range 1..65535";
         }
         {
-          assertion = (lib.length cfg.vlans) == (lib.length (lib.unique (map (v: v.name) cfg.vlans)));
-          message = "my.router.vlans names must be unique";
+          assertion = all (
+            name: all (r: isHostOctet r.ip) cfg.segments.${name}.dhcp.reservations
+          ) segmentNames;
+          message = "my.router.segments.*.dhcp.reservations.*.ip must be a numeric host octet in the range 2..254";
         }
         {
-          assertion = (lib.length cfg.vlans) == (lib.length (lib.unique (map (v: v.id) cfg.vlans)));
-          message = "my.router.vlans IDs must be unique";
+          assertion = all (
+            rule:
+              lib.elem rule.segment normalizedPolicyTargets
+              && all (port: port >= 1 && port <= 65535) (rule.tcpPorts ++ rule.udpPorts)
+          ) allReachRules;
+          message = "Segment policy rules must reference known segments/zones and only use ports in range 1..65535";
         }
         {
-          assertion = lib.all (v: v.id >= 2 && v.id <= 4094) cfg.vlans;
-          message = "my.router.vlans.*.id must be in range 2..4094 (VLAN 1 is reserved for LAN)";
+          assertion = all (
+            name:
+              let
+                policy = cfg.segments.${name}.policy;
+              in
+                all (port: port >= 1 && port <= 65535) (policy.routerAllowedTcpPorts ++ policy.routerAllowedUdpPorts)
+          ) segmentNames;
+          message = "my.router.segments.*.policy.routerAllowed{Tcp,Udp}Ports must be within 1..65535";
         }
         {
-          assertion =
-            (lib.length (map (v: v.subnet) cfg.vlans))
-            == (lib.length (lib.unique (map (v: v.subnet) cfg.vlans)));
-          message = "my.router.vlans subnets must be unique";
+          assertion = lib.hasAttr "default" cfg.dns.profiles;
+          message = "my.router.dns.profiles must define a default profile";
         }
         {
-          assertion = !(lib.elem cfg.lan.subnet (map (v: v.subnet) cfg.vlans));
-          message = "my.router.vlans subnets must not reuse my.router.lan.subnet";
+          assertion = all (name: lib.hasAttr cfg.segments.${name}.dns.profile cfg.dns.profiles) segmentNames;
+          message = "my.router.segments.*.dns.profile must refer to a declared DNS profile";
         }
         {
-          assertion =
-            lib.all (
-              v:
-                v.dhcpRange.start
-                >= 2
-                && v.dhcpRange.end <= 254
-                && v.dhcpRange.start <= v.dhcpRange.end
-            )
-            cfg.vlans;
-          message = "my.router.vlans.*.dhcpRange must be within 2..254 and start <= end";
+          assertion = all (name: lib.hasAttr name cfg.segments) cfg.dns.enforcement.exemptSegments;
+          message = "my.router.dns.enforcement.exemptSegments must only reference declared segments";
         }
         {
-          assertion = lib.all (v: lib.all (r: isHostOctet r.ip) v.reservations) cfg.vlans;
-          message = "my.router.vlans.*.reservations.*.ip must be a numeric host octet in the range 2..254";
+          assertion = all (name: lib.hasAttr name cfg.segments) cfg.dns.dohBlocking.exemptSegments;
+          message = "my.router.dns.dohBlocking.exemptSegments must only reference declared segments";
+        }
+        {
+          assertion = all (port: port >= 1 && port <= 65535) (cfg.dns.dohBlocking.blockTcpPorts ++ cfg.dns.dohBlocking.blockUdpPorts);
+          message = "my.router.dns.dohBlocking.block{Tcp,Udp}Ports must only contain ports in range 1..65535";
         }
       ];
 
       routerHelpers = let
-        lanSubnet = cfg.lan.subnet;
-        lanCidr = "${lanSubnet}.0/24";
-        routerIp = "${lanSubnet}.1";
+        segmentNames = attrNames cfg.segments;
+        orderedSegmentNames = [cfg.primarySegment] ++ filter (name: name != cfg.primarySegment) segmentNames;
         lanBridge = "br-lan";
-        lanVlanId = 1;
-        lanInterface = "vlan${toString lanVlanId}";
-        dhcpStart = "${lanSubnet}.${toString cfg.lan.dhcpRange.start}";
-        dhcpEnd = "${lanSubnet}.${toString cfg.lan.dhcpRange.end}";
         wgCfg = cfg.wireguard or {};
-        wgRouteToLan = wgCfg.routeToLan or true;
+        wgRouteToPrimary = wgCfg.routeToLan or true;
         wgSubnet = wgCfg.subnet or "10.6.0";
         wgCidr = "${wgSubnet}.0/${toString (wgCfg.cidrPrefix or 24)}";
-        vlanHelpers =
-          map (v: let
-            subnetCidr = "${v.subnet}.0/${toString v.cidrPrefix}";
-            routerVlanIp = "${v.subnet}.1";
-          in {
-            inherit subnetCidr routerVlanIp;
-            inherit (v) name;
-            inherit (v) id;
-            inherit (v) subnet;
-            interface = "vlan${toString v.id}";
-            dhcpStart = "${v.subnet}.${toString v.dhcpRange.start}";
-            dhcpEnd = "${v.subnet}.${toString v.dhcpRange.end}";
-            inherit (v) wanEgress;
-            inherit (v) reservations;
-            inherit (v) cidrPrefix;
-          })
-          cfg.vlans;
 
-        lanZone = {
-          name = "lan";
-          kind = "lan";
-          interface = lanInterface;
-          subnets = [lanCidr];
-          inherit routerIp;
-          wanEgress = true;
-          allowTo = (lib.optional wgRouteToLan "wireguard") ++ ["libvirt"];
+        machineHelpers = map (
+          machine: let
+            segmentName = if machine.segment != null then machine.segment else cfg.primarySegment;
+            segment = cfg.segments.${segmentName};
+          in
+            machine
+            // {
+              segment = segmentName;
+              fullIp = "${segment.subnet}.${machine.ip}";
+              subnet = segment.subnet;
+            }
+        ) cfg.machines;
+
+        machineMap = listToAttrs (map (machine: nameValuePair machine.name machine) machineHelpers);
+
+        mkSegment = name: let
+          segment = cfg.segments.${name};
+          machineReservations = map (
+            machine: {
+              inherit (machine) name mac;
+              ip = machine.fullIp;
+            }
+          ) (filter (machine: machine.segment == name) machineHelpers);
+          directReservations = map (
+            reservation: {
+              inherit (reservation) name mac;
+              ip = "${segment.subnet}.${reservation.ip}";
+            }
+          ) segment.dhcp.reservations;
+          routerAccessLevel =
+            if segment.policy.routerAccessLevel != null
+            then segment.policy.routerAccessLevel
+            else if name == cfg.primarySegment then "full" else "infra";
+          implicitCanReach =
+            optionals (name == cfg.primarySegment && wgRouteToPrimary && (wgCfg.enable or false)) ["wireguard"]
+            ++ optional (name == cfg.primarySegment) "libvirt";
+        in {
+          inherit name;
+          description = segment.description;
+          kind = "segment";
+          vlanId = segment.vlan.id;
+          subnet = segment.subnet;
+          cidrPrefix = segment.cidrPrefix;
+          subnetCidr = "${segment.subnet}.0/${toString segment.cidrPrefix}";
+          subnets = ["${segment.subnet}.0/${toString segment.cidrPrefix}"];
+          routerIp = "${segment.subnet}.1";
+          interface = "vlan${toString segment.vlan.id}";
+          internet = segment.policy.internet;
+          isolateClients = segment.policy.isolateClients;
+          routerAccessLevel = routerAccessLevel;
+          routerAllowedTcpPorts = unique segment.policy.routerAllowedTcpPorts;
+          routerAllowedUdpPorts = unique segment.policy.routerAllowedUdpPorts;
+          reachRules = map normalizeReachRule (segment.policy.canReach ++ implicitCanReach);
+          canBeReachedFrom = map normalizeReachRule segment.policy.canBeReachedFrom;
           dhcp = {
-            inherit (cfg.dhcp) enable domainName;
-            poolStart = dhcpStart;
-            poolEnd = dhcpEnd;
-            reservations =
-              map (machine: {
-                inherit (machine) name mac;
-                ip = "${lanSubnet}.${machine.ip}";
-              })
-              cfg.machines;
+            enable = cfg.dhcp.enable && segment.dhcp.enable;
+            domainName = if segment.dhcp.domainName != null then segment.dhcp.domainName else cfg.dhcp.domainName;
+            poolStart = "${segment.subnet}.${toString segment.dhcp.range.start}";
+            poolEnd = "${segment.subnet}.${toString segment.dhcp.range.end}";
+            reservations = directReservations ++ machineReservations;
           };
+          dnsProfile = segment.dns.profile;
+          dnsRedirectEnabled = cfg.dns.enable && cfg.dns.enforcement.redirectPort53 && !(lib.elem name cfg.dns.enforcement.exemptSegments);
+          isPrimary = name == cfg.primarySegment;
         };
 
-        vlanZones =
-          map (v: {
-            inherit (v) name interface wanEgress;
-            kind = "vlan";
-            subnets = [v.subnetCidr];
-            routerIp = v.routerVlanIp;
-            allowTo = [];
-            dhcp = {
-              enable = true;
-              inherit (cfg.dhcp) domainName;
-              poolStart = v.dhcpStart;
-              poolEnd = v.dhcpEnd;
-              reservations =
-                map (r: {
-                  inherit (r) name mac;
-                  ip = "${v.subnet}.${r.ip}";
-                })
-                v.reservations;
-            };
-          })
-          vlanHelpers;
+        segmentMap = mapAttrs (name: _: mkSegment name) cfg.segments;
+        orderedSegments = map (name: segmentMap.${name}) orderedSegmentNames;
+        primarySegment = segmentMap.${cfg.primarySegment};
 
-        wgZone = lib.optional (wgCfg.enable or false) {
+        portHelpers = mapAttrsToList (
+          iface: port:
+            port
+            // {
+              name = iface;
+              memberships =
+                if port.mode == "trunk"
+                then [
+                  {
+                    VLAN = segmentMap.${port.nativeSegment}.vlanId;
+                    PVID = segmentMap.${port.nativeSegment}.vlanId;
+                    EgressUntagged = segmentMap.${port.nativeSegment}.vlanId;
+                  }
+                ] ++ map (segmentName: {VLAN = segmentMap.${segmentName}.vlanId;}) port.taggedSegments
+                else [
+                  {
+                    VLAN = segmentMap.${port.accessSegment}.vlanId;
+                    PVID = segmentMap.${port.accessSegment}.vlanId;
+                    EgressUntagged = segmentMap.${port.accessSegment}.vlanId;
+                  }
+                ];
+            }
+        ) cfg.ports;
+
+        wgZone = optional (wgCfg.enable or false) {
           name = "wireguard";
           kind = "wireguard";
           interface = wgCfg.interfaceName or "wg0";
           subnets = [wgCidr];
           routerIp = "${wgSubnet}.1";
-          wanEgress = true;
-          allowTo = (lib.optional wgRouteToLan "lan") ++ ["cni"];
+          internet = true;
+          isolateClients = false;
+          routerAccessLevel = "full";
+          routerAllowedTcpPorts = [];
+          routerAllowedUdpPorts = [];
+          reachRules = map normalizeReachRule ((optionals wgRouteToPrimary [cfg.primarySegment]) ++ ["cni"]);
+          canBeReachedFrom = [];
           dhcp.enable = false;
         };
 
-        cniZone = lib.optional (config.systemd.network.enable or false) {
+        cniZone = optional (config.systemd.network.enable or false) {
           name = "cni";
           kind = "cni";
           interface = "cni0";
           subnets = [];
           routerIp = null;
-          wanEgress = true;
-          allowTo = ["lan" "wireguard"];
+          internet = true;
+          isolateClients = false;
+          routerAccessLevel = "full";
+          routerAllowedTcpPorts = [];
+          routerAllowedUdpPorts = [];
+          reachRules = map normalizeReachRule ([cfg.primarySegment] ++ optional (wgCfg.enable or false) "wireguard");
+          canBeReachedFrom = [];
           dhcp.enable = false;
         };
 
@@ -766,28 +1103,54 @@
           interface = "virbr*";
           subnets = [];
           routerIp = null;
-          wanEgress = true;
-          allowTo = [];
+          internet = true;
+          isolateClients = false;
+          routerAccessLevel = "full";
+          routerAllowedTcpPorts = [];
+          routerAllowedUdpPorts = [];
+          reachRules = [];
+          canBeReachedFrom = [];
           dhcp.enable = false;
         };
 
         wanZone = {
           name = "wan";
           kind = "wan";
-          inherit (cfg.wan) interface;
+          interface = cfg.wan.interface;
           subnets = [];
           routerIp = null;
-          wanEgress = false;
-          allowTo = [];
+          internet = false;
+          isolateClients = false;
+          routerAccessLevel = "none";
+          routerAllowedTcpPorts = [];
+          routerAllowedUdpPorts = [];
+          reachRules = [];
+          canBeReachedFrom = [];
           dhcp.enable = false;
         };
       in {
-        inherit lanSubnet lanCidr routerIp lanBridge lanVlanId lanInterface dhcpStart dhcpEnd;
-        inherit (cfg.ipv6) ulaPrefix;
+        primarySegmentName = cfg.primarySegment;
+        primarySegment = primarySegment;
+        primarySubnet = primarySegment.subnet;
+        primaryCidr = primarySegment.subnetCidr;
+        primaryRouterIp = primarySegment.routerIp;
+        primaryInterface = primarySegment.interface;
+        lanBridge = lanBridge;
         wanInterface = cfg.wan.interface;
-        lanPorts = cfg.lan.interfaces;
-        vlans = vlanHelpers;
-        zones = [lanZone] ++ vlanZones ++ wgZone ++ cniZone ++ [libvirtZone] ++ [wanZone];
+        bridgePorts = portHelpers;
+        segmentMap = segmentMap;
+        segments = orderedSegments;
+        machineMap = machineMap;
+        machineList = machineHelpers;
+        zones = orderedSegments ++ wgZone ++ cniZone ++ [libvirtZone] ++ [wanZone];
+        ulaPrefix = cfg.ipv6.ulaPrefix;
+
+        # Compatibility aliases for modules still transitioning internally.
+        lanSubnet = primarySegment.subnet;
+        lanCidr = primarySegment.subnetCidr;
+        routerIp = primarySegment.routerIp;
+        lanInterface = primarySegment.interface;
+        lanPorts = map (port: port.name) portHelpers;
       };
     };
   };
