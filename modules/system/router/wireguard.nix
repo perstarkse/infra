@@ -32,7 +32,10 @@
     routerIp =
       if config ? routerHelpers
       then config.routerHelpers.routerIp
-      else "${config.my.router.lan.subnet or "10.0.0"}.1";
+      else let
+        primarySegmentName = config.my.router.primarySegment or "trusted";
+        primarySegment = config.my.router.segments.${primarySegmentName};
+      in "${primarySegment.subnet}.1";
 
     mkPeerSecret = peer: (config.my.secrets.mkMachineSecret {
       name = "wireguard-peer-${peer.name}";

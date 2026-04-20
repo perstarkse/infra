@@ -2,41 +2,82 @@
   config.flake.nixosModules.router-dns = {
     lib,
     config,
+    pkgs,
     ...
   }: let
     cfg = config.my.router;
     dnsCfg = cfg.dns;
     helpers = config.routerHelpers or {};
     zones = helpers.zones or [];
-    lanSubnet = helpers.lanSubnet or cfg.lan.subnet;
-    routerIp = helpers.routerIp or "${lanSubnet}.1";
+    segments = helpers.segments or [];
+    primarySegment = helpers.primarySegment or null;
+    routerIp = if primarySegment != null then primarySegment.routerIp else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
     ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     inherit (cfg) services;
-    internalSubnets = lib.concatMap (z: z.subnets) (lib.filter (z: z.kind != "wan") zones);
+    listenerIps = map (segment: segment.routerIp) segments;
     enabled = cfg.enable && dnsCfg.enable;
-    normalizeZone = z: let
-      z' =
-        if lib.hasSuffix "." z
-        then z
-        else "${z}.";
-    in
-      z';
+    normalizeZone = z:
+      if lib.hasSuffix "." z then z else "${z}.";
     rawLocalZones = dnsCfg.localZones or [];
-    localZones = let
-      lst = rawLocalZones;
-    in
-      if lst == []
+    localZones =
+      if rawLocalZones == []
       then ["lan."]
-      else lib.unique (map normalizeZone lst);
+      else lib.unique (map normalizeZone rawLocalZones);
     isIPv4Literal = s: builtins.match "^[0-9]{1,3}(\.[0-9]{1,3}){3}$" s != null;
     normalizeFqdn = host:
-      if lib.hasSuffix "." host
-      then host
-      else "${host}.";
+      if lib.hasSuffix "." host then host else "${host}.";
     mkServiceRecord = service:
       if isIPv4Literal service.target
       then "\"${service.name} IN A ${service.target}\""
       else "\"${service.name} IN CNAME ${normalizeFqdn service.target}\"";
+
+    blockyPort = 53;
+    blockyHttpPort = 4000;
+    unboundPort = 5354;
+    unboundListen = ["127.0.0.1" "::1"];
+    profileNames = lib.attrNames dnsCfg.profiles;
+
+    mkInlineSourceEntries = domains:
+      if domains == []
+      then []
+      else [((lib.concatStringsSep "\n" domains) + "\n")];
+
+    profileDenyDomains = lib.mapAttrs (
+      _name: profile:
+        profile.denyDomains
+        ++ lib.optionals dnsCfg.dohBlocking.enable dnsCfg.dohBlocking.denyDomains
+    ) dnsCfg.profiles;
+
+    blockyDenyLists = lib.mapAttrs (
+      name: profile:
+        profile.blocklistSources ++ (mkInlineSourceEntries profileDenyDomains.${name})
+    ) dnsCfg.profiles;
+
+    blockyClientGroups =
+      {
+        default = ["default"];
+      }
+      // lib.listToAttrs (map (
+        segment:
+          lib.nameValuePair segment.subnetCidr [segment.dnsProfile]
+      ) segments);
+
+    blockyBootstrapDns = [
+      {upstream = "1.1.1.1";}
+      {upstream = "1.0.0.1";}
+    ];
+
+    blockyPorts =
+      {
+        dns = map (ip: "${ip}:${toString blockyPort}") listenerIps ++ ["127.0.0.1:${toString blockyPort}"];
+        http = ["127.0.0.1:${toString blockyHttpPort}"];
+      }
+      // lib.optionalAttrs (primarySegment != null) {
+        dns = map (ip: "${ip}:${toString blockyPort}") listenerIps ++ [
+          "127.0.0.1:${toString blockyPort}"
+          "[${ulaPrefix}::1]:${toString blockyPort}"
+        ];
+      };
   in {
     config = lib.mkIf enabled {
       services.unbound = {
@@ -44,23 +85,12 @@
         settings = {
           "remote-control" = {"control-enable" = true;};
           server = {
-            interface = [
-              "127.0.0.1"
-              "::1"
-              routerIp
-              "${ulaPrefix}::1"
+            interface = unboundListen;
+            port = unboundPort;
+            "access-control" = [
+              "127.0.0.0/8 allow"
+              "::1 allow"
             ];
-            "access-control" =
-              [
-                "127.0.0.0/8 allow"
-                "::1 allow"
-                "${ulaPrefix}::/64 allow"
-              ]
-              ++ (map (cidr: "${cidr} allow") internalSubnets)
-              ++ [
-                "0.0.0.0/0 refuse"
-                "::0/0 refuse"
-              ];
             "cache-min-ttl" = 0;
             "cache-max-ttl" = 86400;
             "do-tcp" = true;
@@ -79,8 +109,7 @@
                   ]
                   ++ lib.concatMap (
                     zone:
-                      map (r: "\"${r.name}.${lz} IN A ${r.ip}\"")
-                      (zone.dhcp.reservations or [])
+                      map (r: "\"${r.name}.${lz} IN A ${r.ip}\"") (zone.dhcp.reservations or [])
                   )
                   zones
               )
@@ -94,6 +123,56 @@
               "forward-tls-upstream" = true;
             }
           ];
+        };
+      };
+
+      services.blocky = {
+        enable = true;
+        settings = {
+          ports = blockyPorts // {dohPath = "/dns-query";};
+          log = {
+            level = "info";
+            privacy = true;
+          };
+          upstreams = {
+            init.strategy = "blocking";
+            strategy = "parallel_best";
+            groups.default = ["127.0.0.1:${toString unboundPort}"];
+          };
+          bootstrapDns = blockyBootstrapDns;
+          blocking = {
+            denylists = blockyDenyLists;
+            clientGroupsBlock = blockyClientGroups;
+            blockType = dnsCfg.blocking.blockType;
+            blockTTL = dnsCfg.blocking.blockTTL;
+            loading = {
+              strategy = dnsCfg.blocking.loadingStrategy;
+              refreshPeriod = dnsCfg.blocking.refreshPeriod;
+            };
+          };
+          customDNS = {
+            customTTL = "1h";
+            filterUnmappedTypes = false;
+          };
+          caching = {
+            minTime = "0";
+            maxTime = "24h";
+            prefetching = true;
+            cacheTimeNegative = "30m";
+          };
+          specialUseDomains.enable = false;
+          prometheus = {
+            enable = true;
+            path = "/metrics";
+          };
+        };
+      };
+
+      systemd.services.blocky = {
+        after = ["unbound.service"];
+        requires = ["unbound.service"];
+        serviceConfig = {
+          StateDirectoryMode = "0750";
         };
       };
     };

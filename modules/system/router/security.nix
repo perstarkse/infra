@@ -10,11 +10,13 @@
     f2bCfg = secCfg.fail2ban;
     jrCfg = secCfg.journalReceiver;
     helpers = config.routerHelpers or {};
-    lanCidr = helpers.lanCidr or "${cfg.lan.subnet}.0/24";
+    primarySegment = helpers.primarySegment or null;
+    internalCidrs = map (segment: segment.subnetCidr) (helpers.segments or []);
+    lanCidr = if primarySegment != null then primarySegment.subnetCidr else "${cfg.segments.${cfg.primarySegment}.subnet}.0/24";
     wgCfg = cfg.wireguard or {};
     wgSubnet = wgCfg.subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/${toString (wgCfg.cidrPrefix or 24)}";
-    routerIp = helpers.routerIp or "${cfg.lan.subnet}.1";
+    routerIp = if primarySegment != null then primarySegment.routerIp else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
     jrListenHost =
       if builtins.match ".*:.*" jrCfg.listenAddress != null && !(lib.hasPrefix "[" jrCfg.listenAddress)
       then "[${jrCfg.listenAddress}]"
@@ -26,8 +28,8 @@
       [
         "127.0.0.0/8"
         "::1"
-        lanCidr
       ]
+      ++ internalCidrs
       ++ lib.optionals (wgCfg.enable or false) [wgCidr];
 
     allIgnoreIPs = autoIgnoreIPs ++ f2bCfg.ignoreIPs;

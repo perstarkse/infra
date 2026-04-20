@@ -26,11 +26,15 @@
         'BEGIN { print (avg < threshold) ? "1" : "0" }')
 
       # Check for user input activity via logind IdleHint (set by swayidle)
-      # Only check graphical sessions (wayland/x11), ignore TTY/pts sessions
+      # Only treat active graphical user sessions as activity; ignore greeter and closing sessions
       user_idle=1
       for session in $(${pkgs.systemd}/bin/loginctl list-sessions --no-legend | ${pkgs.gawk}/bin/awk '{print $1}'); do
         session_type=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Type --value 2>/dev/null || echo "")
-        if [ "$session_type" = "wayland" ] || [ "$session_type" = "x11" ]; then
+        session_class=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Class --value 2>/dev/null || echo "")
+        session_state=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p State --value 2>/dev/null || echo "")
+        if { [ "$session_type" = "wayland" ] || [ "$session_type" = "x11" ]; } \
+          && [ "$session_class" = "user" ] \
+          && [ "$session_state" = "active" ]; then
           idle_hint=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleHint --value 2>/dev/null || echo "yes")
           if [ "$idle_hint" = "no" ]; then
             user_idle=0

@@ -55,7 +55,7 @@ _: {
 
     parentNetworkUnitName =
       if networkCfg.parentInterface == (routerHelpers.lanInterface or null)
-      then "35-${networkCfg.parentInterface}"
+      then "40-${networkCfg.parentInterface}"
       else "10-${networkCfg.parentInterface}";
 
     defaultPackage = pkgs.callPackage ../../pkgs/unifi-os {

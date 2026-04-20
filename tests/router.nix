@@ -242,6 +242,91 @@
     };
   };
 
+  iotClientNode = lib.recursiveUpdate commonNode {
+    virtualisation.vlans = [2];
+
+    systemd = {
+      network = {
+        netdevs."10-vlan20" = {
+          netdevConfig = {
+            Name = "vlan20";
+            Kind = "vlan";
+          };
+          vlanConfig.Id = 20;
+        };
+
+        networks."10-eth1" = {
+          matchConfig.Name = "eth1";
+          networkConfig = {
+            ConfigureWithoutCarrier = true;
+            VLAN = ["vlan20"];
+          };
+        };
+
+        networks."20-vlan20" = {
+          matchConfig.Name = "vlan20";
+          networkConfig.DHCP = "yes";
+        };
+      };
+    };
+  };
+
+  iotServerNode = lib.recursiveUpdate commonNode {
+    virtualisation.vlans = [2];
+    systemd = {
+      network = {
+        netdevs."10-vlan20" = {
+          netdevConfig = {
+            Name = "vlan20";
+            Kind = "vlan";
+          };
+          vlanConfig.Id = 20;
+        };
+
+        networks."10-eth1" = {
+          matchConfig.Name = "eth1";
+          networkConfig = {
+            ConfigureWithoutCarrier = true;
+            VLAN = ["vlan20"];
+          };
+        };
+
+        networks."20-vlan20" = {
+          matchConfig.Name = "vlan20";
+          address = ["10.0.20.11/24"];
+          networkConfig.ConfigureWithoutCarrier = true;
+          routes = [
+            {
+              Gateway = "10.0.20.1";
+            }
+          ];
+        };
+      };
+    };
+    systemd.services.iot-http = {
+      description = "Test HTTP service on IoT server";
+      wantedBy = ["multi-user.target"];
+      serviceConfig = {
+        Type = "simple";
+        Restart = "always";
+        RestartSec = "2s";
+      };
+      script = ''
+        mkdir -p /var/lib/iot-http
+        printf 'iot-ok\n' > /var/lib/iot-http/index.html
+        exec ${pkgs.busybox}/bin/httpd -f -p 8080 -h /var/lib/iot-http
+      '';
+    };
+  };
+
+  accessIotClientNode = lib.recursiveUpdate commonNode {
+    virtualisation.vlans = [2];
+    systemd.network.networks."10-eth1" = {
+      matchConfig.Name = "eth1";
+      networkConfig.DHCP = "yes";
+    };
+  };
+
   wgClientNode = lib.recursiveUpdate commonNode {
     virtualisation.vlans = [1];
 
@@ -277,31 +362,57 @@
         {
           enable = true;
           hostname = "router";
+          primarySegment = "trusted";
 
           wan.interface = "eth1";
-          lan = {
-            subnet = "10.0.0";
-            interfaces = ["eth2"];
-            dhcpRange = {
-              start = 100;
-              end = 200;
+          ports.eth2 = {
+            mode = "trunk";
+            nativeSegment = "trusted";
+            taggedSegments = ["cameras" "iot"];
+          };
+          segments = {
+            trusted = {
+              vlan.id = 1;
+              subnet = "10.0.0";
+              dhcp = {
+                range = {
+                  start = 100;
+                  end = 200;
+                };
+              };
+            };
+            cameras = {
+              vlan.id = 30;
+              subnet = "10.0.30";
+              dhcp = {
+                range = {
+                  start = 10;
+                  end = 50;
+                };
+              };
+              policy.internet = false;
+            };
+            iot = {
+              vlan.id = 20;
+              subnet = "10.0.20";
+              dhcp = {
+                range = {
+                  start = 10;
+                  end = 50;
+                };
+              };
+              dns.profile = "iotFiltered";
+              policy = {
+                internet = true;
+                canReach = [
+                  {
+                    segment = "trusted";
+                    tcpPorts = [8080];
+                  }
+                ];
+              };
             };
           };
-
-          vlans = [
-            {
-              name = "cameras";
-              id = 30;
-              subnet = "10.0.30";
-              cidrPrefix = 24;
-              dhcpRange = {
-                start = 10;
-                end = 50;
-              };
-              wanEgress = false;
-              reservations = [];
-            }
-          ];
 
           dhcp = {
             enable = true;
@@ -314,6 +425,12 @@
           dns = {
             enable = true;
             localZones = ["lan.test."];
+            profiles = {
+              default = {};
+              iotFiltered = {
+                denyDomains = ["cloudflare.com"];
+              };
+            };
           };
 
           monitoring.enable = false;
@@ -355,8 +472,8 @@ in {
     '';
   };
 
-  router-vlan-regression = pkgs.testers.runNixOSTest {
-    name = "router-vlan-regression";
+  router-segment-isolation = pkgs.testers.runNixOSTest {
+    name = "router-segment-isolation";
     nodes = {
       wan = wanNode;
       router = mkRouterNode {};
@@ -370,17 +487,200 @@ in {
       wan.wait_for_unit("dnsmasq.service")
       router.wait_for_unit("systemd-networkd.service")
       router.wait_for_unit("kea-dhcp4-server.service")
+      router.wait_for_unit("unbound.service")
 
       lanClient.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10\\.0\\.0\\.'", timeout=180)
       camClient.wait_until_succeeds("ip -4 -o addr show dev vlan30 | grep -q '10\\.0\\.30\\.'", timeout=180)
 
-      router.succeed("ping -c1 -W2 10.0.0.10")
-      lanClient.succeed("ping -c1 -W2 10.0.0.10")
-      lanClient.succeed("ping -c1 -W2 192.168.100.1")
-
       camClient.succeed("ping -c1 -W2 10.0.30.1")
+      camClient.succeed("dig +short @10.0.30.1 router.lan.test A | grep -x '10.0.0.1'")
       camClient.fail("ping -c1 -W2 10.0.0.10")
       camClient.fail("ping -c1 -W2 192.168.100.1")
+      lanClient.fail("ping -c1 -W2 10.0.30.10")
+    '';
+  };
+
+  router-segment-policy = pkgs.testers.runNixOSTest {
+    name = "router-segment-policy";
+    nodes = {
+      wan = wanNode;
+      router = mkRouterNode {
+        extraRouterConfig = {
+          machines = [
+            {
+              name = "lan-server";
+              ip = "10";
+              mac = "02:00:00:00:10:00";
+              portForwards = [];
+            }
+          ];
+        };
+      };
+      lanServer = lanServerRoutedHttpNode;
+      iotClient = iotClientNode;
+      camClient = camClientNode;
+    };
+    testScript = ''
+      start_all()
+
+      wan.wait_for_unit("dnsmasq.service")
+      lanServer.wait_for_unit("lan-http.service")
+      router.wait_for_unit("systemd-networkd.service")
+      router.wait_for_unit("kea-dhcp4-server.service")
+
+      iotClient.wait_until_succeeds("ip -4 -o addr show dev vlan20 | grep -q '10\\.0\\.20\\.'", timeout=180)
+      camClient.wait_until_succeeds("ip -4 -o addr show dev vlan30 | grep -q '10\\.0\\.30\\.'", timeout=180)
+
+      iotClient.succeed("curl --fail -sS --max-time 5 http://10.0.0.10:8080/ | grep -q '^ok$'")
+      iotClient.fail("curl --fail -sS --max-time 5 http://10.0.0.10:18081/")
+      camClient.fail("curl --fail -sS --max-time 5 http://10.0.0.10:8080/")
+      iotClient.succeed("ping -c1 -W2 192.168.100.1")
+      camClient.fail("ping -c1 -W2 192.168.100.1")
+    '';
+  };
+
+  router-access-port = pkgs.testers.runNixOSTest {
+    name = "router-access-port";
+    nodes = {
+      wan = wanNode;
+      router = mkRouterNode {
+        extraRouterConfig = {
+          ports.eth2 = {
+            mode = "access";
+            accessSegment = "iot";
+            nativeSegment = null;
+            taggedSegments = [];
+          };
+        };
+      };
+      accessIotClient = accessIotClientNode;
+    };
+    testScript = ''
+      start_all()
+
+      wan.wait_for_unit("dnsmasq.service")
+      router.wait_for_unit("systemd-networkd.service")
+      router.wait_for_unit("kea-dhcp4-server.service")
+
+      accessIotClient.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10\\.0\\.20\\.'", timeout=180)
+      accessIotClient.succeed("ping -c1 -W2 10.0.20.1")
+      accessIotClient.succeed("ping -c1 -W2 192.168.100.1")
+      accessIotClient.fail("ping -c1 -W2 10.0.0.10")
+    '';
+  };
+
+  router-nginx-machine-targets = pkgs.testers.runNixOSTest {
+    name = "router-nginx-machine-targets";
+    nodes = {
+      wan = wanNode;
+      iotServer = iotServerNode;
+      router = mkRouterNode {
+        extraRouterConfig = {
+          nginx = {
+            enable = true;
+            virtualHosts = [
+              {
+                domain = "iot-target.lan.test";
+                target = "iot-app";
+                port = 8080;
+                websockets = false;
+                noAcme = true;
+              }
+            ];
+          };
+          machines = [
+            {
+              name = "iot-app";
+              segment = "iot";
+              ip = "11";
+              mac = "02:00:00:00:20:11";
+              portForwards = [];
+            }
+          ];
+        };
+      };
+    };
+    testScript = ''
+      start_all()
+
+      wan.wait_for_unit("dnsmasq.service")
+      iotServer.wait_for_unit("iot-http.service")
+      router.wait_for_unit("nginx.service")
+      router.wait_for_unit("kea-dhcp4-server.service")
+
+      router.succeed("curl --fail -sS --max-time 5 -H 'Host: iot-target.lan.test' http://127.0.0.1/ | grep -q '^iot-ok$'")
+    '';
+  };
+
+  router-dns-profiles = pkgs.testers.runNixOSTest {
+    name = "router-dns-profiles";
+    nodes = {
+      wan = wanNode;
+      router = mkRouterNode {
+        extraRouterConfig = {
+          dns = {
+            profiles = {
+              default = {};
+              iotFiltered = {
+                denyDomains = ["cloudflare.com"];
+              };
+            };
+            dohBlocking.exemptSegments = ["trusted"];
+          };
+          segments.iot.dns.profile = "iotFiltered";
+        };
+      };
+      lanClient = lanClientNode;
+      iotClient = iotClientNode;
+    };
+    testScript = ''
+      start_all()
+
+      wan.wait_for_unit("dnsmasq.service")
+      router.wait_for_unit("blocky.service")
+      router.wait_for_unit("unbound.service")
+      router.wait_for_unit("kea-dhcp4-server.service")
+      lanClient.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10\\.0\\.0\\.'", timeout=180)
+      iotClient.wait_until_succeeds("ip -4 -o addr show dev vlan20 | grep -q '10\\.0\\.20\\.'", timeout=180)
+
+      lanClient.fail("dig +short @10.0.0.1 cloudflare.com A | grep -x '0.0.0.0'")
+      iotClient.succeed("dig +short @10.0.20.1 cloudflare.com A | grep -x '0.0.0.0'")
+      iotClient.fail("dig +short @10.0.20.1 router.lan.test A | grep -x '0.0.0.0'")
+    '';
+  };
+
+  router-dns-enforcement = pkgs.testers.runNixOSTest {
+    name = "router-dns-enforcement";
+    nodes = {
+      wan = wanNode;
+      router = mkRouterNode {
+        extraRouterConfig = {
+          dns = {
+            profiles = {
+              default = {};
+              iotFiltered = {
+                denyDomains = ["cloudflare.com"];
+              };
+            };
+            dohBlocking.exemptSegments = ["trusted"];
+          };
+          segments.iot.dns.profile = "iotFiltered";
+        };
+      };
+      iotClient = iotClientNode;
+    };
+    testScript = ''
+      start_all()
+
+      wan.wait_for_unit("dnsmasq.service")
+      router.wait_for_unit("blocky.service")
+      router.wait_for_unit("kea-dhcp4-server.service")
+      iotClient.wait_until_succeeds("ip -4 -o addr show dev vlan20 | grep -q '10\\.0\\.20\\.'", timeout=180)
+
+      iotClient.succeed("dig +short @8.8.8.8 cloudflare.com A | grep -x '0.0.0.0'")
+      iotClient.succeed("dig +short @8.8.8.8 dns.google A | grep -x '0.0.0.0'")
+      iotClient.succeed("dig +short @8.8.8.8 router.lan.test A | grep -x '10.0.0.1'")
+      iotClient.fail("nc -vz -w2 1.1.1.1 853")
     '';
   };
 

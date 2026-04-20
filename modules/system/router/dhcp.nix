@@ -7,9 +7,9 @@
     inherit (lib) filter imap0;
     cfg = config.my.router;
     helpers = config.routerHelpers or {};
-    zones = helpers.zones or [];
-    enabledZones = filter (z: (z.dhcp.enable or false)) zones;
-    enabled = cfg.enable && (enabledZones != []);
+    segments = helpers.segments or [];
+    enabledSegments = filter (segment: segment.dhcp.enable or false) segments;
+    enabled = cfg.enable && (enabledSegments != []);
   in {
     config = lib.mkIf enabled {
       services.kea = {
@@ -24,7 +24,7 @@
           enable = true;
           settings = {
             interfaces-config = {
-              interfaces = map (z: z.interface) enabledZones;
+              interfaces = map (segment: segment.interface) enabledSegments;
               re-detect = true;
             };
             "lease-database" = {
@@ -38,11 +38,11 @@
             "rebind-timer" = cfg.dhcp.rebindTimer;
             subnet4 =
               imap0
-              (index: zone: {
+              (index: segment: {
                 id = 1 + index;
-                subnet = lib.head zone.subnets;
+                subnet = segment.subnetCidr;
                 pools = [
-                  {pool = "${zone.dhcp.poolStart} - ${zone.dhcp.poolEnd}";}
+                  {pool = "${segment.dhcp.poolStart} - ${segment.dhcp.poolEnd}";}
                 ];
                 reservations =
                   map (
@@ -52,23 +52,23 @@
                       hostname = reservation.name;
                     }
                   )
-                  (zone.dhcp.reservations or []);
+                  (segment.dhcp.reservations or []);
                 "option-data" = [
                   {
                     name = "routers";
-                    data = zone.routerIp;
+                    data = segment.routerIp;
                   }
                   {
                     name = "domain-name-servers";
-                    data = zone.routerIp;
+                    data = segment.routerIp;
                   }
                   {
                     name = "domain-name";
-                    data = zone.dhcp.domainName or cfg.dhcp.domainName;
+                    data = segment.dhcp.domainName or cfg.dhcp.domainName;
                   }
                 ];
               })
-              enabledZones;
+              enabledSegments;
           };
         };
       };
