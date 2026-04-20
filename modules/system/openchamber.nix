@@ -48,6 +48,23 @@ _: {
       then "ip6 saddr ${source} tcp dport ${toString cfg.port} accept"
       else "ip saddr ${source} tcp dport ${toString cfg.port} accept")
     cfg.allowedFirewallSources;
+    mkFirewallExtraCommands = port: sources: let
+      allowRules =
+        map (
+          source:
+            if builtins.match ".*:.*" source != null
+            then "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp -s ${source} --dport ${toString port} -j ACCEPT"
+            else "${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp -s ${source} --dport ${toString port} -j ACCEPT"
+        )
+        sources;
+    in
+      lib.concatStringsSep "\n" (
+        allowRules
+        ++ [
+          "${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp --dport ${toString port} -j DROP"
+          "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp --dport ${toString port} -j DROP"
+        ]
+      );
   in {
     options.my.openchamber = {
       enable = lib.mkEnableOption "OpenChamber web interface";
@@ -294,6 +311,9 @@ _: {
         extraInputRules = lib.mkIf (cfg.allowedFirewallSources != []) (lib.mkAfter ''
           ${firewallSourceRules}
           tcp dport ${toString cfg.port} drop
+        '');
+        extraCommands = lib.mkIf (!config.networking.nftables.enable && cfg.allowedFirewallSources != []) (lib.mkAfter ''
+          ${mkFirewallExtraCommands cfg.port cfg.allowedFirewallSources}
         '');
       };
     };

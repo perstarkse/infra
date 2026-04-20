@@ -143,6 +143,76 @@
     };
   };
 
+  fakeOpenChamberPackage = pkgs.writeShellApplication {
+    name = "openchamber";
+    runtimeInputs = [pkgs.busybox pkgs.coreutils];
+    text = ''
+      set -eu
+      port=3000
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          serve)
+            shift
+            ;;
+          --port)
+            port="$2"
+            shift 2
+            ;;
+          *)
+            shift
+            ;;
+        esac
+      done
+      mkdir -p /tmp/openchamber-www
+      printf 'openchamber-ok\n' > /tmp/openchamber-www/index.html
+      exec ${pkgs.busybox}/bin/httpd -f -p "$port" -h /tmp/openchamber-www
+    '';
+  };
+
+  openchamberFirewallServerNode = lib.recursiveUpdate commonNode {
+    imports = [nixosModules.openchamber];
+    networking = {
+      firewall.enable = true;
+      useNetworkd = true;
+      useDHCP = false;
+    };
+    virtualisation.vlans = [1];
+    systemd.network.networks."10-eth1" = {
+      matchConfig.Name = "eth1";
+      address = ["192.168.50.10/24"];
+      networkConfig.ConfigureWithoutCarrier = true;
+    };
+    my.openchamber = {
+      enable = true;
+      package = fakeOpenChamberPackage;
+      runAsMainUser = false;
+      listenAddress = "0.0.0.0";
+      port = 3000;
+      projectPath = null;
+      projectLabel = null;
+      openFirewall = true;
+      allowedFirewallSources = ["192.168.50.11"];
+    };
+  };
+
+  openchamberAllowedClientNode = lib.recursiveUpdate commonNode {
+    virtualisation.vlans = [1];
+    systemd.network.networks."10-eth1" = {
+      matchConfig.Name = "eth1";
+      address = ["192.168.50.11/24"];
+      networkConfig.ConfigureWithoutCarrier = true;
+    };
+  };
+
+  openchamberBlockedClientNode = lib.recursiveUpdate commonNode {
+    virtualisation.vlans = [1];
+    systemd.network.networks."10-eth1" = {
+      matchConfig.Name = "eth1";
+      address = ["192.168.50.12/24"];
+      networkConfig.ConfigureWithoutCarrier = true;
+    };
+  };
+
   camClientNode = lib.recursiveUpdate commonNode {
     virtualisation.vlans = [2];
 
@@ -437,6 +507,32 @@ in {
         f"curl -sS -o /dev/null -w '%{{http_code}}' --max-time 5 http://{router_wan_ip}:18081/ || true"
       ).strip()
       assert wan_blocked_code == "000", f"expected non-forwarded WAN port to be blocked, got HTTP {wan_blocked_code}"
+    '';
+  };
+
+  openchamber-firewall-sources = pkgs.testers.runNixOSTest {
+    name = "openchamber-firewall-sources";
+    nodes = {
+      server = openchamberFirewallServerNode;
+      allowedClient = openchamberAllowedClientNode;
+      blockedClient = openchamberBlockedClientNode;
+    };
+    testScript = ''
+      start_all()
+
+      server.wait_for_unit("openchamber.service")
+      server.wait_until_succeeds("ss -ltn '( sport = :3000 )' | grep -q ':3000'", timeout=120)
+      server.succeed("curl --fail -sS --max-time 5 http://127.0.0.1:3000/ | grep -q '^openchamber-ok$'")
+
+      allowedClient.wait_until_succeeds("ping -c1 -W2 192.168.50.10", timeout=120)
+      blockedClient.wait_until_succeeds("ping -c1 -W2 192.168.50.10", timeout=120)
+
+      allowedClient.succeed("curl --fail -sS --max-time 5 http://192.168.50.10:3000/ | grep -q '^openchamber-ok$'")
+
+      blocked_status = blockedClient.succeed(
+        "curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://192.168.50.10:3000/ || true"
+      ).strip()
+      assert blocked_status == "000", f"expected blocked client to fail closed, got HTTP {blocked_status}"
     '';
   };
 
