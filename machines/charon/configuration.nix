@@ -4,7 +4,15 @@
   pkgs,
   lib,
   ...
-}: {
+}: let
+  pinnedKernelPkgs = import (builtins.getFlake "github:NixOS/nixpkgs/afbbf774e2087c3d734266c22f96fca2e78d3620") {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    config = {
+      allowUnfree = true;
+      nvidia.acceptLicense = true;
+    };
+  };
+in {
   imports = with ctx.flake.nixosModules;
     [
       home-module
@@ -416,6 +424,9 @@
     };
   };
 
+  # Battlemage + xe is currently stable on 6.12.74 here; newer 6.12.x regressed GPU init.
+  boot.kernelPackages = pinnedKernelPkgs.linuxPackages;
+
   time.timeZone = "Europe/Stockholm";
 
   environment.systemPackages = with pkgs; [
@@ -464,13 +475,6 @@
       };
     };
   };
-
-  hardware.graphics.extraPackages = lib.mkForce (with pkgs.unstable; [
-    intel-media-driver
-    intel-compute-runtime
-    vpl-gpu-rt
-    level-zero
-  ]);
 
   security = {
     polkit.enable = true;
