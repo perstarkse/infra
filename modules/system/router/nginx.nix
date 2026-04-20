@@ -107,6 +107,8 @@
             11 1;
             01 1;
           }
+
+          limit_req_zone $binary_remote_addr zone=public:10m rate=10r/m;
         '';
 
         virtualHosts =

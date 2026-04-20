@@ -20,7 +20,6 @@
       heartbeat
       home-assistant
       ntfy
-      # unifi-controller # keep this for now, until unifi-os stable
       unifi-os
       frigate
       garage
@@ -56,6 +55,7 @@
       "::1"
       "10.0.0.1"
     ];
+    externalOrigin = "https://wake.stark.pub";
     passwordHashFile = config.my.secrets.getPath "wake-proxy" "env";
   };
 
@@ -562,6 +562,10 @@
             port = 8091;
             websockets = true;
             cloudflareOnly = true;
+            extraConfig = ''
+              limit_req zone=public burst=20 nodelay;
+              limit_req_status 429;
+            '';
             acmeDns01 = {
               dnsProvider = "cloudflare";
               environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
@@ -660,12 +664,6 @@
     #   memoryGb = 4;
     #   diskSizeGb = 120;
     # };
-  };
-
-  # Keep UniFi on unstable package set.
-  services.unifi = {
-    unifiPackage = pkgs.unstable.unifi;
-    mongodbPackage = pkgs.mongodb-7_0;
   };
 
   services.unifi-os-server = {

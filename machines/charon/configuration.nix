@@ -186,12 +186,13 @@
     pollInterval = 2;
     wakePollIntervalMs = 2000;
     readyCacheTtl = 5;
-    trustProxyHeaders = true;
+    trustProxyHeaders = false;
     trustedProxyIps = [
       "127.0.0.1"
       "::1"
       "10.0.0.1"
     ];
+    externalOrigin = "https://wake.stark.pub";
     passwordHashFile = config.my.secrets.getPath "wake-proxy" "env";
     keepAwake = {
       enable = true;
@@ -380,6 +381,10 @@
       projectPath = "/home/p/repos";
       projectLabel = "charon";
       openFirewall = true;
+      allowedFirewallSources = [
+        "10.0.0.1"
+        "10.0.0.15"
+      ];
     };
 
     # Auto-suspend when system is idle (load < threshold + no user input)
