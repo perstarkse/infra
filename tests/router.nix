@@ -644,6 +644,7 @@ in {
       iotClient.wait_until_succeeds("ip -4 -o addr show dev vlan20 | grep -q '10\\.0\\.20\\.'", timeout=180)
 
       lanClient.fail("dig +short @10.0.0.1 cloudflare.com A | grep -x '0.0.0.0'")
+      iotClient.succeed("dig +short @10.0.20.1 dns.google A | grep -x '0.0.0.0'")
       iotClient.succeed("dig +short @10.0.20.1 cloudflare.com A | grep -x '0.0.0.0'")
       iotClient.fail("dig +short @10.0.20.1 router.lan.test A | grep -x '0.0.0.0'")
     '';

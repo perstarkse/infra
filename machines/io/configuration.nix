@@ -387,6 +387,32 @@
           "2606:4700:4700::1111@853#cloudflare-dns.com"
           "2606:4700:4700::1001@853#cloudflare-dns.com"
         ];
+        profiles = {
+          default = {};
+          iot = {
+            blocklistSources = [
+              "https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt"
+              "https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt"
+            ];
+          };
+          guests = {
+            blocklistSources = [
+              "https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt"
+              "https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt"
+              "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews/hosts"
+            ];
+          };
+          kids = {
+            blocklistSources = [
+              "https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt"
+              "https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt"
+              "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/native/tif.txt"
+              "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/native/gambling.txt"
+            ];
+          };
+        };
+        enforcement.exemptSegments = ["trusted"];
+        dohBlocking.exemptSegments = ["trusted"];
       };
 
       nginx = {
@@ -646,6 +672,11 @@
             {
               job_name = "unbound";
               static_configs = [{targets = ["localhost:9167"];}];
+            }
+            {
+              job_name = "blocky";
+              static_configs = [{targets = ["127.0.0.1:4000"];}];
+              metrics_path = "/metrics";
             }
           ];
         };

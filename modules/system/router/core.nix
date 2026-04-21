@@ -690,6 +690,11 @@
                   job_name = "unbound";
                   static_configs = [{targets = ["localhost:${toString 9167}"];}];
                 }
+                {
+                  job_name = "blocky";
+                  static_configs = [{targets = ["127.0.0.1:${toString 4000}"];}];
+                  metrics_path = "/metrics";
+                }
               ];
               description = "Prometheus scrape configs";
             };
