@@ -35,7 +35,6 @@
     blockyHttpPort = 4000;
     unboundPort = 5354;
     unboundListen = ["127.0.0.1" "::1"];
-    profileNames = lib.attrNames dnsCfg.profiles;
 
     mkInlineSourceEntries = domains:
       if domains == []
@@ -45,12 +44,24 @@
     profileDenyDomains = lib.mapAttrs (
       _name: profile:
         profile.denyDomains
-        ++ lib.optionals dnsCfg.dohBlocking.enable dnsCfg.dohBlocking.denyDomains
     ) dnsCfg.profiles;
+
+    protectedDohProfiles = lib.unique (map (
+      segment: segment.dnsProfile
+    ) (lib.filter (
+      segment:
+        dnsCfg.dohBlocking.enable
+        && !(lib.elem segment.name dnsCfg.dohBlocking.exemptSegments)
+    ) segments));
+
+    effectiveProfileDenyDomains = lib.mapAttrs (
+      name: domains:
+        domains ++ lib.optionals (lib.elem name protectedDohProfiles) dnsCfg.dohBlocking.denyDomains
+    ) profileDenyDomains;
 
     blockyDenyLists = lib.mapAttrs (
       name: profile:
-        profile.blocklistSources ++ (mkInlineSourceEntries profileDenyDomains.${name})
+        profile.blocklistSources ++ (mkInlineSourceEntries effectiveProfileDenyDomains.${name})
     ) dnsCfg.profiles;
 
     blockyClientGroups =
