@@ -248,9 +248,9 @@ my.router = {
     acmeEmail = "email@domain.tld";
     ddclient.enable = true;
     virtualHosts = [
-      { domain = "service.domain.tld"; target = "makemake"; port = 7909; websockets = true; cloudflareOnly = true; }
+      { domain = "service.domain.tld"; target = "makemake"; port = 7909; websockets = true; cloudflareProxied = true; }
       {
-        domain = "service2.domain.tld"; target = "makemake"; port = 3000; cloudflareOnly = true; websockets = false;
+        domain = "service2.domain.tld"; target = "makemake"; port = 3000; cloudflareProxied = true; websockets = false;
         extraConfig = ''
           proxy_set_header Connection "close";
           proxy_http_version 1.1;

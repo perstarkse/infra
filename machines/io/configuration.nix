@@ -57,6 +57,10 @@
     ];
     externalOrigin = "https://wake.stark.pub";
     passwordHashFile = config.my.secrets.getPath "wake-proxy" "env";
+    keepAwake = {
+      enable = true;
+      maxDurationSeconds = 14400;
+    };
   };
 
   my = {
@@ -171,17 +175,17 @@
         enp2s0 = {
           mode = "trunk";
           nativeSegment = "trusted";
-          taggedSegments = ["cameras"];
+          taggedSegments = ["iot" "kids" "guests" "cameras"];
         };
         enp3s0 = {
           mode = "trunk";
           nativeSegment = "trusted";
-          taggedSegments = ["cameras"];
+          taggedSegments = ["iot" "kids" "guests" "cameras"];
         };
         enp4s0 = {
           mode = "trunk";
           nativeSegment = "trusted";
-          taggedSegments = ["cameras"];
+          taggedSegments = ["iot" "kids" "guests" "cameras"];
         };
       };
       segments = {
@@ -193,6 +197,63 @@
               start = 100;
               end = 200;
             };
+          };
+          policy.routerAllowedTcpPorts = [3900 3901 3902];
+        };
+        iot = {
+          vlan.id = 20;
+          subnet = "10.0.20";
+          dhcp = {
+            range = {
+              start = 10;
+              end = 200;
+            };
+          };
+          dns.profile = "iot";
+          policy = {
+            internet = true;
+            isolateClients = false;
+            canReach = [];
+            canBeReachedFrom = [
+              {
+                segment = "trusted";
+                tcpPorts = [8008 8009 8443];
+                udpPorts = [1900 5353];
+              }
+            ];
+          };
+        };
+
+        kids = {
+          vlan.id = 40;
+          subnet = "10.0.40";
+          dhcp = {
+            range = {
+              start = 10;
+              end = 200;
+            };
+          };
+          dns.profile = "kids";
+          policy = {
+            internet = true;
+            isolateClients = false;
+            canReach = [];
+          };
+        };
+        guests = {
+          vlan.id = 50;
+          subnet = "10.0.50";
+          dhcp = {
+            range = {
+              start = 10;
+              end = 200;
+            };
+          };
+          dns.profile = "guests";
+          policy = {
+            internet = true;
+            isolateClients = true;
+            canReach = [];
           };
         };
         cameras = {
@@ -521,21 +582,21 @@
             target = "makemake";
             port = 8080;
             websockets = true;
-            cloudflareOnly = true;
+            cloudflareProxied = true;
           }
           {
             domain = "request.stark.pub";
             target = "makemake";
             port = 5055;
             websockets = true;
-            cloudflareOnly = true;
+            cloudflareProxied = true;
           }
           {
             domain = "minne.stark.pub";
             target = "makemake";
             port = 3001;
             websockets = false;
-            cloudflareOnly = true;
+            cloudflareProxied = true;
             extraConfig = ''
               proxy_set_header Connection "close";
               proxy_http_version 1.1;
@@ -549,7 +610,7 @@
             target = "makemake";
             port = 3001;
             websockets = false;
-            cloudflareOnly = true;
+            cloudflareProxied = true;
             extraConfig = ''
               return 301 https://minne.stark.pub$request_uri;
             '';
@@ -561,7 +622,7 @@
             websockets = false;
             lanOnly = true;
             useWildcard = "lanstark";
-            cloudflareOnly = false;
+            cloudflareProxied = false;
             extraConfig = ''
               proxy_set_header Connection "close";
               proxy_http_version 1.1;
@@ -575,7 +636,7 @@
             target = "makemake";
             port = 3002;
             websockets = false;
-            cloudflareOnly = true;
+            cloudflareProxied = true;
             extraConfig = ''
               client_max_body_size 55M;
             '';
@@ -592,7 +653,7 @@
             target = "makemake";
             port = 5150;
             websockets = false;
-            cloudflareOnly = true;
+            cloudflareProxied = true;
           }
           {
             domain = "paperless.lan.stark.pub";
@@ -610,11 +671,7 @@
             target = "10.0.0.1";
             port = 8091;
             websockets = true;
-            cloudflareOnly = true;
-            extraConfig = ''
-              limit_req zone=public burst=20 nodelay;
-              limit_req_status 429;
-            '';
+            cloudflareProxied = true;
             acmeDns01 = {
               dnsProvider = "cloudflare";
               environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
@@ -644,6 +701,12 @@
             useWildcard = "lanstark";
           }
         ];
+      };
+
+      casting = {
+        enable = true;
+        sourceSegment = "trusted";
+        targetSegments = ["iot"];
       };
 
       monitoring = {

@@ -12,11 +12,13 @@
     helpers = config.routerHelpers or {};
     primarySegment = helpers.primarySegment or null;
     internalCidrs = map (segment: segment.subnetCidr) (helpers.segments or []);
-    lanCidr = if primarySegment != null then primarySegment.subnetCidr else "${cfg.segments.${cfg.primarySegment}.subnet}.0/24";
     wgCfg = cfg.wireguard or {};
     wgSubnet = wgCfg.subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/${toString (wgCfg.cidrPrefix or 24)}";
-    routerIp = if primarySegment != null then primarySegment.routerIp else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
+    routerIp =
+      if primarySegment != null
+      then primarySegment.routerIp
+      else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
     jrListenHost =
       if builtins.match ".*:.*" jrCfg.listenAddress != null && !(lib.hasPrefix "[" jrCfg.listenAddress)
       then "[${jrCfg.listenAddress}]"
@@ -38,6 +40,13 @@
     journalLogDir = "/var/log/journal/remote";
 
     enabled = cfg.enable && secCfg.enable;
+    journalReceiverPorts = lib.optionals (enabled && jrCfg.enable) [
+      {
+        access = "admin";
+        protocol = "tcp";
+        inherit (jrCfg) port;
+      }
+    ];
   in {
     options.my.router.security = {
       enable = mkEnableOption "router security features (Fail2Ban)";
@@ -158,6 +167,9 @@
     };
 
     config = mkIf enabled (mkMerge [
+      {
+        my.router.internalServicePorts = journalReceiverPorts;
+      }
       # Fail2Ban configuration
       (mkIf f2bCfg.enable {
         services.fail2ban = {
@@ -311,11 +323,15 @@
           inherit (jrCfg) port;
         };
 
-        # Bind journal-remote to an explicit address+port socket
-        systemd.sockets.systemd-journal-remote.listenStreams = lib.mkForce [
-          ""
-          jrListenStream
-        ];
+        # Bind journal-remote to an explicit address+port socket after network addresses exist
+        systemd.sockets.systemd-journal-remote = {
+          after = ["systemd-networkd-wait-online.service" "network-online.target"];
+          wants = ["network-online.target"];
+          listenStreams = lib.mkForce [
+            ""
+            jrListenStream
+          ];
+        };
 
         # Create directory for remote journals
         systemd.tmpfiles.rules = [

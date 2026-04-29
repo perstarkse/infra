@@ -219,6 +219,12 @@ _: {
           bun
           cloudflared
           nodejs
+          nodePackages.pnpm
+          bashInteractive
+          coreutils
+          gnugrep
+          gawk
+          findutils
           nix
           devenv
         ];
@@ -279,6 +285,12 @@ _: {
           bun
           cloudflared
           nodejs
+          nodePackages.pnpm
+          bashInteractive
+          coreutils
+          gnugrep
+          gawk
+          findutils
           nix
           devenv
         ];
