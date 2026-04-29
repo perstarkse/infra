@@ -1277,11 +1277,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1777402408,
-        "narHash": "sha256-9E1aHXbpE4lykJSML87ofueFNHxM2LYj/zEvopqizFI=",
+        "lastModified": 1777441943,
+        "narHash": "sha256-pISdNAhwFFkn+mm1rxpwJMETqAigYbQG9HatfXRkiHw=",
         "ref": "refs/heads/main",
-        "rev": "4ce2c8ea76549a982558037be1dea49b130094d8",
-        "revCount": 807,
+        "rev": "55c57dc762daf52fb66c0c7c645407f4ef44c701",
+        "revCount": 808,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/politikerstod.git"
       },
