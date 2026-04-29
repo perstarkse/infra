@@ -4,11 +4,17 @@
   fetchurl,
   makeWrapper,
   nodejs,
+  nodePackages,
   git,
   openssh,
   opencode,
   cloudflared,
   bun,
+  bashInteractive,
+  coreutils,
+  gnugrep,
+  gawk,
+  findutils,
   python3,
 }:
 buildNpmPackage rec {
@@ -37,11 +43,17 @@ buildNpmPackage rec {
     wrapProgram $out/bin/openchamber \
       --prefix PATH : ${lib.makeBinPath [
       nodejs
+      nodePackages.pnpm
       git
       openssh
       opencode
       cloudflared
       bun
+      bashInteractive
+      coreutils
+      gnugrep
+      gawk
+      findutils
     ]}
   '';
 

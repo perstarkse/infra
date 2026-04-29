@@ -2,7 +2,6 @@
   config.flake.nixosModules.router-dns = {
     lib,
     config,
-    pkgs,
     ...
   }: let
     cfg = config.my.router;
@@ -11,13 +10,18 @@
     zones = helpers.zones or [];
     segments = helpers.segments or [];
     primarySegment = helpers.primarySegment or null;
-    routerIp = if primarySegment != null then primarySegment.routerIp else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
+    routerIp =
+      if primarySegment != null
+      then primarySegment.routerIp
+      else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
     ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     inherit (cfg) services;
     listenerIps = map (segment: segment.routerIp) segments;
     enabled = cfg.enable && dnsCfg.enable;
     normalizeZone = z:
-      if lib.hasSuffix "." z then z else "${z}.";
+      if lib.hasSuffix "." z
+      then z
+      else "${z}.";
     rawLocalZones = dnsCfg.localZones or [];
     localZones =
       if rawLocalZones == []
@@ -25,11 +29,13 @@
       else lib.unique (map normalizeZone rawLocalZones);
     isIPv4Literal = s: builtins.match "^[0-9]{1,3}(\.[0-9]{1,3}){3}$" s != null;
     normalizeFqdn = host:
-      if lib.hasSuffix "." host then host else "${host}.";
+      if lib.hasSuffix "." host
+      then host
+      else "${host}.";
     mkServiceRecord = service:
       if isIPv4Literal service.target
-      then "\"${service.name} IN A ${service.target}\""
-      else "\"${service.name} IN CNAME ${normalizeFqdn service.target}\"";
+      then "\"${normalizeFqdn service.name} IN A ${service.target}\""
+      else "\"${normalizeFqdn service.name} IN CNAME ${normalizeFqdn service.target}\"";
 
     blockyPort = 53;
     blockyHttpPort = 4000;
@@ -41,37 +47,45 @@
       then []
       else [((lib.concatStringsSep "\n" domains) + "\n")];
 
-    profileDenyDomains = lib.mapAttrs (
-      _name: profile:
-        profile.denyDomains
-    ) dnsCfg.profiles;
+    profileDenyDomains =
+      lib.mapAttrs (
+        _name: profile:
+          profile.denyDomains
+      )
+      dnsCfg.profiles;
 
     protectedDohProfiles = lib.unique (map (
-      segment: segment.dnsProfile
-    ) (lib.filter (
-      segment:
-        dnsCfg.dohBlocking.enable
-        && !(lib.elem segment.name dnsCfg.dohBlocking.exemptSegments)
-    ) segments));
+        segment: segment.dnsProfile
+      ) (lib.filter (
+          segment:
+            dnsCfg.dohBlocking.enable
+            && !(lib.elem segment.name dnsCfg.dohBlocking.exemptSegments)
+        )
+        segments));
 
-    effectiveProfileDenyDomains = lib.mapAttrs (
-      name: domains:
-        domains ++ lib.optionals (lib.elem name protectedDohProfiles) dnsCfg.dohBlocking.denyDomains
-    ) profileDenyDomains;
+    effectiveProfileDenyDomains =
+      lib.mapAttrs (
+        name: domains:
+          domains ++ lib.optionals (lib.elem name protectedDohProfiles) dnsCfg.dohBlocking.denyDomains
+      )
+      profileDenyDomains;
 
-    blockyDenyLists = lib.mapAttrs (
-      name: profile:
-        profile.blocklistSources ++ (mkInlineSourceEntries effectiveProfileDenyDomains.${name})
-    ) dnsCfg.profiles;
+    blockyDenyLists =
+      lib.mapAttrs (
+        name: profile:
+          profile.blocklistSources ++ (mkInlineSourceEntries effectiveProfileDenyDomains.${name})
+      )
+      dnsCfg.profiles;
 
     blockyClientGroups =
       {
         default = ["default"];
       }
       // lib.listToAttrs (map (
-        segment:
-          lib.nameValuePair segment.subnetCidr [segment.dnsProfile]
-      ) segments);
+          segment:
+            lib.nameValuePair segment.subnetCidr [segment.dnsProfile]
+        )
+        segments);
 
     blockyBootstrapDns = [
       {upstream = "1.1.1.1";}
@@ -84,13 +98,29 @@
         http = ["127.0.0.1:${toString blockyHttpPort}"];
       }
       // lib.optionalAttrs (primarySegment != null) {
-        dns = map (ip: "${ip}:${toString blockyPort}") listenerIps ++ [
-          "127.0.0.1:${toString blockyPort}"
-          "[${ulaPrefix}::1]:${toString blockyPort}"
-        ];
+        dns =
+          map (ip: "${ip}:${toString blockyPort}") listenerIps
+          ++ [
+            "127.0.0.1:${toString blockyPort}"
+            "[${ulaPrefix}::1]:${toString blockyPort}"
+          ];
       };
+    dnsServicePorts = lib.optionals enabled [
+      {
+        access = "infra";
+        protocol = "tcp";
+        port = 53;
+      }
+      {
+        access = "infra";
+        protocol = "udp";
+        port = 53;
+      }
+    ];
   in {
     config = lib.mkIf enabled {
+      my.router.internalServicePorts = dnsServicePorts;
+
       services.unbound = {
         enable = true;
         settings = {
@@ -154,11 +184,11 @@
           blocking = {
             denylists = blockyDenyLists;
             clientGroupsBlock = blockyClientGroups;
-            blockType = dnsCfg.blocking.blockType;
-            blockTTL = dnsCfg.blocking.blockTTL;
+            inherit (dnsCfg.blocking) blockType;
+            inherit (dnsCfg.blocking) blockTTL;
             loading = {
               strategy = dnsCfg.blocking.loadingStrategy;
-              refreshPeriod = dnsCfg.blocking.refreshPeriod;
+              inherit (dnsCfg.blocking) refreshPeriod;
             };
           };
           customDNS = {

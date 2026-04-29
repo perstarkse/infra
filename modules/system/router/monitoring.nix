@@ -8,28 +8,71 @@
     mon = cfg.monitoring;
     helpers = config.routerHelpers or {};
     primarySegment = helpers.primarySegment or null;
-    bindAddress = if primarySegment != null then primarySegment.routerIp else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
+    bindAddress =
+      if primarySegment != null
+      then primarySegment.routerIp
+      else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
     enabled = cfg.enable && mon.enable;
+    monitoringServicePorts =
+      lib.optionals (enabled && mon.netdata.enable) [
+        {
+          access = "admin";
+          protocol = "tcp";
+          port = 19999;
+        }
+      ]
+      ++ lib.optionals (enabled && mon.ntopng.enable) [
+        {
+          access = "admin";
+          protocol = "tcp";
+          port = mon.ntopng.httpPort;
+        }
+      ]
+      ++ lib.optionals (enabled && mon.grafana.enable) [
+        {
+          access = "admin";
+          protocol = "tcp";
+          port = mon.grafana.httpPort;
+        }
+      ]
+      ++ lib.optionals (enabled && mon.prometheus.enable) [
+        {
+          access = "admin";
+          protocol = "tcp";
+          inherit (mon.prometheus) port;
+        }
+      ];
   in {
     config = lib.mkIf enabled {
+      my.router.internalServicePorts = monitoringServicePorts;
+
       services = {
         netdata = lib.mkIf mon.netdata.enable {
           enable = true;
           config.global = {
-            "bind to" = if mon.netdata.bindAddress != null then mon.netdata.bindAddress else bindAddress;
+            "bind to" =
+              if mon.netdata.bindAddress != null
+              then mon.netdata.bindAddress
+              else bindAddress;
           };
         };
 
         ntopng = lib.mkIf mon.ntopng.enable {
           enable = true;
           inherit (mon.ntopng) httpPort;
-          interfaces = if mon.ntopng.interfaces != [] then mon.ntopng.interfaces else [helpers.lanBridge helpers.wanInterface];
+          interfaces =
+            if mon.ntopng.interfaces != []
+            then mon.ntopng.interfaces
+            else [helpers.lanBridge helpers.wanInterface];
         };
 
         grafana = lib.mkIf mon.grafana.enable {
           enable = true;
           settings.server = {
-            http_addr = if mon.grafana.httpAddr != null then mon.grafana.httpAddr else bindAddress;
+            http_addr =
+              if mon.grafana.httpAddr != null
+              then mon.grafana.httpAddr
+              else bindAddress;
             http_port = mon.grafana.httpPort;
           };
           inherit (mon.grafana) dataDir;

@@ -9,15 +9,17 @@
     nginxCfg = cfg.nginx;
     helpers = config.routerHelpers or {};
     primarySegment = helpers.primarySegment or null;
-    lanSubnet = if primarySegment != null then primarySegment.subnet else cfg.segments.${cfg.primarySegment}.subnet;
+    lanSubnet =
+      if primarySegment != null
+      then primarySegment.subnet
+      else cfg.segments.${cfg.primarySegment}.subnet;
     machineMap = helpers.machineMap or {};
     enabled = cfg.enable && nginxCfg.enable;
-    lanCidr = if primarySegment != null then primarySegment.subnetCidr else "${lanSubnet}.0/24";
     internalCidrs = map (segment: segment.subnetCidr) (helpers.segments or []);
     ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     wgSubnet = (cfg.wireguard or {}).subnet or "10.6.0";
-    wgCidr = "${wgSubnet}.0/24";
-    cfNeeded = lib.any (v: (v.cloudflareOnly or false)) nginxCfg.virtualHosts;
+    wgCidr = "${wgSubnet}.0/${toString ((cfg.wireguard or {}).cidrPrefix or 24)}";
+    cfNeeded = lib.any (v: (v.cloudflareProxied or false)) nginxCfg.virtualHosts;
     cfDir = "/var/lib/cloudflare-ips";
     cfAllow = "${cfDir}/allow.conf";
     cfRealip = "${cfDir}/realip.conf";
@@ -25,6 +27,37 @@
 
     ddclientEnabled = nginxCfg.ddclient.enable;
     ddclientZones = nginxCfg.ddclient.zones;
+    publicVhosts = lib.filter (vhost: !(vhost.lanOnly or false)) nginxCfg.virtualHosts;
+    httpsEnabled = lib.any (vhost: !(vhost.noAcme or false)) nginxCfg.virtualHosts;
+    nginxServicePorts =
+      lib.optionals enabled [
+        {
+          access = "admin";
+          protocol = "tcp";
+          port = 80;
+        }
+      ]
+      ++ lib.optionals (enabled && httpsEnabled) [
+        {
+          access = "admin";
+          protocol = "tcp";
+          port = 443;
+        }
+      ]
+      ++ lib.optionals (enabled && publicVhosts != []) [
+        {
+          access = "wan";
+          protocol = "tcp";
+          port = 80;
+        }
+      ]
+      ++ lib.optionals (enabled && httpsEnabled && publicVhosts != []) [
+        {
+          access = "wan";
+          protocol = "tcp";
+          port = 443;
+        }
+      ];
     mkDdclientConfEntry = zone:
       lib.nameValuePair "ddclient-${zone.zone}.conf" {
         mode = "0600";
@@ -67,6 +100,8 @@
       };
   in {
     config = lib.mkIf enabled {
+      my.router.internalServicePorts = nginxServicePorts;
+
       security.acme = {
         acceptTerms = true;
         defaults.email = nginxCfg.acmeEmail;
@@ -139,15 +174,14 @@
 
                 targetUrl = "${vhost.targetScheme}://${targetIp}:${toString vhost.port}";
 
-                 lanAllow = ''
-                   ${lib.concatMapStringsSep "\n" (cidr: "allow ${cidr};") internalCidrs}
-                   allow ${ulaPrefix}::/64;
-                   allow ${wgCidr};
-                 '';
-
+                lanAllow = ''
+                  ${lib.concatMapStringsSep "\n" (cidr: "allow ${cidr};") internalCidrs}
+                  allow ${ulaPrefix}::/64;
+                  allow ${wgCidr};
+                '';
 
                 acl =
-                  if (vhost.cloudflareOnly or false)
+                  if (vhost.cloudflareProxied or false)
                   then ''
                     if ($cf_access_ok = 0) { return 403; }
                   ''

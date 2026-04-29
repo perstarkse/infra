@@ -8,6 +8,7 @@
       router-dns
       router-nginx
       router-monitoring
+      router-casting
       router-wireguard
       router-security
     ];

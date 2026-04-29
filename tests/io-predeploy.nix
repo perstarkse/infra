@@ -261,7 +261,13 @@
     my = {
       router = {
         wan.interface = lib.mkForce "eth1";
-        lan.interfaces = lib.mkForce ["eth2"];
+        ports = lib.mkForce {
+          eth2 = {
+            mode = "trunk";
+            nativeSegment = "trusted";
+            taggedSegments = ["cameras"];
+          };
+        };
         wireguard.privateKeyFile = lib.mkForce "/etc/test-secrets/wireguard-server/private-key";
         wireguard.peers = lib.mkForce [];
       };
@@ -345,12 +351,15 @@ in {
       io.wait_for_unit("nftables.service")
       io.wait_for_unit("kea-dhcp4-server.service")
       io.wait_for_unit("unbound.service")
+      io.wait_for_unit("blocky.service")
 
       io.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '192\\.168\\.100\\.'", timeout=240)
       io.wait_until_succeeds("ip -4 -o addr show dev vlan1 | grep -q '10\\.0\\.0\\.1/24'", timeout=240)
       io.wait_until_succeeds("ip -4 -o addr show dev wg0 | grep -q '10\\.6\\.0\\.1/24'", timeout=240)
 
       lanClient.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10\\.0\\.0\\.'", timeout=240)
+      lanClient.wait_until_succeeds("dig +short @10.0.0.1 io.lan.stark.pub A | grep -x '10.0.0.1'", timeout=240)
+      lanClient.wait_until_succeeds("dig +short @10.0.0.1 mail.stark.pub A | grep -x '10.0.0.10'", timeout=240)
       camClient.wait_until_succeeds("ip -4 -o addr show dev vlan30 | grep -q '10\\.0\\.30\\.'", timeout=240)
 
       lanClient.succeed("ping -c1 -W2 10.0.0.1")

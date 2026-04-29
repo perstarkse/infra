@@ -349,6 +349,14 @@
     };
   };
 
+  journalSenderNode = lib.recursiveUpdate commonNode {
+    virtualisation.vlans = [2];
+    systemd.network.networks."10-eth1" = {
+      matchConfig.Name = "eth1";
+      networkConfig.DHCP = "yes";
+    };
+  };
+
   mkRouterNode = {
     extraRouterConfig ? {},
     extraConfig ? {},
@@ -506,11 +514,23 @@ in {
       wan = wanNode;
       router = mkRouterNode {
         extraRouterConfig = {
+          casting = {
+            enable = true;
+            sourceSegment = "trusted";
+            targetSegments = ["iot"];
+          };
           machines = [
             {
               name = "lan-server";
               ip = "10";
               mac = "02:00:00:00:10:00";
+              portForwards = [];
+            }
+            {
+              name = "iot-tv";
+              segment = "iot";
+              ip = "11";
+              mac = "02:00:00:00:20:11";
               portForwards = [];
             }
           ];
@@ -536,6 +556,8 @@ in {
       camClient.fail("curl --fail -sS --max-time 5 http://10.0.0.10:8080/")
       iotClient.succeed("ping -c1 -W2 192.168.100.1")
       camClient.fail("ping -c1 -W2 192.168.100.1")
+      router.succeed("nft list ruleset | grep -q 'tcp dport 8008 accept'")
+      router.succeed("nft list ruleset | grep -q 'udp dport 1900 accept'")
     '';
   };
 
@@ -691,10 +713,11 @@ in {
       wan = wanNode;
       lanClient = lanClientNode;
       lanServer = lanServerHttpNode;
+      journalSender = journalSenderNode;
       router = mkRouterNode {
         extraRouterConfig = {
           security.enable = true;
-          security.journalReceiver.enable = false;
+          security.journalReceiver.enable = true;
           nginx = {
             enable = true;
             virtualHosts = [
@@ -704,6 +727,13 @@ in {
                 port = 8080;
                 websockets = false;
                 lanOnly = true;
+                noAcme = true;
+              }
+              {
+                domain = "public-status.lan.test";
+                target = "lan-server";
+                port = 8080;
+                websockets = false;
                 noAcme = true;
               }
             ];
@@ -731,23 +761,27 @@ in {
       wan.wait_for_unit("dnsmasq.service")
       lanServer.wait_for_unit("lan-http.service")
       lanClient.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10\\.0\\.0\\.'", timeout=180)
+      journalSender.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10\\.0\\.0\\.'", timeout=180)
 
       router.wait_for_unit("nginx.service")
       router.wait_for_unit("fail2ban.service")
       router.wait_for_unit("unbound.service")
+      router.wait_for_unit("blocky.service")
+      router.wait_for_unit("systemd-journal-remote.socket")
 
-      lanClient.succeed("dig +short @10.0.0.1 status.lan.test A | grep -x '10.0.0.10'")
+      lanClient.wait_until_succeeds("dig +short @10.0.0.1 status.lan.test A | grep -x '10.0.0.10'", timeout=120)
       lanClient.succeed("curl --fail -sS -H 'Host: status.lan.test' http://10.0.0.1/ | grep -q '^ok$'")
+      journalSender.succeed("nc -vz -w2 10.0.0.1 19532")
 
       router_wan_ip = router.succeed("ip -4 -o addr show dev eth1 | awk '{print $4}' | cut -d/ -f1").strip()
 
       wan_status = wan.succeed(
-        f"curl -sS -o /dev/null -w '%{{http_code}}' --max-time 5 -H 'Host: status.lan.test' http://{router_wan_ip}/"
+        f"curl -sS -o /dev/null -w '%{{http_code}}' --max-time 5 -H 'Host: status.lan.test' http://{router_wan_ip}/ || true"
       ).strip()
-      assert wan_status == "403", f"expected WAN lan-only request to return 403, got {wan_status}"
+      assert wan_status == "403", f"expected WAN lan-only request to be denied, got HTTP {wan_status}"
 
       wan.succeed(
-        f"for _ in $(seq 1 6); do curl -sS -o /dev/null --max-time 3 -H 'Host: status.lan.test' http://{router_wan_ip}/wp-admin || true; done"
+        f"for _ in $(seq 1 6); do curl -sS -o /dev/null --max-time 3 -H 'Host: public-status.lan.test' http://{router_wan_ip}/wp-admin || true; done"
       )
       router.wait_until_succeeds("fail2ban-client status nginx-url-probe | grep -q '192\\.168\\.100\\.1'", timeout=120)
       router.wait_until_succeeds("nft list ruleset | grep -q '192\\.168\\.100\\.1'", timeout=120)
@@ -834,6 +868,72 @@ in {
         "curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://192.168.50.10:3000/ || true"
       ).strip()
       assert blocked_status == "000", f"expected blocked client to fail closed, got HTTP {blocked_status}"
+    '';
+  };
+
+  router-wireguard-admin = pkgs.testers.runNixOSTest {
+    name = "router-wireguard-admin";
+    nodes = {
+      wan = wanNode;
+      wgClient = wgClientNode;
+      router = mkRouterNode {
+        extraConfig = {
+          environment.etc."wireguard-server.key" = {
+            text = wireguardTestKeys.routerPrivate;
+            mode = "0440";
+            user = "root";
+            group = "systemd-network";
+          };
+        };
+        extraRouterConfig = {
+          monitoring = {
+            enable = true;
+            grafana = {
+              enable = true;
+              httpPort = 8888;
+            };
+          };
+          wireguard = {
+            enable = true;
+            cidrPrefix = 27;
+            privateKeyFile = "/etc/wireguard-server.key";
+            peers = [
+              {
+                name = "wg-client";
+                ip = 2;
+                publicKey = wireguardTestKeys.clientPublic;
+                autoGenerate = false;
+              }
+            ];
+          };
+        };
+      };
+    };
+    testScript = ''
+      start_all()
+
+      wan.wait_for_unit("dnsmasq.service")
+      router.wait_for_unit("systemd-networkd.service")
+      router.wait_for_unit("grafana.service")
+      router.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '192\\.168\\.100\\.'", timeout=120)
+      router.wait_until_succeeds("ip -4 -o addr show dev wg0 | grep -q '10\\.6\\.0\\.1/27'", timeout=120)
+      wgClient.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '192\\.168\\.100\\.'", timeout=180)
+
+      router_wan_ip = router.succeed("ip -4 -o addr show dev eth1 | awk '{print $4}' | cut -d/ -f1").strip()
+
+      wgClient.succeed("ip link add wg0 type wireguard")
+      wgClient.succeed("ip address add 10.6.0.2/27 dev wg0")
+      wgClient.succeed(
+        f"wg set wg0 private-key /etc/wg-client.key peer ${wireguardTestKeys.routerPublic} allowed-ips 10.6.0.0/27,10.0.0.0/24 endpoint {router_wan_ip}:51820 persistent-keepalive 1"
+      )
+      wgClient.succeed("ip link set up dev wg0")
+      wgClient.succeed("ip route add 10.0.0.0/24 dev wg0")
+
+      wgClient.succeed("ping -c1 -W5 10.6.0.1")
+      wgClient.wait_until_succeeds("wg show wg0 latest-handshakes | awk '{print $2}' | grep -Eq '^[1-9][0-9]*$'", timeout=120)
+      router.wait_until_succeeds("ss -ltn '( sport = :8888 )' | grep -q ':8888'", timeout=180)
+      router.succeed("nft list ruleset | grep -Fq 'iifname \"wg0\" tcp dport 8888 accept'")
+      wgClient.succeed("nc -vz -w5 10.0.0.1 8888")
     '';
   };
 
