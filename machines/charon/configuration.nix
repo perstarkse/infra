@@ -130,7 +130,7 @@ in {
           withRbw = true;
         };
         helix = {
-          languages = ["nix" "typst" "markdown" "rust" "jinja" "spellchecking"];
+          languages = ["nix" "typst" "markdown" "rust" "jinja" "spellchecking" "fish"];
         };
       };
 
@@ -205,6 +205,10 @@ in {
     keepAwake = {
       enable = true;
       maxDurationSeconds = 14400;
+      sshTarget = {
+        enable = true;
+        authorizedKeysFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "public_key";
+      };
     };
   };
 
@@ -224,7 +228,7 @@ in {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "wake-proxy" "attic-cache"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "wake-proxy" "keep-awake" "attic-cache"];
       };
 
       exposeUserSecrets = [

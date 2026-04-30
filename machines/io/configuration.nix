@@ -3,7 +3,24 @@
   config,
   pkgs,
   ...
-}: {
+}: let
+  exposureLib = (ctx.flake.lib or {}).exposure or (import ../../flake/lib/exposure.nix {inherit (pkgs) lib;});
+  routerImportCfg = config.my.exposure.routerImports;
+  routerDefaultDnsTarget =
+    if routerImportCfg.defaultDnsTarget != null
+    then routerImportCfg.defaultDnsTarget
+    else config.routerHelpers.primarySegment.routerIp or "10.0.0.1";
+  routerImportedExposures = exposureLib.mkRouterImportedExposures {
+    nixosConfigurations = ctx.flake.nixosConfigurations or {};
+    inherit routerImportCfg;
+    defaultDnsTarget = routerDefaultDnsTarget;
+    routerName = "io";
+    resolveBasicAuthSecret = secret: {
+      inherit (secret) realm;
+      htpasswdFile = config.my.secrets.getPath secret.name secret.file;
+    };
+  };
+in {
   clan.core.deployment.requireExplicitUpdate = true;
 
   imports = with ctx.flake.nixosModules;
@@ -60,10 +77,26 @@
     keepAwake = {
       enable = true;
       maxDurationSeconds = 14400;
+      remoteSsh = {
+        enable = true;
+        host = "10.0.0.15";
+        identityFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
+      };
     };
   };
 
   my = {
+    wake-proxy.exposure = {
+      enable = true;
+      domain = "wake.stark.pub";
+      public = true;
+      cloudflareProxied = true;
+      acmeDns01 = {
+        dnsProvider = "cloudflare";
+        environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+      };
+    };
+
     listenNetworkAddress = "10.0.0.1"; # Internal LAN IP
 
     attic-cache.client = {
@@ -94,22 +127,68 @@
 
     heartbeat.push.enable = true;
 
+    frigate.exposure = {
+      enable = true;
+      domain = "frigate.lan.stark.pub";
+      useWildcard = "lanstark";
+    };
+
+    home-assistant.exposure = {
+      enable = true;
+      domain = "home.lan.stark.pub";
+      useWildcard = "lanstark";
+    };
+
     ntfy = {
       enable = true;
       address = "10.0.0.1";
       baseUrl = "https://ntfy.lan.stark.pub";
       secretName = "ntfy";
+      exposure = {
+        enable = true;
+        useWildcard = "lanstark";
+      };
       settings = {
         behind-proxy = true;
         upstream-base-url = "https://ntfy.sh";
       };
     };
 
+    exposure.routerImports = {
+      machines = ["makemake"];
+      routerName = "io";
+    };
+
+    exposure.services =
+      routerImportedExposures
+      // {
+        unifi-router = {
+          upstream = {
+            host = "10.0.0.21";
+            port = 443;
+            scheme = "https";
+          };
+          http.virtualHosts = [
+            {
+              domain = "unifi.lan.stark.pub";
+              lanOnly = true;
+              useWildcard = "lanstark";
+            }
+          ];
+          dns.records = [
+            {
+              name = "unifi.lan.stark.pub";
+              target = "10.0.0.1";
+            }
+          ];
+        };
+      };
+
     secrets = {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "heartbeat" "ntfy" "attic-cache"];
+        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache"];
       };
 
       generateManifest = false;
@@ -362,71 +441,7 @@
           target = "10.0.0.10";
         }
         {
-          name = "chat.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "minne.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "minne.lan.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "request.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "vault.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
           name = "kube-test.lan.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "frigate.lan.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "home.lan.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "unifi.lan.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "nous.fyi";
-          target = "10.0.0.1";
-        }
-        {
-          name = "atuin.lan.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "webdav.lan.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "politikerstod.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "paperless.lan.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "wake.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "ntfy.lan.stark.pub";
-          target = "10.0.0.1";
-        }
-        {
-          name = "search.lan.stark.pub";
           target = "10.0.0.1";
         }
       ];
@@ -515,189 +530,10 @@
         ];
         virtualHosts = [
           {
-            domain = "frigate.lan.stark.pub";
-            target = "10.0.0.1";
-            port = 5000;
-            websockets = true;
-            useWildcard = "lanstark";
-          }
-          {
-            domain = "home.lan.stark.pub";
-            target = "10.0.0.1";
-            port = 8123;
-            websockets = true;
-            lanOnly = true;
-            useWildcard = "lanstark";
-          }
-          {
-            domain = "unifi.lan.stark.pub";
-            target = "10.0.0.21";
-            targetScheme = "https";
-            port = 443;
-            websockets = true;
-            lanOnly = true;
-            useWildcard = "lanstark";
-          }
-          {
-            domain = "webdav.lan.stark.pub";
-            target = "makemake";
-            port = 8081;
-            websockets = false;
-            lanOnly = true;
-            useWildcard = "lanstark";
-            basicAuth = {
-              realm = "WebDAV";
-              htpasswdFile = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
-            };
-            extraConfig = ''
-              # iOS WebDAV compatibility
-              client_max_body_size 0;
-              proxy_buffering off;
-              proxy_request_buffering off;
-              proxy_http_version 1.1;
-              proxy_read_timeout 300s;
-              proxy_send_timeout 300s;
-            '';
-          }
-          {
             domain = "kube-test.lan.stark.pub";
             target = "10.0.0.10";
             port = 80;
             websockets = false;
-            useWildcard = "lanstark";
-          }
-          {
-            domain = "vault.stark.pub";
-            target = "makemake";
-            port = 8322;
-            websockets = true;
-            lanOnly = true;
-            acmeDns01 = {
-              dnsProvider = "cloudflare";
-              environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
-            };
-          }
-          {
-            domain = "chat.stark.pub";
-            target = "makemake";
-            port = 8080;
-            websockets = true;
-            cloudflareProxied = true;
-          }
-          {
-            domain = "request.stark.pub";
-            target = "makemake";
-            port = 5055;
-            websockets = true;
-            cloudflareProxied = true;
-          }
-          {
-            domain = "minne.stark.pub";
-            target = "makemake";
-            port = 3001;
-            websockets = false;
-            cloudflareProxied = true;
-            extraConfig = ''
-              proxy_set_header Connection "close";
-              proxy_http_version 1.1;
-              chunked_transfer_encoding off;
-              proxy_buffering off;
-              proxy_cache off;
-            '';
-          }
-          {
-            domain = "minne-demo.stark.pub";
-            target = "makemake";
-            port = 3001;
-            websockets = false;
-            cloudflareProxied = true;
-            extraConfig = ''
-              return 301 https://minne.stark.pub$request_uri;
-            '';
-          }
-          {
-            domain = "minne.lan.stark.pub";
-            target = "makemake";
-            port = 3000;
-            websockets = false;
-            lanOnly = true;
-            useWildcard = "lanstark";
-            cloudflareProxied = false;
-            extraConfig = ''
-              proxy_set_header Connection "close";
-              proxy_http_version 1.1;
-              chunked_transfer_encoding off;
-              proxy_buffering off;
-              proxy_cache off;
-            '';
-          }
-          {
-            domain = "nous.fyi";
-            target = "makemake";
-            port = 3002;
-            websockets = false;
-            cloudflareProxied = true;
-            extraConfig = ''
-              client_max_body_size 55M;
-            '';
-          }
-          {
-            domain = "atuin.lan.stark.pub";
-            target = "makemake";
-            port = 8888;
-            websockets = true;
-            useWildcard = "lanstark";
-          }
-          {
-            domain = "politikerstod.stark.pub";
-            target = "makemake";
-            port = 5150;
-            websockets = false;
-            cloudflareProxied = true;
-          }
-          {
-            domain = "paperless.lan.stark.pub";
-            target = "makemake";
-            port = 28981;
-            websockets = true;
-            lanOnly = true;
-            useWildcard = "lanstark";
-            extraConfig = ''
-              client_max_body_size 100M;
-            '';
-          }
-          {
-            domain = "wake.stark.pub";
-            target = "10.0.0.1";
-            port = 8091;
-            websockets = true;
-            cloudflareProxied = true;
-            acmeDns01 = {
-              dnsProvider = "cloudflare";
-              environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
-            };
-          }
-          {
-            domain = "ntfy.lan.stark.pub";
-            target = "10.0.0.1";
-            port = 2586;
-            websockets = true;
-            lanOnly = true;
-            useWildcard = "lanstark";
-            extraConfig = ''
-              client_max_body_size 0;
-              proxy_buffering off;
-              proxy_request_buffering off;
-              proxy_read_timeout 1h;
-              proxy_send_timeout 1h;
-            '';
-          }
-          {
-            domain = "search.lan.stark.pub";
-            target = "makemake";
-            port = 8088;
-            websockets = false;
-            lanOnly = true;
             useWildcard = "lanstark";
           }
         ];
