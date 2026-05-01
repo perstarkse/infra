@@ -75,10 +75,8 @@ in {
     externalOrigin = "https://wake.stark.pub";
     passwordHashFile = config.my.secrets.getPath "wake-proxy" "env";
     keepAwake = {
-      enable = true;
       maxDurationSeconds = 14400;
       remoteSsh = {
-        enable = true;
         host = "10.0.0.15";
         identityFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
       };
