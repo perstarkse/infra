@@ -203,7 +203,6 @@ in {
     externalOrigin = "https://wake.stark.pub";
     passwordHashFile = config.my.secrets.getPath "wake-proxy" "env";
     keepAwake = {
-      enable = true;
       maxDurationSeconds = 14400;
       sshTarget = {
         enable = true;
