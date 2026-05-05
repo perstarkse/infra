@@ -5,35 +5,14 @@
   politikerstodPackage,
   ...
 }: let
-  secretsStubModule = {lib, ...}: {
-    options.my.secrets = {
-      declarations = lib.mkOption {
-        type = lib.types.listOf lib.types.anything;
-        default = [];
-      };
-      allowReadAccess = lib.mkOption {
-        type = lib.types.listOf lib.types.anything;
-        default = [];
-      };
-      discover = {
-        enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-        };
-        includeTags = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [];
-        };
-      };
-      getPath = lib.mkOption {
-        type = lib.types.anything;
-        default = name: file: "/etc/test-secrets/${name}/${file}";
-      };
-      mkMachineSecret = lib.mkOption {
-        type = lib.types.anything;
-        default = spec: spec;
-      };
-    };
+  testHelpers = import ./lib/test-helpers.nix {inherit lib;};
+
+  secretsStubModule = import ./lib/secrets-stub.nix {
+    inherit lib;
+    getPathDefault = name: file: "/etc/test-secrets/${name}/${file}";
+    mkMachineSecretDefault = spec: spec;
+    withDiscover = true;
+    withAllowReadAccess = true;
   };
 
   realPolitikerstodPkg = politikerstodPackage;
@@ -44,23 +23,11 @@
     host    all             all             ::1/128                 trust
   '';
 
-  nodeBase = {
-    networking = {
-      useNetworkd = true;
-      useDHCP = false;
-      firewall.enable = false;
-    };
-    systemd.network.enable = true;
-    system.stateVersion = "25.11";
-    environment.systemPackages = with pkgs; [
-      busybox
-      curl
-    ];
-  };
+  nodeBase = testHelpers.mkCommonNode {extraPackages = with pkgs; [busybox curl];};
 
   serverNode = lib.recursiveUpdate nodeBase {
     virtualisation.vlans = [1];
-    imports = [nixosModules.politikerstod secretsStubModule];
+    imports = [nixosModules.options nixosModules.politikerstod secretsStubModule];
     systemd.network.networks."10-eth1" = {
       matchConfig.Name = "eth1";
       address = ["10.0.0.10/24"];

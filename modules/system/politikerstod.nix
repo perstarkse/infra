@@ -3,6 +3,7 @@
     config,
     lib,
     pkgs,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.politikerstod;
@@ -21,11 +22,6 @@
         map (d: "@" + (escapeForSystemd (lib.strings.escapeRegex d)) + "$$") cfg.settings.authAllowedEmailDomains
       ))
       + ")";
-    serviceFirewallSourceRules = lib.concatMapStringsSep "\n" (source:
-      if builtins.match ".*:.*" source != null
-      then "ip6 saddr ${source} tcp dport ${toString cfg.port} accept"
-      else "ip saddr ${source} tcp dport ${toString cfg.port} accept")
-    cfg.allowedFirewallSources;
 
     dbProxyFirewallSourceRules = lib.concatMapStringsSep "\n" (source:
       if builtins.match ".*:.*" source != null
@@ -185,6 +181,19 @@
         };
       };
 
+      exposure =
+        mkStandardExposureOptions {
+          subject = "Politikerstöd";
+          visibility = "public";
+          withRouter = true;
+        }
+        // {
+          domain = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = lib.removePrefix "https://" (lib.removePrefix "http://" cfg.host);
+          };
+        };
+
       settings = {
         logLevel = lib.mkOption {
           type = lib.types.str;
@@ -305,17 +314,30 @@
       };
       users.groups.politikerstod = {};
 
-      # 5. Firewall - optional open ports or explicit source ACLs
+      my.exposure.services.politikerstod = lib.mkIf cfg.exposure.enable {
+        upstream = {
+          host = config.my.listenNetworkAddress or "0.0.0.0";
+          inherit (cfg) port;
+        };
+        router = {inherit (cfg.exposure.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
+          inherit (cfg.exposure) domain;
+          inherit (cfg.exposure) public cloudflareProxied;
+          websockets = false;
+        };
+        firewall.local = {
+          enable = cfg.openFirewall || cfg.allowedFirewallSources != [];
+          tcp = [cfg.port];
+          allowedSources = cfg.allowedFirewallSources;
+        };
+      };
+
+      # Firewall - DB proxy only (service port handled by exposure firewall.local)
       networking.firewall = {
         allowedTCPPorts =
-          (lib.optional (cfg.openFirewall && cfg.allowedFirewallSources == []) cfg.port)
-          ++ (lib.optionals (cfg.database.enableContainer && cfg.database.allowedHosts == []) [5432]);
+          lib.optionals (cfg.database.enableContainer && cfg.database.allowedHosts == []) [5432];
 
         extraInputRules = lib.mkMerge [
-          (lib.mkIf (cfg.allowedFirewallSources != []) (lib.mkAfter ''
-            ${serviceFirewallSourceRules}
-            tcp dport ${toString cfg.port} drop
-          ''))
           (lib.mkIf (cfg.database.enableContainer && cfg.database.allowedHosts != []) (lib.mkAfter ''
             ${dbProxyFirewallSourceRules}
             tcp dport 5432 drop
@@ -323,9 +345,6 @@
         ];
 
         extraCommands = lib.mkMerge [
-          (lib.mkIf (!config.networking.nftables.enable && cfg.allowedFirewallSources != []) (lib.mkAfter ''
-            ${mkFirewallExtraCommands cfg.port cfg.allowedFirewallSources}
-          ''))
           (lib.mkIf (!config.networking.nftables.enable && cfg.database.enableContainer && cfg.database.allowedHosts != []) (lib.mkAfter ''
             ${mkFirewallExtraCommands 5432 cfg.database.allowedHosts}
           ''))

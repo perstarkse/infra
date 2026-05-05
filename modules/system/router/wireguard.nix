@@ -32,10 +32,7 @@
     routerIp =
       if config ? routerHelpers
       then config.routerHelpers.routerIp
-      else let
-        primarySegmentName = config.my.router.primarySegment or "trusted";
-        primarySegment = config.my.router.segments.${primarySegmentName};
-      in "${primarySegment.subnet}.1";
+      else throw "routerHelpers not defined — is the router module loaded?";
 
     mkPeerSecret = peer: (config.my.secrets.mkMachineSecret {
       name = "wireguard-peer-${peer.name}";

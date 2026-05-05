@@ -9,20 +9,8 @@
     config.allowUnfree = true;
   };
 
-  unwrapSingletonImports = m:
-    if builtins.isAttrs m && m ? imports && builtins.length m.imports == 1
-    then unwrapSingletonImports (builtins.elemAt m.imports 0)
-    else m;
-
-  routerModule = let
-    unwrappedRouter = unwrapSingletonImports nixosModules.router;
-  in
-    if builtins.isFunction unwrappedRouter
-    then
-      unwrappedRouter {
-        ctx.flake.nixosModules = nixosModules;
-      }
-    else nixosModules.router;
+  testHelpers = import ./lib/test-helpers.nix {inherit lib;};
+  routerModule = testHelpers.mkRouterModule nixosModules;
 
   testNixosModules =
     nixosModules
@@ -33,43 +21,13 @@
       shared = {};
     };
 
-  secretsStubModule = {lib, ...}: {
-    options.my.secrets = {
-      declarations = lib.mkOption {
-        type = lib.types.listOf lib.types.anything;
-        default = [];
-      };
-      allowReadAccess = lib.mkOption {
-        type = lib.types.listOf lib.types.anything;
-        default = [];
-      };
-      generateManifest = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-      };
-      discover = {
-        enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-        };
-        dir = lib.mkOption {
-          type = lib.types.path;
-          default = /tmp;
-        };
-        includeTags = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [];
-        };
-      };
-      mkMachineSecret = lib.mkOption {
-        type = lib.types.anything;
-        default = spec: spec;
-      };
-      getPath = lib.mkOption {
-        type = lib.types.anything;
-        default = name: file: "/etc/test-secrets/${name}/${file}";
-      };
-    };
+  secretsStubModule = import ./lib/secrets-stub.nix {
+    inherit lib;
+    getPathDefault = name: file: "/etc/test-secrets/${name}/${file}";
+    mkMachineSecretDefault = spec: spec;
+    withDiscover = true;
+    withAllowReadAccess = true;
+    withGenerateManifest = true;
   };
 
   varsHelperStub = {
@@ -88,20 +46,9 @@
     routerPublic = "Tx4IUngFH9q+qGdSr/BxIWnUlSbmWoxxRY+Juf/jnHs=";
   };
 
-  commonNode = {
-    networking = {
-      useNetworkd = true;
-      useDHCP = false;
-      firewall.enable = false;
-    };
-    systemd.network.enable = true;
-    system.stateVersion = "25.11";
-    environment.systemPackages = with pkgsUnfree; [
-      curl
-      dnsutils
-      iproute2
-      iputils
-    ];
+  commonNode = testHelpers.mkCommonNode {
+    stateVersion = "25.11";
+    extraPackages = with pkgsUnfree; [curl dnsutils iproute2 iputils];
   };
 
   wanNode = lib.recursiveUpdate commonNode {
@@ -222,7 +169,12 @@
             // {
               pkgs = pkgsUnfree;
               ctx = {
-                flake.nixosModules = testNixosModules;
+                flake = {
+                  nixosModules = testNixosModules;
+                  lib = {
+                    exposure = import ../flake/lib/exposure.nix {inherit (pkgs) lib;};
+                  };
+                };
                 inputs = {
                   varsHelper = varsHelperStub;
                 };

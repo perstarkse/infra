@@ -178,30 +178,7 @@ in {
     home.stateVersion = "25.11";
   };
   services.wakeproxy = {
-    enable = true;
-    listenAddress = config.my.listenNetworkAddress;
-    port = 8091;
-
-    upstreamHost = config.my.listenNetworkAddress;
-    upstreamPort = 3000;
-    healthPath = "/health";
-
-    wolMac = "f0:2f:74:de:91:0a";
-    wolBroadcastIp = "10.0.0.255";
-    wolBroadcastPort = 9;
-
-    wakeTimeout = 180;
-    pollInterval = 2;
-    wakePollIntervalMs = 2000;
-    readyCacheTtl = 5;
-    trustProxyHeaders = false;
-    trustedProxyIps = [
-      "127.0.0.1"
-      "::1"
-      "10.0.0.1"
-    ];
-    externalOrigin = "https://wake.stark.pub";
-    passwordHashFile = config.my.secrets.getPath "wake-proxy" "env";
+    enable = false;
     keepAwake = {
       maxDurationSeconds = 14400;
       sshTarget = {
@@ -227,7 +204,7 @@ in {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "wake-proxy" "keep-awake" "attic-cache"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache"];
       };
 
       exposeUserSecrets = [
@@ -248,10 +225,6 @@ in {
       ];
 
       allowReadAccess = [
-        {
-          readers = ["wake-proxy"];
-          path = config.my.secrets.getPath "wake-proxy" "env";
-        }
         {
           readers = [config.my.mainUser.name];
           path = config.my.secrets.getPath "api-key-openai" "api_key";

@@ -4,6 +4,7 @@ _: {
     config,
     lib,
     pkgs,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.nous;
@@ -91,6 +92,22 @@ _: {
         default = true;
         description = "Open firewall for Nous port";
       };
+
+      exposure =
+        mkStandardExposureOptions {
+          subject = "Nous";
+          visibility = "public";
+          withRouter = true;
+          withExtraConfigDefault = ''
+            client_max_body_size 55M;
+          '';
+        }
+        // {
+          domain = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = lib.removePrefix "https://" (lib.removePrefix "http://" cfg.host);
+          };
+        };
     };
 
     config = lib.mkIf cfg.enable {
@@ -183,8 +200,22 @@ _: {
         "d ${cfg.dataDir} 0755 nous nous -"
       ];
 
-      # Firewall
-      networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [cfg.port];
+      my.exposure.services.nous = lib.mkIf cfg.exposure.enable {
+        upstream = {
+          host = cfg.address;
+          inherit (cfg) port;
+        };
+        router = {inherit (cfg.exposure.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
+          inherit (cfg.exposure) domain;
+          inherit (cfg.exposure) public cloudflareProxied extraConfig;
+          websockets = false;
+        };
+        firewall.local = {
+          enable = cfg.openFirewall;
+          tcp = [cfg.port];
+        };
+      };
     };
   };
 }

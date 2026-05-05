@@ -6,7 +6,7 @@
   }: let
     cfg = config.my.router;
     inherit (cfg) casting;
-    helpers = config.routerHelpers or {};
+    helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     segmentMap = helpers.segmentMap or {};
     source = lib.attrByPath [casting.sourceSegment] null segmentMap;
     targets = map (name: segmentMap.${name}) casting.targetSegments;

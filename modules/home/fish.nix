@@ -19,6 +19,7 @@
         "wlc" = "${pkgs.wl-clipboard}/bin/wl-copy";
         "sccache-stats" = "${pkgs.sccache}/bin/sccache --show-stats";
         "ocs" = "opencode-shared";
+        "," = "${pkgs.nix-index}/bin/comma";
       };
       functions = {
         sccache-flush = ''
@@ -66,14 +67,19 @@
         };
         ns = ''
           if test (count $argv) -eq 0
-            echo "Usage: ns pkg1 [pkg2 ...]"
+            echo "Usage: ns pkg [pkg ...]"
+            echo "Tip: use , cmd for single commands"
             return 1
           end
-          set refs
-          for pkg in $argv
-            set -a refs nixpkgs#$pkg
+          if test (count $argv) -eq 1
+            comma $argv[1]
+          else
+            set refs
+            for pkg in $argv
+              set -a refs nixpkgs#$pkg
+            end
+            nix shell $refs
           end
-          nix shell $refs
         '';
         ctllm-rs = ''
           # Usage: ctllm LOCATION [FILETYPE] [--strip-rust-tests]

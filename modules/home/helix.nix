@@ -41,6 +41,12 @@
               allFeatures = true;
               targetDir = rustAnalyzerTargetDir;
             };
+            inlayHints = {
+              typeHints.enable = true;
+              parameterHints.enable = true;
+              chainingHints.enable = true;
+              closureReturnTypeHints.enable = "with_block";
+            };
           };
         };
       };
@@ -122,6 +128,16 @@
           }
         ];
         language-server.jinjalsp.command = "${pkgs.jinja-lsp}/bin/jinja-lsp";
+      };
+      fish = {
+        packages = [pkgs.fish-lsp];
+        language = [
+          {
+            name = "fish";
+            language-servers = ["fish-lsp"];
+          }
+        ];
+        language-server.fish-lsp.command = "${pkgs.fish-lsp}/bin/fish-lsp";
       };
     };
     enabledDefs = lib.attrsets.filterAttrs (name: _: lib.lists.elem name config.my.programs.helix.languages) langDefs;

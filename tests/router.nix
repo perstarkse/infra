@@ -4,35 +4,12 @@
   nixosModules,
   ...
 }: let
-  routerModule = let
-    unwrapSingletonImports = m:
-      if builtins.isAttrs m && m ? imports && builtins.length m.imports == 1
-      then unwrapSingletonImports (builtins.elemAt m.imports 0)
-      else m;
-    unwrappedRouter = unwrapSingletonImports nixosModules.router;
-  in
-    if builtins.isFunction unwrappedRouter
-    then
-      unwrappedRouter {
-        ctx.flake.nixosModules = nixosModules;
-      }
-    else nixosModules.router;
+  testHelpers = import ./lib/test-helpers.nix {inherit lib;};
+  routerModule = testHelpers.mkRouterModule nixosModules;
 
-  secretsStubModule = {lib, ...}: {
-    options.my.secrets = {
-      declarations = lib.mkOption {
-        type = lib.types.listOf lib.types.anything;
-        default = [];
-      };
-      mkMachineSecret = lib.mkOption {
-        type = lib.types.anything;
-        default = _: {};
-      };
-      getPath = lib.mkOption {
-        type = lib.types.anything;
-        default = _name: _file: "/run/empty-secret";
-      };
-    };
+  secretsStubModule = import ./lib/secrets-stub.nix {
+    inherit lib;
+    getPathDefault = _name: _file: "/run/empty-secret";
   };
 
   stateVersion = "25.11";
@@ -44,20 +21,9 @@
     clientPublic = "SGkU1Asb0JDGFwRrymM/i22qRu+4J6AwEHJMMClELDU=";
   };
 
-  commonNode = {
-    networking = {
-      useNetworkd = true;
-      useDHCP = false;
-      firewall.enable = false;
-    };
-    systemd.network.enable = true;
-    system.stateVersion = stateVersion;
-    environment.systemPackages = with pkgs; [
-      curl
-      dnsutils
-      iproute2
-      iputils
-    ];
+  commonNode = testHelpers.mkCommonNode {
+    inherit stateVersion;
+    extraPackages = with pkgs; [curl dnsutils iproute2 iputils];
   };
 
   wanNode = lib.recursiveUpdate commonNode {

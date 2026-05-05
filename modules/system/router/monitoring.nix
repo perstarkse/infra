@@ -6,12 +6,8 @@
   }: let
     cfg = config.my.router;
     mon = cfg.monitoring;
-    helpers = config.routerHelpers or {};
-    primarySegment = helpers.primarySegment or null;
-    bindAddress =
-      if primarySegment != null
-      then primarySegment.routerIp
-      else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
+    helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
+    bindAddress = helpers.primaryRouterIp;
     enabled = cfg.enable && mon.enable;
     monitoringServicePorts =
       lib.optionals (enabled && mon.netdata.enable) [

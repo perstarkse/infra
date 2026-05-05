@@ -6,16 +6,13 @@
   }: let
     cfg = config.my.router;
     unifiOsCfg = config.services.unifi-os-server or null;
-    helpers = config.routerHelpers or {};
+    helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     zones = helpers.zones or [];
     internalZones = lib.filter (zone: zone.kind != "wan") zones;
     zoneMap = lib.listToAttrs (map (zone: lib.nameValuePair zone.name zone) internalZones);
     segmentMap = helpers.segmentMap or {};
     primarySegment = helpers.primarySegment or null;
-    primaryZoneInterface =
-      if primarySegment != null
-      then primarySegment.interface
-      else null;
+    primaryZoneInterface = helpers.primaryInterface;
     wanZone = lib.findFirst (zone: zone.kind == "wan") null zones;
     wan =
       if wanZone != null

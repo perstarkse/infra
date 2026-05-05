@@ -4,58 +4,18 @@
   nixosModules,
   ...
 }: let
-  secretsStubModule = {lib, ...}: {
-    options.my.secrets = {
-      declarations = lib.mkOption {
-        type = lib.types.listOf lib.types.anything;
-        default = [];
-      };
-      allowReadAccess = lib.mkOption {
-        type = lib.types.listOf lib.types.anything;
-        default = [];
-      };
-      generateManifest = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-      };
-      discover = {
-        enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-        };
-        dir = lib.mkOption {
-          type = lib.types.path;
-          default = /tmp;
-        };
-        includeTags = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [];
-        };
-      };
-      mkMachineSecret = lib.mkOption {
-        type = lib.types.anything;
-        default = spec: spec;
-      };
-      getPath = lib.mkOption {
-        type = lib.types.anything;
-        default = name: file: "/etc/test-secrets/${name}/${file}";
-      };
-    };
+  testHelpers = import ./lib/test-helpers.nix {inherit lib;};
+
+  secretsStubModule = import ./lib/secrets-stub.nix {
+    inherit lib;
+    getPathDefault = name: file: "/etc/test-secrets/${name}/${file}";
+    mkMachineSecretDefault = spec: spec;
+    withDiscover = true;
+    withAllowReadAccess = true;
+    withGenerateManifest = true;
   };
 
-  commonNode = {
-    networking = {
-      useNetworkd = true;
-      useDHCP = false;
-      firewall.enable = false;
-    };
-    systemd.network.enable = true;
-    system.stateVersion = "25.11";
-    environment.systemPackages = with pkgs; [
-      curl
-      garage
-    ];
-  };
+  commonNode = testHelpers.mkCommonNode {extraPackages = with pkgs; [curl garage];};
 
   mkGarageNode = {
     ip,

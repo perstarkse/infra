@@ -9,16 +9,12 @@
     secCfg = cfg.security;
     f2bCfg = secCfg.fail2ban;
     jrCfg = secCfg.journalReceiver;
-    helpers = config.routerHelpers or {};
-    primarySegment = helpers.primarySegment or null;
+    helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     internalCidrs = map (segment: segment.subnetCidr) (helpers.segments or []);
     wgCfg = cfg.wireguard or {};
     wgSubnet = wgCfg.subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/${toString (wgCfg.cidrPrefix or 24)}";
-    routerIp =
-      if primarySegment != null
-      then primarySegment.routerIp
-      else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
+    routerIp = helpers.primaryRouterIp;
     jrListenHost =
       if builtins.match ".*:.*" jrCfg.listenAddress != null && !(lib.hasPrefix "[" jrCfg.listenAddress)
       then "[${jrCfg.listenAddress}]"

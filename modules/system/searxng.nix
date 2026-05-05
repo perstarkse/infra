@@ -3,6 +3,7 @@
     lib,
     config,
     pkgs,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.searxng;
@@ -65,6 +66,25 @@
         };
       };
 
+      exposure =
+        mkStandardExposureOptions {
+          subject = "SearXNG";
+          visibility = "internal";
+          withRouter = true;
+          withRouterTargetHost = true;
+          withRouterDnsTarget = true;
+        }
+        // {
+          domain = mkOption {
+            type = types.nullOr types.str;
+            default =
+              if cfg.baseUrl == null
+              then null
+              else lib.removePrefix "https://" (lib.removePrefix "http://" cfg.baseUrl);
+            description = "Domain used for generated SearXNG reverse proxy and DNS exposure.";
+          };
+        };
+
       vpn = {
         enable = mkEnableOption "Route SearXNG traffic through VPN namespace";
 
@@ -122,7 +142,26 @@
         ];
 
         networking.enableIPv6 = true;
-        networking.firewall.allowedTCPPorts = [8088];
+
+        my.exposure.services.searxng = lib.mkIf cfg.exposure.enable {
+          upstream = {
+            host =
+              if cfg.vpn.enable
+              then "192.168.16.1"
+              else cfg.address;
+            inherit (cfg) port;
+          };
+          router = {inherit (cfg.exposure.router) enable targets targetHost dnsTarget;};
+          http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
+            inherit (cfg.exposure) domain;
+            inherit (cfg.exposure) lanOnly useWildcard;
+            websockets = false;
+          };
+          firewall.local = {
+            enable = true;
+            tcp = [cfg.port];
+          };
+        };
 
         services.searx = {
           enable = true;

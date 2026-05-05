@@ -3,6 +3,7 @@
     config,
     lib,
     pkgs,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.minne;
@@ -48,26 +49,21 @@
         description = "Log level for Minne";
       };
 
-      firewallPorts = lib.mkOption {
-        type = lib.types.submodule {
-          options = {
-            tcp = lib.mkOption {
-              type = lib.types.listOf lib.types.port;
-              default = [];
-              description = "TCP ports to allow through firewall";
-            };
-            udp = lib.mkOption {
-              type = lib.types.listOf lib.types.port;
-              default = [];
-              description = "UDP ports to allow through firewall";
-            };
-          };
-        };
-        default = {
-          tcp = [3000];
-          udp = [];
-        };
-        description = "Firewall port configuration for Minne";
+      firewallTcpPorts = lib.mkOption {
+        type = lib.types.listOf lib.types.port;
+        default = [3000];
+        description = "Additional TCP ports to open for Minne.";
+      };
+      firewallUdpPorts = lib.mkOption {
+        type = lib.types.listOf lib.types.port;
+        default = [];
+        description = "UDP ports to open for Minne.";
+      };
+
+      exposure = mkStandardExposureOptions {
+        subject = "Minne";
+        visibility = "internal";
+        withRouter = true;
       };
     };
 
@@ -113,9 +109,32 @@
 
       users.groups.minne = {};
 
-      # Firewall configuration
-      networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;
-      networking.firewall.allowedUDPPorts = cfg.firewallPorts.udp;
+      my.exposure.services.minne = lib.mkIf cfg.exposure.enable {
+        upstream = {
+          host = cfg.address;
+          inherit (cfg) port;
+        };
+        router = {
+          inherit (cfg.exposure.router) enable targets;
+        };
+        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
+          inherit (cfg.exposure) domain;
+          inherit (cfg.exposure) lanOnly useWildcard;
+          websockets = false;
+          extraConfig = ''
+            proxy_set_header Connection "close";
+            proxy_http_version 1.1;
+            chunked_transfer_encoding off;
+            proxy_buffering off;
+            proxy_cache off;
+          '';
+        };
+        firewall.local = {
+          enable = cfg.firewallTcpPorts != [] || cfg.firewallUdpPorts != [];
+          tcp = cfg.firewallTcpPorts;
+          udp = cfg.firewallUdpPorts;
+        };
+      };
 
       # Ensure data directory exists
       systemd.tmpfiles.rules = [

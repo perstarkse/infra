@@ -3,31 +3,10 @@ _: {
     config,
     lib,
     pkgs,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.paperless;
-    firewallSourceRules = lib.concatMapStringsSep "\n" (source:
-      if builtins.match ".*:.*" source != null
-      then "ip6 saddr ${source} tcp dport ${toString cfg.port} accept"
-      else "ip saddr ${source} tcp dport ${toString cfg.port} accept")
-    cfg.allowedFirewallSources;
-    mkFirewallExtraCommands = port: sources: let
-      allowRules =
-        map (
-          source:
-            if builtins.match ".*:.*" source != null
-            then "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp -s ${source} --dport ${toString port} -j ACCEPT"
-            else "${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp -s ${source} --dport ${toString port} -j ACCEPT"
-        )
-        sources;
-    in
-      lib.concatStringsSep "\n" (
-        allowRules
-        ++ [
-          "${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp --dport ${toString port} -j DROP"
-          "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp --dport ${toString port} -j DROP"
-        ]
-      );
   in {
     options.my.paperless = {
       enable = lib.mkEnableOption "Enable Paperless-ngx document management";
@@ -135,6 +114,17 @@ _: {
           default = true;
           description = "Enable Tika for parsing Office documents";
         };
+      };
+
+      exposure = mkStandardExposureOptions {
+        subject = "Paperless";
+        visibility = "internal";
+        withRouter = true;
+        withRouterTargetHost = true;
+        withRouterDnsTarget = true;
+        withExtraConfigDefault = ''
+          client_max_body_size 100M;
+        '';
       };
 
       s3Consumption = {
@@ -326,16 +316,22 @@ _: {
         ];
       };
 
-      # Firewall
-      networking.firewall = {
-        allowedTCPPorts = lib.mkIf (cfg.openFirewall && cfg.allowedFirewallSources == []) [cfg.port];
-        extraInputRules = lib.mkIf (cfg.allowedFirewallSources != []) (lib.mkAfter ''
-          ${firewallSourceRules}
-          tcp dport ${toString cfg.port} drop
-        '');
-        extraCommands = lib.mkIf (!config.networking.nftables.enable && cfg.allowedFirewallSources != []) (lib.mkAfter ''
-          ${mkFirewallExtraCommands cfg.port cfg.allowedFirewallSources}
-        '');
+      my.exposure.services.paperless = {
+        upstream = {
+          host = cfg.address;
+          inherit (cfg) port;
+        };
+        router = {inherit (cfg.exposure.router) enable targets targetHost dnsTarget;};
+        http.virtualHosts = lib.optionals cfg.exposure.enable (lib.optional (cfg.exposure.domain != null) {
+          inherit (cfg.exposure) domain;
+          inherit (cfg.exposure) lanOnly useWildcard extraConfig;
+          websockets = true;
+        });
+        firewall.local = {
+          enable = cfg.openFirewall || cfg.allowedFirewallSources != [];
+          tcp = [cfg.port];
+          allowedSources = cfg.allowedFirewallSources;
+        };
       };
 
       # PostgreSQL container (isolated like politikerstod)

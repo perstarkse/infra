@@ -6,16 +6,31 @@
   }: let
     cfg = config.my.router;
     dnsCfg = cfg.dns;
-    helpers = config.routerHelpers or {};
+    helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     zones = helpers.zones or [];
     segments = helpers.segments or [];
     primarySegment = helpers.primarySegment or null;
-    routerIp =
-      if primarySegment != null
-      then primarySegment.routerIp
-      else "${cfg.segments.${cfg.primarySegment}.subnet}.1";
+    routerIp = helpers.primaryRouterIp;
     ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     inherit (cfg) services;
+    exposureServices = lib.filterAttrs (_: exposure: exposure.enable) (config.my.exposure.services or {});
+    exposureDnsRecords = lib.concatLists (lib.mapAttrsToList (_name: exposure:
+      exposure.dns.records
+      ++ map (vhost: {
+        name = vhost.domain;
+        target =
+          if vhost.targetHost != null
+          then vhost.targetHost
+          else exposure.upstream.host;
+      })
+      (lib.filter (
+          vhost:
+            vhost.publishDns
+            && !(lib.any (record: record.name == vhost.domain) exposure.dns.records)
+        )
+        exposure.http.virtualHosts))
+    exposureServices);
+    allServices = services ++ exposureDnsRecords;
     listenerIps = map (segment: segment.routerIp) segments;
     enabled = cfg.enable && dnsCfg.enable;
     normalizeZone = z:
@@ -155,7 +170,7 @@
                   zones
               )
               localZones
-              ++ map mkServiceRecord services;
+              ++ map mkServiceRecord allServices;
           };
           "forward-zone" = [
             {

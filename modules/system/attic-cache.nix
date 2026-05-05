@@ -359,6 +359,35 @@
         };
         users.groups.atticd = {};
 
+        systemd.services.atticd-gc = let
+          gcConfig = pkgs.writeText "atticd-gc.toml" ''
+            [database]
+            url = "sqlite://${cfg.server.stateDir}/server.db?mode=rwc"
+            [storage]
+            type = "local"
+            path = "${cfg.server.storageDir}"
+          '';
+        in {
+          description = "Attic cache garbage collection";
+          after = ["atticd.service"];
+          requires = ["atticd.service"];
+          serviceConfig = {
+            Type = "oneshot";
+            User = "atticd";
+            Group = "atticd";
+            ExecStart = "${pkgs.attic-server}/bin/atticd -f ${gcConfig} garbage-collect";
+          };
+        };
+
+        systemd.timers.atticd-gc = {
+          wantedBy = ["timers.target"];
+          timerConfig = {
+            OnCalendar = "monthly";
+            Persistent = true;
+            RandomizedDelaySec = "4h";
+          };
+        };
+
         environment.systemPackages = [
           pkgs.attic-client
           bootstrapServerCache
