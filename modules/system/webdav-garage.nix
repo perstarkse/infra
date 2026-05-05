@@ -3,6 +3,7 @@ _: {
     config,
     lib,
     pkgs,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.webdav-garage;
@@ -68,6 +69,13 @@ _: {
         default = "root";
         description = "Group to run rclone as";
       };
+
+      exposure = mkStandardExposureOptions {
+        subject = "WebDAV Garage";
+        visibility = "internal";
+        withBasicAuthSecret = true;
+        withRouter = true;
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -83,6 +91,32 @@ _: {
           path = config.my.secrets.getPath "garage-s3" "secret_access_key";
         }
       ];
+
+      my.exposure.services.webdav-garage = lib.mkIf cfg.exposure.enable {
+        upstream = {
+          host = config.my.listenNetworkAddress;
+          inherit (cfg) port;
+        };
+        router = {inherit (cfg.exposure.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
+          inherit (cfg.exposure) domain;
+          inherit (cfg.exposure) lanOnly useWildcard basicAuthSecret;
+          websockets = false;
+          extraConfig = ''
+            # iOS WebDAV compatibility
+            client_max_body_size 0;
+            proxy_buffering off;
+            proxy_request_buffering off;
+            proxy_http_version 1.1;
+            proxy_read_timeout 300s;
+            proxy_send_timeout 300s;
+          '';
+        };
+        firewall.local = lib.mkIf (cfg.bindAddress != "127.0.0.1") {
+          enable = true;
+          tcp = [cfg.port];
+        };
+      };
 
       systemd.services.webdav-garage = let
         accessKeyPath = config.my.secrets.getPath "garage-s3" "access_key_id";
@@ -121,10 +155,6 @@ _: {
           RestartSec = "10s";
         };
       };
-
-      networking.firewall.allowedTCPPorts = lib.mkIf (cfg.bindAddress != "127.0.0.1") [
-        cfg.port
-      ];
     };
   };
 }

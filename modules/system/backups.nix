@@ -7,6 +7,7 @@
   }: let
     inherit (lib) mkOption mkEnableOption types mkIf mkMerge mapAttrsToList concatLists;
     cfg = config.my.backups;
+    ntfyCfg = config.my.backupFailureNtfy;
 
     backendSubmodule = types.submodule {
       options = {
@@ -93,9 +94,30 @@
               snapshot = "latest";
             };
           };
+
+          backupPrepareCommand = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Shell command to run before the backup (e.g. database dump).";
+          };
+
+          backupCleanupCommand = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Shell command to run after the backup (always runs, regardless of success).";
+          };
         };
       });
       default = {};
+    };
+
+    options.my.backupFailureNtfy = {
+      enable = mkEnableOption "Send ntfy notification on backup failure";
+      url = mkOption {
+        type = types.str;
+        default = "http://10.0.0.1:2586/backup-alerts";
+        description = "ntfy topic URL for backup failure notifications.";
+      };
     };
 
     config = let
@@ -298,18 +320,25 @@
                     bkName: _bkCfg: let
                       secretName = mkSecretName jobName bkName;
                     in {
-                      "${jobName}-${bkName}" = {
-                        initialize = true;
-                        repositoryFile = config.my.secrets.getPath secretName "repo";
-                        passwordFile = config.my.secrets.getPath secretName "password";
-                        environmentFile = config.my.secrets.getPath secretName "env";
-                        paths = [backup.path];
-                        extraBackupArgs =
-                          (map (p: "--include=" + p) backup.include)
-                          ++ (map (p: "--exclude=" + p) backup.exclude);
-                        timerConfig.OnCalendar = backup.frequency;
-                        inherit (backup) pruneOpts;
-                      };
+                      "${jobName}-${bkName}" =
+                        {
+                          initialize = true;
+                          repositoryFile = config.my.secrets.getPath secretName "repo";
+                          passwordFile = config.my.secrets.getPath secretName "password";
+                          environmentFile = config.my.secrets.getPath secretName "env";
+                          paths = [backup.path];
+                          extraBackupArgs =
+                            (map (p: "--include=" + p) backup.include)
+                            ++ (map (p: "--exclude=" + p) backup.exclude);
+                          timerConfig.OnCalendar = backup.frequency;
+                          inherit (backup) pruneOpts;
+                        }
+                        // lib.optionalAttrs (backup.backupPrepareCommand != null) {
+                          inherit (backup) backupPrepareCommand;
+                        }
+                        // lib.optionalAttrs (backup.backupCleanupCommand != null) {
+                          inherit (backup) backupCleanupCommand;
+                        };
                     }
                   )
                   backends
@@ -389,6 +418,52 @@
                   backends
             )
             cfg));
+        }
+
+        {
+          systemd.services = let
+            backupNotify = pkgs.writeShellScript "backup-notify" ''
+              set -euo pipefail
+              job="''${1:?backup job name required}"
+
+              ${pkgs.curl}/bin/curl -fsS \
+                --retry 2 \
+                --retry-delay 2 \
+                -H "Title: ${config.networking.hostName}: restic backup failed" \
+                -H "Priority: high" \
+                -H "Tags: warning,floppy_disk,${config.networking.hostName}" \
+                --data-binary "Backup job $job failed on ${config.networking.hostName}" \
+                ${lib.escapeShellArg ntfyCfg.url}
+            '';
+          in
+            mkIf ntfyCfg.enable (lib.mkMerge ([
+                {
+                  "backup-failure-notify@" = {
+                    description = "Send ntfy notification for failed backup job %i";
+                    serviceConfig = {
+                      Type = "oneshot";
+                      ExecStart = "${backupNotify} %i";
+                    };
+                  };
+                }
+              ]
+              ++ (concatLists (mapAttrsToList (
+                  jobName: backup:
+                    if !backup.enable || backup.restore.enable
+                    then []
+                    else let
+                      backends = resolveBackends backup;
+                    in
+                      mapAttrsToList (
+                        bkName: _bkCfg: {
+                          "restic-backups-${jobName}-${bkName}" = {
+                            onFailure = ["backup-failure-notify@${jobName}-${bkName}.service"];
+                          };
+                        }
+                      )
+                      backends
+                )
+                cfg))));
         }
 
         {

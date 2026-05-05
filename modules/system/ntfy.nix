@@ -2,6 +2,7 @@ _: {
   config.flake.nixosModules.ntfy = {
     config,
     lib,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.ntfy;
@@ -54,6 +55,26 @@ _: {
         default = {};
         description = "Additional ntfy settings merged into services.ntfy-sh.settings";
       };
+
+      exposure =
+        mkStandardExposureOptions {
+          subject = "ntfy";
+          visibility = "internal";
+          withExtraConfigDefault = ''
+            client_max_body_size 0;
+            proxy_buffering off;
+            proxy_request_buffering off;
+            proxy_read_timeout 1h;
+            proxy_send_timeout 1h;
+          '';
+        }
+        // {
+          domain = lib.mkOption {
+            type = lib.types.str;
+            default = lib.removePrefix "https://" (lib.removePrefix "http://" cfg.baseUrl);
+            description = "Domain used for generated ntfy reverse proxy and DNS exposure.";
+          };
+        };
     };
 
     config = lib.mkIf cfg.enable {
@@ -75,7 +96,23 @@ _: {
           // cfg.settings;
       };
 
-      networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [cfg.port];
+      my.exposure.services.ntfy = lib.mkIf cfg.exposure.enable {
+        upstream = {
+          host = cfg.address;
+          inherit (cfg) port;
+        };
+        http.virtualHosts = [
+          {
+            inherit (cfg.exposure) domain;
+            inherit (cfg.exposure) lanOnly useWildcard extraConfig;
+            websockets = true;
+          }
+        ];
+        firewall.local = {
+          enable = cfg.openFirewall;
+          tcp = [cfg.port];
+        };
+      };
     };
   };
 }

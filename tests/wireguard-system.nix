@@ -4,46 +4,17 @@
   nixosModules,
   ...
 }: let
-  secretsStubModule = {lib, ...}: {
-    options.my.secrets = {
-      declarations = lib.mkOption {
-        type = lib.types.listOf lib.types.anything;
-        default = [];
-      };
-      allowReadAccess = lib.mkOption {
-        type = lib.types.listOf lib.types.anything;
-        default = [];
-      };
-      discover = {
-        enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-        };
-        includeTags = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [];
-        };
-      };
-      mkMachineSecret = lib.mkOption {
-        type = lib.types.anything;
-        default = spec: spec;
-      };
-      getPath = lib.mkOption {
-        type = lib.types.anything;
-        default = name: file: "/etc/test-secrets/${name}/${file}";
-      };
-    };
+  testHelpers = import ./lib/test-helpers.nix {inherit lib;};
+
+  secretsStubModule = import ./lib/secrets-stub.nix {
+    inherit lib;
+    getPathDefault = name: file: "/etc/test-secrets/${name}/${file}";
+    mkMachineSecretDefault = spec: spec;
+    withDiscover = true;
+    withAllowReadAccess = true;
   };
 
-  nodeBase = {
-    networking = {
-      useNetworkd = true;
-      useDHCP = false;
-      firewall.enable = false;
-    };
-    systemd.network.enable = true;
-    system.stateVersion = "25.11";
-  };
+  nodeBase = testHelpers.mkCommonNode {};
 
   serverNode = lib.recursiveUpdate nodeBase {
     virtualisation.vlans = [1];

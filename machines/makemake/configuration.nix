@@ -50,6 +50,22 @@
 
     listenNetworkAddress = "10.0.0.10";
 
+    backupFailureNtfy = {
+      enable = true;
+      url = "http://10.0.0.1:2586/backup-alerts";
+    };
+
+    privateInfra.overseerr.exposure = {
+      enable = true;
+      domain = "request.stark.pub";
+      public = true;
+      cloudflareProxied = true;
+      router = {
+        enable = true;
+        targets = ["io"];
+      };
+    };
+
     storage-alerts = {
       enable = true;
       mounts = [
@@ -111,9 +127,46 @@
       minne = mkB2 config.my.minne.dataDir;
       minne-saas = mkB2 config.my.minne-saas.dataDir;
       vaultwarden = mkB2 config.my.vaultwarden.backupDir;
-      surrealdb = mkB2 config.my.surrealdb.dataDir;
-      surrealdb-saas = mkB2 config.my.minne-saas.surrealdb.dataDir;
-      nous = mkB2 config.my.nous.dataDir;
+
+      surrealdb =
+        (mkB2 config.my.surrealdb.dataDir)
+        // {
+          backupPrepareCommand = ''
+            ${pkgs.surrealdb}/bin/surreal export \
+              --endpoint ws://127.0.0.1:8220 \
+              --ns minne_ns --db minne_db \
+              ${config.my.surrealdb.dataDir}/dump-export.surql
+          '';
+          backupCleanupCommand = ''
+            rm -f ${config.my.surrealdb.dataDir}/dump-export.surql
+          '';
+        };
+
+      surrealdb-saas =
+        (mkB2 config.my.minne-saas.surrealdb.dataDir)
+        // {
+          backupPrepareCommand = ''
+            ${pkgs.surrealdb}/bin/surreal export \
+              --endpoint ws://127.0.0.1:8221 \
+              --ns minne_ns --db minne_db \
+              ${config.my.minne-saas.surrealdb.dataDir}/dump-export.surql
+          '';
+          backupCleanupCommand = ''
+            rm -f ${config.my.minne-saas.surrealdb.dataDir}/dump-export.surql
+          '';
+        };
+
+      nous =
+        (mkB2 config.my.nous.dataDir)
+        // {
+          backupPrepareCommand = ''
+            ${pkgs.postgresql}/bin/pg_dump -Fc -f ${config.my.nous.dataDir}/nous_prod.dump nous_prod
+          '';
+          backupCleanupCommand = ''
+            rm -f ${config.my.nous.dataDir}/nous_prod.dump
+          '';
+        };
+
       paperless = {
         enable = true;
         path = config.my.paperless.dataDir;
@@ -121,6 +174,13 @@
         backend = {
           type = "garage-s3";
         };
+        backupPrepareCommand = ''
+          ${pkgs.postgresql}/bin/pg_dump \
+            -h 192.168.100.22 -U paperless -Fc -f ${config.my.paperless.dataDir}/paperless.dump paperless
+        '';
+        backupCleanupCommand = ''
+          rm -f ${config.my.paperless.dataDir}/paperless.dump
+        '';
       };
     };
 
@@ -128,6 +188,19 @@
       enable = true;
       port = 8322;
       address = "10.0.0.10";
+      exposure = {
+        enable = true;
+        domain = "vault.stark.pub";
+        lanOnly = true;
+        acmeDns01 = {
+          dnsProvider = "cloudflare";
+          environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+        };
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
     };
 
     openwebui = {
@@ -135,6 +208,16 @@
       port = 8080;
       autoUpdate = true;
       updateSchedule = "weekly";
+      exposure = {
+        enable = true;
+        domain = "chat.stark.pub";
+        public = true;
+        cloudflareProxied = true;
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
     };
 
     # SurrealDB configuration
@@ -158,6 +241,15 @@
       };
 
       logLevel = "debug";
+      exposure = {
+        enable = true;
+        domain = "minne.lan.stark.pub";
+        useWildcard = "lanstark";
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
     };
 
     # Minne SaaS configuration
@@ -182,6 +274,17 @@
         "/waitlist"
         "/waitlist/"
       ];
+      exposure = {
+        enable = true;
+        domain = "minne.stark.pub";
+        demoDomain = "minne-demo.stark.pub";
+        public = true;
+        cloudflareProxied = true;
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
     };
 
     # Garage S3-compatible storage (clustered with io)
@@ -204,6 +307,20 @@
       bindAddress = "0.0.0.0";
       port = 8081;
       htpasswdFile = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
+      exposure = {
+        enable = true;
+        domain = "webdav.lan.stark.pub";
+        useWildcard = "lanstark";
+        basicAuthSecret = {
+          realm = "WebDAV";
+          name = "webdav-htpasswd";
+          file = "htpasswd";
+        };
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
     };
 
     # Nous burnout prevention app
@@ -214,6 +331,16 @@
       dataDir = "/var/lib/nous";
       host = "https://nous.fyi";
       logLevel = "info"; # Temporarily debug to diagnose mail issues
+      exposure = {
+        enable = true;
+        public = true;
+        domain = "nous.fyi";
+        cloudflareProxied = true;
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
 
       database = {
         name = "nous_prod";
@@ -238,6 +365,15 @@
       port = 5150;
       host = "https://politikerstod.stark.pub";
       openFirewall = true;
+      exposure = {
+        enable = true;
+        public = true;
+        cloudflareProxied = true;
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
 
       database = {
         name = "politikerstod_prod";
@@ -273,6 +409,15 @@
       enable = true;
       port = 8888;
       openFirewall = true;
+      exposure = {
+        enable = true;
+        domain = "atuin.lan.stark.pub";
+        useWildcard = "lanstark";
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
     };
 
     # Atuin client
@@ -284,7 +429,7 @@
       openFirewall = true;
       port = 28981;
       address = "10.0.0.10";
-      url = "https://paperless.lan.stark.pub";
+      url = "https://dokument.lan.stark.pub";
       dataDir = "/var/lib/paperless";
       consumptionDir = "/var/lib/paperless/consume";
       mediaDir = "/var/lib/paperless/media";
@@ -301,6 +446,15 @@
         };
       };
       tika.enable = true;
+      exposure = {
+        enable = true;
+        domain = "dokument.lan.stark.pub";
+        useWildcard = "lanstark";
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
       s3Consumption = {
         enable = true;
         bucket = "paperless-consume";
@@ -315,6 +469,14 @@
       port = 8088;
       address = "127.0.0.1";
       baseUrl = "https://search.lan.stark.pub";
+      exposure = {
+        enable = true;
+        useWildcard = "lanstark";
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
       # address = "10.0.0.10";
       vpn = {
         enable = true;

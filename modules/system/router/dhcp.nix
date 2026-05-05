@@ -6,7 +6,7 @@
   }: let
     inherit (lib) filter imap0;
     cfg = config.my.router;
-    helpers = config.routerHelpers or {};
+    helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     segments = helpers.segments or [];
     enabledSegments = filter (segment: segment.dhcp.enable or false) segments;
     enabled = cfg.enable && (enabledSegments != []);

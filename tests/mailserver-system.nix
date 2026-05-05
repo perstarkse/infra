@@ -95,6 +95,11 @@
         text = passwordHash;
       };
 
+      "test-secrets/mail/stark/skanning_crypt" = {
+        mode = "0400";
+        text = passwordHash;
+      };
+
       "test-secrets/mail/stark/paperless_ingest_crypt" = {
         mode = "0400";
         text = passwordHash;

@@ -1,10 +1,12 @@
 {
   ctx,
   config,
+  lib,
   pkgs,
   ...
 }: let
-  exposureLib = (ctx.flake.lib or {}).exposure or (import ../../flake/lib/exposure.nix {inherit (pkgs) lib;});
+  exposureLib = ctx.flake.lib.exposure or (import ../../flake/lib/exposure.nix {inherit (pkgs) lib;});
+  keepAwakeIdentityFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
   routerImportCfg = config.my.exposure.routerImports;
   routerDefaultDnsTarget =
     if routerImportCfg.defaultDnsTarget != null
@@ -76,10 +78,13 @@ in {
     passwordHashFile = config.my.secrets.getPath "wake-proxy" "env";
     keepAwake = {
       maxDurationSeconds = 14400;
-      remoteSsh = {
-        host = "10.0.0.15";
-        identityFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
-      };
+      remoteSsh =
+        {
+          host = "10.0.0.15";
+        }
+        // lib.optionalAttrs (keepAwakeIdentityFile != null) {
+          identityFile = keepAwakeIdentityFile;
+        };
     };
   };
 
@@ -194,6 +199,10 @@ in {
         {
           readers = ["wake-proxy"];
           path = config.my.secrets.getPath "wake-proxy" "env";
+        }
+        {
+          readers = ["wake-proxy"];
+          path = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
         }
         {
           readers = ["systemd-network"];
@@ -485,8 +494,9 @@ in {
             ];
           };
         };
-        enforcement.exemptSegments = ["trusted"];
-        dohBlocking.exemptSegments = ["trusted"];
+        profiles.default.denyDomains = ["use-application-dns.net"];
+        enforcement.exemptSegments = [];
+        dohBlocking.exemptSegments = [];
       };
 
       nginx = {

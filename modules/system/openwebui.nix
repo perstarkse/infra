@@ -3,6 +3,7 @@
     config,
     lib,
     pkgs,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.openwebui;
@@ -44,26 +45,21 @@
         description = "Schedule for container updates (daily, weekly, monthly)";
       };
 
-      firewallPorts = lib.mkOption {
-        type = lib.types.submodule {
-          options = {
-            tcp = lib.mkOption {
-              type = lib.types.listOf lib.types.port;
-              default = [];
-              description = "TCP ports to allow through firewall";
-            };
-            udp = lib.mkOption {
-              type = lib.types.listOf lib.types.port;
-              default = [];
-              description = "UDP ports to allow through firewall";
-            };
-          };
-        };
-        default = {
-          tcp = [8080];
-          udp = [];
-        };
-        description = "Firewall port configuration for OpenWebUI";
+      firewallTcpPorts = lib.mkOption {
+        type = lib.types.listOf lib.types.port;
+        default = [8080];
+        description = "Additional TCP ports to open for OpenWebUI.";
+      };
+      firewallUdpPorts = lib.mkOption {
+        type = lib.types.listOf lib.types.port;
+        default = [];
+        description = "UDP ports to open for OpenWebUI.";
+      };
+
+      exposure = mkStandardExposureOptions {
+        subject = "OpenWebUI";
+        visibility = "public";
+        withRouter = true;
       };
     };
 
@@ -104,9 +100,22 @@
         };
       };
 
-      # Firewall configuration
-      networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;
-      networking.firewall.allowedUDPPorts = cfg.firewallPorts.udp;
+      my.exposure.services.openwebui = lib.mkIf cfg.exposure.enable {
+        upstream = {
+          host = config.my.listenNetworkAddress;
+          inherit (cfg) port;
+        };
+        router = {inherit (cfg.exposure.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
+          inherit (cfg.exposure) domain;
+          inherit (cfg.exposure) public cloudflareProxied;
+        };
+        firewall.local = {
+          enable = cfg.firewallTcpPorts != [] || cfg.firewallUdpPorts != [];
+          tcp = cfg.firewallTcpPorts;
+          udp = cfg.firewallUdpPorts;
+        };
+      };
 
       # OpenWebUI container configuration
       virtualisation.oci-containers.containers.openwebui = {

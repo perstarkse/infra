@@ -88,7 +88,12 @@
 #   };
 # }
 {
-  config.flake.nixosModules.frigate = _: let
+  config.flake.nixosModules.frigate = {
+    config,
+    lib,
+    mkStandardExposureOptions,
+    ...
+  }: let
     frigateConfigYAML = builtins.toFile "frigate-config.yml" ''
       mqtt:
         enabled: false
@@ -137,6 +142,11 @@
               days: 0
     '';
   in {
+    options.my.frigate.exposure = mkStandardExposureOptions {
+      subject = "Frigate";
+      visibility = "internal";
+    };
+
     config = {
       # GPU access for container user
       users = {
@@ -173,6 +183,17 @@
         services.podman-frigate = {
           requires = ["frigate-config-sync.service"];
           after = ["frigate-config-sync.service"];
+        };
+      };
+
+      my.exposure.services.frigate = lib.mkIf config.my.frigate.exposure.enable {
+        upstream = {
+          host = config.my.listenNetworkAddress;
+          port = 5000;
+        };
+        http.virtualHosts = lib.optional (config.my.frigate.exposure.domain != null) {
+          inherit (config.my.frigate.exposure) domain;
+          inherit (config.my.frigate.exposure) lanOnly useWildcard;
         };
       };
 

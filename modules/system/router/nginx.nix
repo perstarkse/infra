@@ -7,19 +7,38 @@
   }: let
     cfg = config.my.router;
     nginxCfg = cfg.nginx;
-    helpers = config.routerHelpers or {};
-    primarySegment = helpers.primarySegment or null;
-    lanSubnet =
-      if primarySegment != null
-      then primarySegment.subnet
-      else cfg.segments.${cfg.primarySegment}.subnet;
+    helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
+    lanSubnet = helpers.primarySubnet;
     machineMap = helpers.machineMap or {};
     enabled = cfg.enable && nginxCfg.enable;
     internalCidrs = map (segment: segment.subnetCidr) (helpers.segments or []);
     ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     wgSubnet = (cfg.wireguard or {}).subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/${toString ((cfg.wireguard or {}).cidrPrefix or 24)}";
-    cfNeeded = lib.any (v: (v.cloudflareProxied or false)) nginxCfg.virtualHosts;
+    exposureServices = lib.filterAttrs (_: exposure: exposure.enable) (config.my.exposure.services or {});
+    exposureVhosts = lib.concatLists (lib.mapAttrsToList (_name: exposure:
+      map (vhost: {
+        inherit (vhost) domain;
+        target =
+          if vhost.targetHost != null
+          then vhost.targetHost
+          else exposure.upstream.host;
+        targetScheme =
+          if vhost.targetScheme != null
+          then vhost.targetScheme
+          else exposure.upstream.scheme;
+        port =
+          if vhost.targetPort != null
+          then toString vhost.targetPort
+          else if exposure.upstream.port != null
+          then toString exposure.upstream.port
+          else null;
+        inherit (vhost) websockets extraConfig lanOnly cloudflareProxied noAcme useWildcard acmeDns01 basicAuth publishDns;
+      })
+      exposure.http.virtualHosts)
+    exposureServices);
+    allVirtualHosts = nginxCfg.virtualHosts ++ exposureVhosts;
+    cfNeeded = lib.any (v: (v.cloudflareProxied or false)) allVirtualHosts;
     cfDir = "/var/lib/cloudflare-ips";
     cfAllow = "${cfDir}/allow.conf";
     cfRealip = "${cfDir}/realip.conf";
@@ -27,8 +46,8 @@
 
     ddclientEnabled = nginxCfg.ddclient.enable;
     ddclientZones = nginxCfg.ddclient.zones;
-    publicVhosts = lib.filter (vhost: !(vhost.lanOnly or false)) nginxCfg.virtualHosts;
-    httpsEnabled = lib.any (vhost: !(vhost.noAcme or false)) nginxCfg.virtualHosts;
+    publicVhosts = lib.filter (vhost: !(vhost.lanOnly or false)) allVirtualHosts;
+    httpsEnabled = lib.any (vhost: !(vhost.noAcme or false)) allVirtualHosts;
     nginxServicePorts =
       lib.optionals enabled [
         {
@@ -257,7 +276,7 @@
               in
                 lib.nameValuePair vhost.domain (baseCfg // sslConfig)
             )
-            nginxCfg.virtualHosts);
+            allVirtualHosts);
       };
 
       security.acme.certs = lib.mkMerge (

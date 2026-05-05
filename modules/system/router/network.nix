@@ -5,7 +5,7 @@
     ...
   }: let
     cfg = config.my.router;
-    helpers = config.routerHelpers or {};
+    helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     wan = helpers.wanInterface or cfg.wan.interface;
     bridgePorts = helpers.bridgePorts or [];
     lanBridge = helpers.lanBridge or "br-lan";

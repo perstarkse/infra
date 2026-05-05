@@ -1,5 +1,16 @@
 {
-  config.flake.nixosModules.home-assistant = {pkgs, ...}: {
+  config.flake.nixosModules.home-assistant = {
+    config,
+    lib,
+    pkgs,
+    mkStandardExposureOptions,
+    ...
+  }: {
+    options.my.home-assistant.exposure = mkStandardExposureOptions {
+      subject = "Home Assistant";
+      visibility = "internal";
+    };
+
     config = {
       systemd = {
         tmpfiles.rules = [
@@ -60,7 +71,20 @@
       };
       hardware.bluetooth.enable = true;
 
-      networking.firewall.allowedTCPPorts = [8123 1400];
+      my.exposure.services.home-assistant = lib.mkIf config.my.home-assistant.exposure.enable {
+        upstream = {
+          host = config.my.listenNetworkAddress;
+          port = 8123;
+        };
+        http.virtualHosts = lib.optional (config.my.home-assistant.exposure.domain != null) {
+          inherit (config.my.home-assistant.exposure) domain;
+          inherit (config.my.home-assistant.exposure) lanOnly useWildcard;
+        };
+        firewall.local = {
+          enable = true;
+          tcp = [8123 1400];
+        };
+      };
 
       virtualisation.oci-containers = {
         containers.homeassistant = {

@@ -2,6 +2,7 @@
   config.flake.nixosModules.vaultwarden = {
     config,
     lib,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.vaultwarden;
@@ -31,31 +32,36 @@
         description = "Directory to store Vaultwarden data and backups";
       };
 
-      firewallPorts = lib.mkOption {
-        type = lib.types.submodule {
-          options = {
-            tcp = lib.mkOption {
-              type = lib.types.listOf lib.types.port;
-              default = [];
-              description = "TCP ports to allow through firewall";
-            };
-            udp = lib.mkOption {
-              type = lib.types.listOf lib.types.port;
-              default = [];
-              description = "UDP ports to allow through firewall";
-            };
+      firewallTcpPorts = lib.mkOption {
+        type = lib.types.listOf lib.types.port;
+        default = [8322];
+        description = "Additional TCP ports to open for Vaultwarden.";
+      };
+      firewallUdpPorts = lib.mkOption {
+        type = lib.types.listOf lib.types.port;
+        default = [];
+        description = "UDP ports to open for Vaultwarden.";
+      };
+
+      exposure =
+        mkStandardExposureOptions {
+          subject = "Vaultwarden";
+          visibility = "internal";
+          withAcmeDns01 = true;
+          withRouter = true;
+          withRouterTargetHost = true;
+          withRouterDnsTarget = true;
+        }
+        // {
+          cloudflareProxied = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Require generated reverse proxy traffic through Cloudflare or internal networks.";
           };
         };
-        default = {
-          tcp = [8322];
-          udp = [];
-        };
-        description = "Firewall port configuration for Vaultwarden";
-      };
     };
 
     config = {
-      # Vaultwarden service configuration
       services.vaultwarden = {
         inherit (cfg) enable;
         inherit (cfg) backupDir;
@@ -66,9 +72,23 @@
         environmentFile = config.my.secrets.getPath "vaultwarden" "env";
       };
 
-      # Firewall configuration
-      networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;
-      networking.firewall.allowedUDPPorts = cfg.firewallPorts.udp;
+      my.exposure.services.vaultwarden = lib.mkIf cfg.exposure.enable {
+        upstream = {
+          host = cfg.address;
+          inherit (cfg) port;
+        };
+        router = {inherit (cfg.exposure.router) enable targets targetHost dnsTarget;};
+        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
+          inherit (cfg.exposure) domain;
+          inherit (cfg.exposure) lanOnly cloudflareProxied useWildcard acmeDns01;
+          websockets = true;
+        };
+        firewall.local = {
+          enable = cfg.firewallTcpPorts != [] || cfg.firewallUdpPorts != [];
+          tcp = cfg.firewallTcpPorts;
+          udp = cfg.firewallUdpPorts;
+        };
+      };
 
       # Generate a secret for the Vaultwarden environment file
       my.secrets.declarations = [

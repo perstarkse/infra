@@ -3,6 +3,7 @@
     config,
     lib,
     pkgs,
+    mkStandardExposureOptions,
     ...
   }: let
     cfg = config.my.minne-saas;
@@ -72,27 +73,30 @@
         description = "Mutating paths allowed in demo mode (mapped to DEMO_ALLOWED_MUTATING_PATHS)";
       };
 
-      firewallPorts = lib.mkOption {
-        type = lib.types.submodule {
-          options = {
-            tcp = lib.mkOption {
-              type = lib.types.listOf lib.types.port;
-              default = [];
-              description = "TCP ports to allow through firewall";
-            };
-            udp = lib.mkOption {
-              type = lib.types.listOf lib.types.port;
-              default = [];
-              description = "UDP ports to allow through firewall";
-            };
+      firewallTcpPorts = lib.mkOption {
+        type = lib.types.listOf lib.types.port;
+        default = [cfg.port];
+        description = "Additional TCP ports to open for Minne SaaS.";
+      };
+      firewallUdpPorts = lib.mkOption {
+        type = lib.types.listOf lib.types.port;
+        default = [];
+        description = "UDP ports to open for Minne SaaS.";
+      };
+
+      exposure =
+        mkStandardExposureOptions {
+          subject = "Minne SaaS";
+          visibility = "public";
+          withRouter = true;
+        }
+        // {
+          demoDomain = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Optional demo redirect domain for generated Minne SaaS exposure.";
           };
         };
-        default = {
-          tcp = [cfg.port];
-          udp = [];
-        };
-        description = "Firewall port configuration for Minne SaaS";
-      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -225,9 +229,42 @@
 
       users.groups.minne-saas = {};
 
-      # Firewall configuration
-      networking.firewall.allowedTCPPorts = cfg.firewallPorts.tcp;
-      networking.firewall.allowedUDPPorts = cfg.firewallPorts.udp;
+      my.exposure.services.minne-saas = lib.mkIf cfg.exposure.enable {
+        upstream = {
+          host = cfg.address;
+          inherit (cfg) port;
+        };
+        router = {
+          inherit (cfg.exposure.router) enable targets;
+        };
+        http.virtualHosts =
+          lib.optional (cfg.exposure.domain != null) {
+            inherit (cfg.exposure) domain;
+            inherit (cfg.exposure) public cloudflareProxied;
+            websockets = false;
+            extraConfig = ''
+              proxy_set_header Connection "close";
+              proxy_http_version 1.1;
+              chunked_transfer_encoding off;
+              proxy_buffering off;
+              proxy_cache off;
+            '';
+          }
+          ++ lib.optional (cfg.exposure.demoDomain != null) {
+            domain = cfg.exposure.demoDomain;
+            inherit (cfg.exposure) public cloudflareProxied;
+            websockets = false;
+            publishDns = false;
+            extraConfig = ''
+              return 301 https://${cfg.exposure.domain}$request_uri;
+            '';
+          };
+        firewall.local = {
+          enable = cfg.firewallTcpPorts != [] || cfg.firewallUdpPorts != [];
+          tcp = cfg.firewallTcpPorts;
+          udp = cfg.firewallUdpPorts;
+        };
+      };
     };
   };
 }

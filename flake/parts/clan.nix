@@ -15,6 +15,7 @@
           inherit (inputs) nous;
         };
       };
+      inherit ((import ../lib/exposure-options.nix {inherit (inputs.nixpkgs) lib;})) mkStandardExposureOptions;
     };
 
     inventory = {

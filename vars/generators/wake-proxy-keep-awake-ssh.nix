@@ -1,7 +1,7 @@
-{
+{pkgs, ...}: {
   "wake-proxy-keep-awake-ssh" = {
     share = true;
-    runtimeInputs = ["openssh"];
+    runtimeInputs = [pkgs.openssh];
     files = {
       private_key = {
         mode = "0400";

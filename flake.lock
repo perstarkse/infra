@@ -1329,11 +1329,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1771961576,
-        "narHash": "sha256-PXrUjC++4AtuD53q2pd1Uzoerzm9+jsfw0m7JKqeoug=",
+        "lastModified": 1777919845,
+        "narHash": "sha256-POBVr72ivxLhPbcjXGL0+X85OzvqlofafsjshLXOlio=",
         "ref": "refs/heads/main",
-        "rev": "227362396c129cb5cd08b256b9a7b04b4ba30038",
-        "revCount": 57,
+        "rev": "d00625a17b1227346260d5eb541a1b6cd3f6a8cd",
+        "revCount": 60,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },
@@ -1837,11 +1837,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1777306021,
-        "narHash": "sha256-sbBbd1gEK7I4rTtMjbX2I66L3SWzkFqAzov7cOPsdJc=",
+        "lastModified": 1777919129,
+        "narHash": "sha256-n4h5qp8CWCDU58k9vyIGHVaceX33X572Cv7NjHnDFZ0=",
         "ref": "refs/heads/main",
-        "rev": "18d2097079e41526cf627f90fb2da3a1cdfcbc1d",
-        "revCount": 25,
+        "rev": "bacc2dc1c8598c1e5264fb2e3862bfe208199909",
+        "revCount": 29,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/wol-web-proxy.git"
       },
