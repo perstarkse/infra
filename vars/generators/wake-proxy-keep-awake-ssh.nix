@@ -1,12 +1,17 @@
-{pkgs, ...}: {
+{
+  config,
+  pkgs,
+  ...
+}: {
   "wake-proxy-keep-awake-ssh" = {
     share = true;
     runtimeInputs = [pkgs.openssh];
     files = {
       private_key = {
         mode = "0400";
-        owner = "wake-proxy";
         neededFor = "services";
+      } // pkgs.lib.optionalAttrs config.services.wakeproxy.enable {
+        owner = "wake-proxy";
       };
       public_key = {
         mode = "0444";

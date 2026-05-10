@@ -26,7 +26,9 @@
       politikerstod
       atuin-server
       atuin
+      webdav-htpasswd-secret
       webdav-garage
+
       paperless
       storage-alerts
       searxng

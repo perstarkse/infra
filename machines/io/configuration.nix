@@ -36,6 +36,7 @@ in {
       attic-cache
       router
       wake-proxy
+      webdav-htpasswd-secret
       heartbeat
       home-assistant
       ntfy
@@ -201,10 +202,6 @@ in {
           path = config.my.secrets.getPath "wake-proxy" "env";
         }
         {
-          readers = ["wake-proxy"];
-          path = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
-        }
-        {
           readers = ["systemd-network"];
           path = config.my.secrets.getPath "wireguard-server" "private-key";
         }
@@ -233,21 +230,6 @@ in {
           script = ''
             ssh-keygen -t ed25519 -C "oumu-vm-deploy-key" -f "$out/private_key" -N ""
             mv "$out/private_key.pub" "$out/public_key"
-          '';
-        })
-        (config.my.secrets.mkMachineSecret {
-          name = "webdav-htpasswd";
-          share = true;
-          runtimeInputs = [pkgs.apacheHttpd];
-          files = {
-            htpasswd = {mode = "0400";};
-            password = {mode = "0400";};
-          };
-          script = ''
-            username="webdav"
-            password=$(head -c 24 /dev/urandom | base64 -w0 | tr -d '/+=')
-            htpasswd -nbB "$username" "$password" > "$out/htpasswd"
-            echo "$password" > "$out/password"
           '';
         })
       ];
