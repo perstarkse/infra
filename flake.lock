@@ -1787,11 +1787,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1768993968,
-        "narHash": "sha256-zbZfyJNucjZncq7fBhwF5qBY0iYfPRiRcMaFYPor7qI=",
+        "lastModified": 1778070464,
+        "narHash": "sha256-2lZxUk8DAcQ6FEtdkPJC7OH9uNG4PuW7HG5J9X77bRE=",
         "owner": "perstarkse",
         "repo": "clan-vars-helper",
-        "rev": "7eb10496f517437925e13dfe78320ae683b4d1e2",
+        "rev": "96f89b1b9cabe7709a1da81fee15e73f0d852893",
         "type": "github"
       },
       "original": {
@@ -1837,11 +1837,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1777919129,
-        "narHash": "sha256-n4h5qp8CWCDU58k9vyIGHVaceX33X572Cv7NjHnDFZ0=",
+        "lastModified": 1778134575,
+        "narHash": "sha256-hK7ykwwHxwsZJt4iwRbxCPVjuqZregHiexnOF5oDug4=",
         "ref": "refs/heads/main",
-        "rev": "bacc2dc1c8598c1e5264fb2e3862bfe208199909",
-        "revCount": 29,
+        "rev": "9391ad8ea967651540d8057282bc8f90eb20fa1d",
+        "revCount": 31,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/wol-web-proxy.git"
       },

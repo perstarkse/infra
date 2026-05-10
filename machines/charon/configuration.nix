@@ -452,6 +452,21 @@ in {
     };
   };
 
+  systemd.services.bluetooth-resume-recover = {
+    description = "Recover Bluetooth after resume";
+    wantedBy = ["suspend.target" "hibernate.target" "hybrid-sleep.target" "suspend-then-hibernate.target"];
+    after = ["suspend.target" "hibernate.target" "hybrid-sleep.target" "suspend-then-hibernate.target"];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pkgs.writeShellScript "bluetooth-resume-recover" ''
+        set -euo pipefail
+        ${pkgs.coreutils}/bin/sleep 3
+        ${pkgs.systemd}/bin/systemctl try-restart bluetooth.service
+        ${pkgs.bluez}/bin/bluetoothctl power on >/dev/null 2>&1 || true
+      '';
+    };
+  };
+
   security = {
     polkit.enable = true;
 

@@ -170,6 +170,46 @@
       printf '{"text":"%s","tooltip":"WireGuard: %s\\nTunnel IP: %s","class":"connected"}\n' "$text" "$iface_list" "$ip_list"
     '';
 
+    bluetoothScript = pkgs.writeShellScriptBin "waybar-bluetooth-status" ''
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      bluetoothctl_bin="${pkgs.bluez}/bin/bluetoothctl"
+      timeout_bin="${pkgs.coreutils}/bin/timeout"
+
+      if ! output="$($timeout_bin 2s $bluetoothctl_bin show 2>/dev/null)"; then
+        printf '{"text":"BT ?","tooltip":"Bluetooth controller did not respond","class":"error"}\n'
+        exit 0
+      fi
+
+      powered="$(printf '%s\n' "$output" | ${pkgs.gnugrep}/bin/grep -m1 'Powered:' | ${pkgs.gawk}/bin/awk '{print $2}')"
+      controller="$(printf '%s\n' "$output" | ${pkgs.gnugrep}/bin/grep -m1 'Name:' | ${pkgs.coreutils}/bin/cut -d: -f2- | ${pkgs.gnused}/bin/sed 's/^ *//')"
+
+      if [ "$powered" != "yes" ]; then
+        printf '{"text":"BT off","tooltip":"%s","class":"disabled"}\n' "''${controller:-Bluetooth controller is powered off}"
+        exit 0
+      fi
+
+      devices="$($timeout_bin 2s $bluetoothctl_bin devices Connected 2>/dev/null || true)"
+      count="$(printf '%s\n' "$devices" | ${pkgs.gnugrep}/bin/grep -c '^Device ' || true)"
+
+      if [ "$count" -eq 0 ]; then
+        printf '{"text":"BT on","tooltip":"%s","class":"enabled"}\n' "''${controller:-Bluetooth is powered on}"
+        exit 0
+      fi
+
+      aliases="$(printf '%s\n' "$devices" | ${pkgs.coreutils}/bin/cut -d' ' -f3- | ${pkgs.coreutils}/bin/paste -sd ', ' -)"
+      first_alias="$(printf '%s\n' "$devices" | ${pkgs.coreutils}/bin/head -n1 | ${pkgs.coreutils}/bin/cut -d' ' -f3-)"
+
+      if [ "$count" -eq 1 ]; then
+        text="$first_alias"
+      else
+        text="BT $count"
+      fi
+
+      printf '{"text":"%s","tooltip":"%s","class":"connected"}\n' "$text" "$aliases"
+    '';
+
     commonModules = {
       "custom/vpn" = {
         "interval" = 5;
@@ -224,14 +264,12 @@
           on-scroll-down = "shift_down";
         };
       };
-      "bluetooth" = {
-        "format" = " {status}";
-        "format-connected" = " {device_alias}";
-        "format-connected-battery" = " {device_alias} {device_battery_percentage}%";
-        "tooltip-format" = "{controller_alias}\t{controller_address}\n\n{num_connections} connected";
-        "tooltip-format-connected" = "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}";
-        "tooltip-format-enumerate-connected" = "{device_alias}\t{device_address}";
-        "tooltip-format-enumerate-connected-battery" = "{device_alias}\t{device_address}\t{device_battery_percentage}%";
+      "custom/bluetooth" = {
+        "interval" = 5;
+        "exec" = "${bluetoothScript}/bin/waybar-bluetooth-status";
+        "return-type" = "json";
+        "format" = "{}";
+        "tooltip" = true;
       };
       "memory" = {
         "interval" = 10;
@@ -442,7 +480,7 @@
               height = 20;
               modules-left = [wmWorkspaces];
               modules-center = [wmWindow "mpris"];
-              modules-right = ["custom/vpn" "memory" "cpu" "temperature" "disk" "custom/backup" wmLanguage "bluetooth" "pulseaudio" "clock" "custom/voxtype" "privacy"];
+              modules-right = ["custom/vpn" "memory" "cpu" "temperature" "disk" "custom/backup" wmLanguage "custom/bluetooth" "pulseaudio" "clock" "custom/voxtype" "privacy"];
             }
             // commonModules // wmModules;
         };

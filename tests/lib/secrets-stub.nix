@@ -4,6 +4,7 @@
   withAllowReadAccess ? false,
   withGenerateManifest ? false,
   mkMachineSecretDefault ? (_: {}),
+  ...
 }: {lib, ...}: {
   options.my.secrets =
     {
