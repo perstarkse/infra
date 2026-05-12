@@ -88,7 +88,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "searx" "wireguard-tunnels"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "searx" "wireguard-tunnels"];
       };
 
       generateManifest = false;
@@ -107,8 +107,8 @@
         #   path = config.my.secrets.getPath "garage" "env";
         # }
         {
-          readers = ["politikerstod"];
-          path = config.my.secrets.getPath "politikerstod" "env";
+          readers = ["politikerstod-lekeberg"];
+          path = config.my.secrets.getPath "politikerstod-lekeberg" "env";
         }
       ];
     };
@@ -361,48 +361,50 @@
       };
     };
 
-    # Politikerstöd Service
+    # Politikerstöd Service Instances
     politikerstod = {
-      enable = true;
-      port = 5150;
-      host = "https://politikerstod.stark.pub";
-      openFirewall = true;
-      exposure = {
-        enable = true;
-        public = true;
-        cloudflareProxied = true;
-        router = {
+      instances = {
+        lekeberg = {
           enable = true;
-          targets = ["io"];
+          port = 5150;
+          host = "https://politikerstod.stark.pub";
+          openFirewall = true;
+          exposure = {
+            enable = true;
+            public = true;
+            cloudflareProxied = true;
+            router = {
+              enable = true;
+              targets = ["io"];
+            };
+          };
+
+          database = {
+            name = "politikerstod_prod";
+            user = "politikerstod";
+            host = "192.168.100.12"; # Container IP
+            port = 5432;
+            enableContainer = true;
+            allowedHosts = ["10.0.0.15"]; # charon - remote worker
+            container = {
+              name = "politikerstod-db"; # Preserve existing container data
+              hostAddress = "192.168.100.10";
+              localAddress = "192.168.100.12";
+            };
+          };
+
+          scraper.baseUrl = "https://meetings.lekeberg.se";
+          s3.prefix = "lekeberg";
+
+          settings = {
+            logLevel = "info";
+            prettyBacktrace = true;
+            numWorkers = 4;
+            pollingHistoricalMonths = 36;
+            openaiModel = "gpt-4.1-mini";
+            evaluationModel = "gpt-4.1-mini";
+          };
         };
-      };
-
-      database = {
-        name = "politikerstod_prod";
-        user = "politikerstod";
-        host = "192.168.100.12"; # Container IP
-        port = 5432;
-        enableContainer = true;
-        allowedHosts = ["10.0.0.15"]; # charon - remote worker
-        container = {
-          hostAddress = "192.168.100.10";
-          localAddress = "192.168.100.12";
-        };
-      };
-
-      smtp = {
-        host = "mail-eu.smtp2go.com";
-        port = 587;
-        secure = false; # Upgrade via STARTTLS
-      };
-
-      settings = {
-        logLevel = "info";
-        prettyBacktrace = true;
-        numWorkers = 4;
-        pollingHistoricalMonths = 36;
-        openaiModel = "gpt-4.1-mini";
-        evaluationModel = "gpt-4.1-mini";
       };
     };
 

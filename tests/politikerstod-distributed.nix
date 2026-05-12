@@ -35,19 +35,27 @@
     };
 
     my.politikerstod = {
-      enable = true;
-      package = realPolitikerstodPkg;
-      startMode = "server";
-      openFirewall = false;
-      dataDir = "/var/lib/politikerstod";
-      database = {
-        host = "127.0.0.1";
-        enableContainer = false;
+      instances = {
+        test = {
+          enable = true;
+          package = realPolitikerstodPkg;
+          startMode = "server";
+          openFirewall = false;
+          dataDir = "/var/lib/politikerstod-test";
+          database = {
+            host = "127.0.0.1";
+            enableContainer = false;
+          };
+          s3 = {
+            endpoint = "http://127.0.0.1:3900";
+            prefix = "lekeberg";
+          };
+          scraper.baseUrl = "https://meetings.lekeberg.se";
+        };
       };
-      s3.endpoint = "http://127.0.0.1:3900";
     };
 
-    environment.etc."test-secrets/politikerstod/env" = {
+    environment.etc."test-secrets/politikerstod-test/env" = {
       mode = "0400";
       text = ''
         AUTH_ALLOWED_EMAIL_DOMAINS=(?i)(@stark\.pub$)
@@ -102,15 +110,23 @@
     };
 
     my.politikerstod-remote-worker = {
-      enable = true;
-      package = realPolitikerstodPkg;
-      dataDir = "/var/lib/politikerstod";
-      workerTags = ["document_process"];
-      database.host = "10.0.0.10";
-      s3.endpoint = "http://10.0.0.1:3900";
+      instances = {
+        test = {
+          enable = true;
+          package = realPolitikerstodPkg;
+          dataDir = "/var/lib/politikerstod-worker-test";
+          workerTags = ["document_process"];
+          database.host = "10.0.0.10";
+          s3 = {
+            endpoint = "http://10.0.0.1:3900";
+            prefix = "lekeberg";
+          };
+          scraper.baseUrl = "https://meetings.lekeberg.se";
+        };
+      };
     };
 
-    environment.etc."test-secrets/politikerstod/env" = {
+    environment.etc."test-secrets/politikerstod-test/env" = {
       mode = "0400";
       text = ''
         AUTH_ALLOWED_EMAIL_DOMAINS=(?i)(@stark\.pub$)
@@ -162,16 +178,16 @@ in {
     testScript = ''
       start_all()
 
-      server.wait_for_unit("politikerstod.service")
+      server.wait_for_unit("politikerstod-test.service")
       server.wait_for_unit("politikerstod-task-export.service")
-      worker.wait_for_unit("politikerstod-worker.service")
+      worker.wait_for_unit("politikerstod-worker-test.service")
       worker.wait_for_unit("politikerstod-worker-test-consumer.service")
 
-      server.wait_until_succeeds("systemctl is-active politikerstod.service", timeout=60)
-      worker.wait_until_succeeds("systemctl is-active politikerstod-worker.service", timeout=60)
+      server.wait_until_succeeds("systemctl is-active politikerstod-test.service", timeout=60)
+      worker.wait_until_succeeds("systemctl is-active politikerstod-worker-test.service", timeout=60)
 
-      server.succeed("systemctl show -p ExecStart politikerstod.service | grep -F -- '--server'")
-      worker.succeed("systemctl show -p ExecStart politikerstod-worker.service | grep -F -- '--worker=document_process'")
+      server.succeed("systemctl show -p ExecStart politikerstod-test.service | grep -F -- '--server'")
+      worker.succeed("systemctl show -p ExecStart politikerstod-worker-test.service | grep -F -- '--worker=document_process'")
 
       server.succeed("printf 'queued-by-server\\n' > /var/lib/politikerstod/task.queue")
       worker.succeed("curl --fail -sS http://10.0.0.10:18080/task.queue -o /var/lib/politikerstod/task.queue")
