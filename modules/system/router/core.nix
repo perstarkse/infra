@@ -11,7 +11,7 @@
     isHostOctet = s: builtins.match "^([2-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-4])$" s != null;
     isIPv4Base = s: builtins.match "^${ipv4OctetPattern}(\\.${ipv4OctetPattern}){2}$" s != null;
     isMacAddress = s: builtins.match "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$" s != null;
-    reservedZoneNames = ["wan" "wireguard" "cni" "libvirt"];
+    reservedZoneNames = ["wan" "wireguard" "zerotier" "cni" "libvirt"];
     normalizeRouterAccessLevel = level:
       if level == "full"
       then "admin"
@@ -748,6 +748,25 @@
           };
         };
 
+        zerotier = {
+          enable = mkEnableOption "Enable ZeroTier as a router policy zone";
+          interfaceName = mkOption {
+            type = types.str;
+            default = "zt*";
+            description = "ZeroTier interface name or nftables glob pattern";
+          };
+          routerAccessLevel = mkOption {
+            type = types.enum ["none" "infra" "admin" "full"];
+            default = "infra";
+            description = "Router-host access profile for ZeroTier peers";
+          };
+          canReach = mkOption {
+            type = types.listOf (types.oneOf [types.str reachRuleSubmodule]);
+            default = [];
+            description = "Segments or special zones ZeroTier peers may reach";
+          };
+        };
+
         wireguard = {
           enable = mkEnableOption "Enable WireGuard VPN server";
           interfaceName = mkOption {
@@ -921,7 +940,7 @@
         }
         {
           assertion = all (name: !(lib.elem name reservedZoneNames)) segmentNames;
-          message = "my.router.segments must not use reserved names: wan, wireguard, cni, libvirt";
+          message = "my.router.segments must not use reserved names: wan, wireguard, zerotier, cni, libvirt";
         }
         {
           assertion = all (name: cfg.segments.${name}.vlan.id >= 1 && cfg.segments.${name}.vlan.id <= 4094) segmentNames;
@@ -1074,6 +1093,7 @@
         orderedSegmentNames = [cfg.primarySegment] ++ filter (name: name != cfg.primarySegment) segmentNames;
         lanBridge = "br-lan";
         wgCfg = cfg.wireguard or {};
+        ztCfg = cfg.zerotier or {};
         wgRouteToPrimary = wgCfg.routeToLan or true;
         wgSubnet = wgCfg.subnet or "10.6.0";
         wgCidr = "${wgSubnet}.0/${toString (wgCfg.cidrPrefix or 24)}";
@@ -1204,6 +1224,22 @@
           dhcp.enable = false;
         };
 
+        ztZone = optional (ztCfg.enable or false) {
+          name = "zerotier";
+          kind = "zerotier";
+          interface = ztCfg.interfaceName or "zt*";
+          subnets = [];
+          routerIp = null;
+          internet = false;
+          isolateClients = true;
+          routerAccessLevel = normalizeRouterAccessLevel (ztCfg.routerAccessLevel or "infra");
+          routerAllowedTcpPorts = [];
+          routerAllowedUdpPorts = [];
+          reachRules = map normalizeReachRule (ztCfg.canReach or []);
+          canBeReachedFrom = [];
+          dhcp.enable = false;
+        };
+
         cniZone = optional (config.systemd.network.enable or false) {
           name = "cni";
           kind = "cni";
@@ -1265,7 +1301,7 @@
         segments = orderedSegments;
         inherit machineMap;
         machineList = machineHelpers;
-        zones = orderedSegments ++ wgZone ++ cniZone ++ [libvirtZone] ++ [wanZone];
+        zones = orderedSegments ++ wgZone ++ ztZone ++ cniZone ++ [libvirtZone] ++ [wanZone];
         inherit (cfg.ipv6) ulaPrefix;
 
         # Compatibility aliases for modules still transitioning internally.

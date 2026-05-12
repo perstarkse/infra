@@ -308,6 +308,7 @@ in {
             canReach = [];
           };
         };
+
         guests = {
           vlan.id = 50;
           subnet = "10.0.50";
@@ -324,6 +325,7 @@ in {
             canReach = [];
           };
         };
+
         cameras = {
           vlan.id = 30;
           subnet = "10.0.30";
@@ -354,6 +356,11 @@ in {
           else [];
       };
       ipv6.ulaPrefix = "fd00:711a:edcd:7e75";
+
+      zerotier = {
+        enable = true;
+        routerAccessLevel = "infra";
+      };
 
       wireguard = {
         enable = true;
@@ -595,18 +602,9 @@ in {
       };
     };
 
-    # Libvirt for VM hosting
     libvirtd = {
       enable = true;
     };
-
-    # # Oumu AI assistant VM (interstellar visitor)
-    # oumu-vm = {
-    #   enable = true;
-    #   storageBaseDir = "/storage/libvirt/oumu";
-    #   memoryGb = 4;
-    #   diskSizeGb = 120;
-    # };
   };
 
   services.unifi-os-server = {

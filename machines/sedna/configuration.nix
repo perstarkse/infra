@@ -20,7 +20,12 @@
   ];
 
   my = {
-    mainUser.name = "p";
+    mainUser = {
+      name = "p";
+      extraSshKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn p@charon"
+      ];
+    };
 
     secrets = {
       discover = {
@@ -162,6 +167,8 @@
 
     heartbeat.receiver = {
       enable = true;
+      user = "heartbeat";
+      group = "heartbeat";
       listenAddress = "::";
       port = 18080;
       externalEndpointName = "io-heartbeat";
@@ -170,9 +177,63 @@
     };
   };
 
-  services.avahi.enable = lib.mkForce false;
+  services = {
+    avahi.enable = lib.mkForce false;
 
-  users.users.root.openssh.authorizedKeys.keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn p@charon"
-  ];
+    openssh = {
+      ports = [2222];
+      settings = {
+        KbdInteractiveAuthentication = false;
+        PasswordAuthentication = false;
+        PermitRootLogin = "prohibit-password";
+      };
+    };
+
+    endlessh = {
+      enable = true;
+      port = 22;
+      openFirewall = true;
+    };
+  };
+
+  networking.firewall.allowedTCPPorts = [2222];
+
+  users = {
+    groups.heartbeat = {};
+    users = {
+      heartbeat = {
+        isSystemUser = true;
+        group = "heartbeat";
+      };
+
+      root.openssh.authorizedKeys.keys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn p@charon"
+      ];
+    };
+  };
+
+  systemd.services.heartbeat-receiver.serviceConfig = {
+    CapabilityBoundingSet = "";
+    LockPersonality = true;
+    MemoryDenyWriteExecute = true;
+    NoNewPrivileges = true;
+    PrivateDevices = true;
+    PrivateTmp = true;
+    ProtectClock = true;
+    ProtectControlGroups = true;
+    ProtectHome = true;
+    ProtectHostname = true;
+    ProtectKernelLogs = true;
+    ProtectKernelModules = true;
+    ProtectKernelTunables = true;
+    ProtectSystem = "strict";
+    RestrictAddressFamilies = [
+      "AF_INET"
+      "AF_INET6"
+    ];
+    RestrictNamespaces = true;
+    RestrictRealtime = true;
+    SystemCallArchitectures = "native";
+    UMask = "0077";
+  };
 }

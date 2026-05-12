@@ -70,6 +70,7 @@
             machines = {
               sedna = {
                 settings.host = "130.61.55.4";
+                settings.port = 2222;
               };
               io = {
                 settings.host = "io.lan";
