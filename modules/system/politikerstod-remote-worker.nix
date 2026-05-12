@@ -5,87 +5,87 @@
     pkgs,
     ...
   }: let
-    cfg = config.my.politikerstod-remote-worker;
     appPkg = inputs.politikerstod.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
-    mkInstanceConfig = name: instance: let
+    mkWorkerConfig = name: let
+      i = config.my.politikerstod-remote-worker.instances.${name} or {};
+      enabled = i.enable or false;
       escapeForSystemd = s: builtins.replaceStrings ["\\" "$" "\""] ["\\\\" "$$" "\\\""] s;
       authAllowedRegex = "(?i)(" + (builtins.concatStringsSep "|" (
-        map (d: "@" + (escapeForSystemd (lib.strings.escapeRegex d)) + "$$") instance.settings.authAllowedEmailDomains
+        map (d: "@" + (escapeForSystemd (lib.strings.escapeRegex d)) + "$$") (i.settings.authAllowedEmailDomains or [])
       )) + ")";
 
       serviceName = "politikerstod-worker-${name}";
       userName = "politikerstod-worker-${name}";
       groupName = "politikerstod-worker-${name}";
-      dataDir = instance.dataDir;
-    in {
-      systemd.services."${serviceName}" = {
-        description = "Politikerstöd Remote Worker (${name}) — OCR + Embeddings";
-        wantedBy = ["multi-user.target"];
-        after = ["network-online.target"];
-        wants = ["network-online.target"];
+      dataDir = i.dataDir or "/var/lib/politikerstod-worker-${name}";
+    in
+      lib.mkIf enabled {
+        systemd.services."${serviceName}" = {
+          description = "Politikerstöd Remote Worker (${name}) — OCR + Embeddings";
+          wantedBy = ["multi-user.target"];
+          after = ["network-online.target"];
+          wants = ["network-online.target"];
 
-        serviceConfig = {
-          Type = "simple";
-          User = userName;
-          Group = groupName;
-          WorkingDirectory = dataDir;
+          serviceConfig = {
+            Type = "simple";
+            User = userName;
+            Group = groupName;
+            WorkingDirectory = dataDir;
 
-          ExecStart = let
-            workerArgs =
-              if instance.workerTags != []
-              then "--worker=${lib.concatStringsSep "," instance.workerTags}"
-              else "--worker";
-          in "${cfg.package}/bin/politikerstod-cli start ${workerArgs}";
+            ExecStart = let
+              workerArgs =
+                if (i.workerTags or []) != []
+                then "--worker=${lib.concatStringsSep "," (i.workerTags or [])}"
+                else "--worker";
+            in "${config.my.politikerstod-remote-worker.package}/bin/politikerstod-cli start ${workerArgs}";
 
-          Restart = "always";
-          RestartSec = "10";
+            Restart = "always";
+            RestartSec = "10";
 
-          Environment = [
-            "LOCO_ENV=production"
-            "DATABASE_URL=postgres://${instance.database.user}@${instance.database.host}:${toString instance.database.port}/${instance.database.name}"
-            "S3_ENDPOINT=${instance.s3.endpoint}"
-            "S3_BUCKET=${instance.s3.bucket}"
-            "AWS_REGION=${instance.s3.region}"
-            "S3_KEY_PREFIX=${instance.s3.prefix}"
-            "LEKEBERG_BASE_URL=${instance.scraper.baseUrl}"
-            "LOG_LEVEL=${instance.logLevel}"
-            "NUM_WORKERS=${toString instance.numWorkers}"
-            "OPENAI_MODEL=${instance.openai.model}"
-            "FASTEMBED_CACHE_PATH=${dataDir}/fastembed_cache"
-            "HOST=http://localhost"
-            "PORT=5150"
-            "CORS_ALLOW_ORIGIN=http://localhost"
-            "AUTH_ALLOWED_EMAIL_DOMAINS=\"${authAllowedRegex}\""
-            "SMTP_HOST=${instance.smtp.host}"
-            "SMTP_PORT=${toString instance.smtp.port}"
-            "MAILER_FROM=${instance.smtp.from}"
-            "PRETTY_BACKTRACE=false"
-            "POLLING_HISTORICAL_MONTHS=${toString instance.settings.pollingHistoricalMonths}"
-            "EVALUATION_MODEL=${instance.settings.evaluationModel}"
-          ];
+            Environment = [
+              "LOCO_ENV=production"
+              "DATABASE_URL=postgres://${i.database.user or "politikerstod"}:@${i.database.host or "10.0.0.10"}:${toString (i.database.port or 5432)}/${i.database.name or "politikerstod_prod"}"
+              "S3_ENDPOINT=${i.s3.endpoint or "http://10.0.0.1:3900"}"
+              "S3_BUCKET=${i.s3.bucket or "politikerstod"}"
+              "AWS_REGION=${i.s3.region or "garage"}"
+              "S3_KEY_PREFIX=${i.s3.prefix or ""}"
+              "LEKEBERG_BASE_URL=${i.scraper.baseUrl or ""}"
+              "LOG_LEVEL=${i.logLevel or "info"}"
+              "NUM_WORKERS=${toString (i.numWorkers or 4)}"
+              "OPENAI_MODEL=${i.openai.model or "gpt-4.1-mini"}"
+              "FASTEMBED_CACHE_PATH=${dataDir}/fastembed_cache"
+              "HOST=http://localhost"
+              "PORT=5150"
+              "CORS_ALLOW_ORIGIN=http://localhost"
+              "AUTH_ALLOWED_EMAIL_DOMAINS=\"${authAllowedRegex}\""
+              "SMTP_HOST=${i.smtp.host or "smtp.example.com"}"
+              "SMTP_PORT=${toString (i.smtp.port or 587)}"
+              "MAILER_FROM=${i.smtp.from or "politikerstod@stark.pub"}"
+              "PRETTY_BACKTRACE=false"
+              "POLLING_HISTORICAL_MONTHS=${toString (i.settings.pollingHistoricalMonths or 12)}"
+              "EVALUATION_MODEL=${i.settings.evaluationModel or "gpt-4o-mini"}"
+            ];
 
-          EnvironmentFile = [
-            (config.my.secrets.getPath instance.secretsNamespace "env")
-          ];
+            EnvironmentFile = [
+              (config.my.secrets.getPath (i.secretsNamespace or "politikerstod-${name}") "env")
+            ];
+          };
         };
+
+        users.users."${userName}" = {
+          isSystemUser = true;
+          group = groupName;
+          home = dataDir;
+          createHome = true;
+        };
+        users.groups."${groupName}" = {};
+
+        systemd.tmpfiles.rules = [
+          "d ${dataDir} 0755 ${userName} ${groupName} -"
+          "d ${dataDir}/fastembed_cache 0755 ${userName} ${groupName} -"
+        ];
       };
-
-      users.users."${userName}" = {
-        isSystemUser = true;
-        group = groupName;
-        home = dataDir;
-        createHome = true;
-      };
-      users.groups."${groupName}" = {};
-
-      systemd.tmpfiles.rules = [
-        "d ${dataDir} 0755 ${userName} ${groupName} -"
-        "d ${dataDir}/fastembed_cache 0755 ${userName} ${groupName} -"
-      ];
-    };
-
-    enabledInstances = lib.filterAttrs (_: instance: instance.enable) cfg.instances;
   in {
     options.my.politikerstod-remote-worker = {
       package = lib.mkOption {
@@ -132,44 +132,16 @@
             };
 
             database = {
-              host = lib.mkOption {
-                type = lib.types.str;
-                default = "10.0.0.10";
-                description = "Remote PostgreSQL host";
-              };
-              port = lib.mkOption {
-                type = lib.types.port;
-                default = 5432;
-                description = "Remote PostgreSQL port";
-              };
-              name = lib.mkOption {
-                type = lib.types.str;
-                default = "politikerstod_prod";
-                description = "Database name";
-              };
-              user = lib.mkOption {
-                type = lib.types.str;
-                default = "politikerstod";
-                description = "Database user";
-              };
+              host = lib.mkOption { type = lib.types.str; default = "10.0.0.10"; };
+              port = lib.mkOption { type = lib.types.port; default = 5432; };
+              name = lib.mkOption { type = lib.types.str; default = "politikerstod_prod"; };
+              user = lib.mkOption { type = lib.types.str; default = "politikerstod"; };
             };
 
             s3 = {
-              endpoint = lib.mkOption {
-                type = lib.types.str;
-                default = "http://10.0.0.1:3900";
-                description = "Remote S3/Garage endpoint";
-              };
-              bucket = lib.mkOption {
-                type = lib.types.str;
-                default = "politikerstod";
-                description = "S3 bucket name";
-              };
-              region = lib.mkOption {
-                type = lib.types.str;
-                default = "garage";
-                description = "S3 region";
-              };
+              endpoint = lib.mkOption { type = lib.types.str; default = "http://10.0.0.1:3900"; };
+              bucket = lib.mkOption { type = lib.types.str; default = "politikerstod"; };
+              region = lib.mkOption { type = lib.types.str; default = "garage"; };
               prefix = lib.mkOption {
                 type = lib.types.str;
                 description = "S3 key prefix (maps to S3_KEY_PREFIX env var). Must be set per instance.";
@@ -184,60 +156,39 @@
             };
 
             openai = {
-              model = lib.mkOption {
-                type = lib.types.str;
-                default = "gpt-4.1-mini";
-                description = "OpenAI model for analysis";
-              };
+              model = lib.mkOption { type = lib.types.str; default = "gpt-4.1-mini"; };
             };
 
             settings = {
               authAllowedEmailDomains = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = ["gmail.com" "hotmail.com" "lekeberg.se" "stark.pub"];
-                description = "Allowed email domains for authentication (required by app startup)";
               };
-              evaluationModel = lib.mkOption {
-                type = lib.types.str;
-                default = "gpt-4o-mini";
-                description = "OpenAI model for evaluation";
-              };
-              pollingHistoricalMonths = lib.mkOption {
-                type = lib.types.int;
-                default = 12;
-                description = "Months of historical data to poll";
-              };
+              evaluationModel = lib.mkOption { type = lib.types.str; default = "gpt-4o-mini"; };
+              pollingHistoricalMonths = lib.mkOption { type = lib.types.int; default = 12; };
             };
 
             smtp = {
-              host = lib.mkOption {
-                type = lib.types.str;
-                default = "smtp.example.com";
-                description = "SMTP server host (required by app startup)";
-              };
-              port = lib.mkOption {
-                type = lib.types.port;
-                default = 587;
-                description = "SMTP server port";
-              };
-              from = lib.mkOption {
-                type = lib.types.str;
-                default = "politikerstod@stark.pub";
-                description = "Email sender address";
-              };
+              host = lib.mkOption { type = lib.types.str; default = "smtp.example.com"; };
+              port = lib.mkOption { type = lib.types.port; default = 587; };
+              from = lib.mkOption { type = lib.types.str; default = "politikerstod@stark.pub"; };
             };
           };
         }));
         default = {};
-        description = "Politikerstod remote worker instances. Each runs OCR/embedding processing for one instance.";
+        description = "Politikerstod remote worker instances.";
       };
     };
 
-    config = lib.mkMerge (lib.mapAttrsToList mkInstanceConfig enabledInstances)
-      // lib.mkIf (enabledInstances != {}) {
-        my.secrets.discover.includeTags = lib.mkAfter (
-          lib.mapAttrsToList (name: instance: instance.secretsNamespace) enabledInstances
-        );
-      };
+    config = lib.mkMerge [
+      (mkWorkerConfig "lekeberg")
+      (mkWorkerConfig "orebro")
+      {
+        my.secrets.discover.includeTags = lib.mkAfter [
+          (config.my.politikerstod-remote-worker.instances.lekeberg.secretsNamespace or "politikerstod-lekeberg")
+          (config.my.politikerstod-remote-worker.instances.orebro.secretsNamespace or "politikerstod-orebro")
+        ];
+      }
+    ];
   };
 }
