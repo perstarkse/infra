@@ -58,7 +58,6 @@
     wgEnabled = cfg.wireguard.enable or false;
     wgPort = toString (cfg.wireguard.listenPort or 51820);
     dnsFrontendPort = 53;
-    zerotierEnabled = config.services.zerotierone.enable or false;
     internalServicePorts = config.my.router.internalServicePorts or [];
     wanAllowedTcpRules = lib.concatStringsSep "\n" (map (port: "iifname \"${wan}\" tcp dport ${toString port} accept") (lib.unique cfg.wan.allowedTcpPorts));
     wanAllowedUdpRules = lib.concatStringsSep "\n" (map (port: "iifname \"${wan}\" udp dport ${toString port} accept") (lib.unique cfg.wan.allowedUdpPorts));
@@ -401,7 +400,6 @@
                 ${bridgeLanInputCompatRule}
                 ${unifiDiscoveryInputRule}
                 ${inputInternalRulesV6}
-                ${lib.optionalString zerotierEnabled "iifname \"zt*\" accept"}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" icmpv6 type {
                   destination-unreachable, packet-too-big, time-exceeded,
@@ -414,8 +412,6 @@
               chain forward {
                 type filter hook forward priority 0; policy drop;
                 ${forwardCommonRulesV6}
-                ${lib.optionalString (zerotierEnabled && primaryZoneInterface != null) "iifname \"zt*\" oifname \"${primaryZoneInterface}\" accept"}
-                ${lib.optionalString (zerotierEnabled && primaryZoneInterface != null) "iifname \"${primaryZoneInterface}\" oifname \"zt*\" accept"}
               }
             '';
           };

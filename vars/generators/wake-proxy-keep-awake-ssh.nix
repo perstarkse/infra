@@ -7,12 +7,14 @@
     share = true;
     runtimeInputs = [pkgs.openssh];
     files = {
-      private_key = {
-        mode = "0400";
-        neededFor = "services";
-      } // pkgs.lib.optionalAttrs config.services.wakeproxy.enable {
-        owner = "wake-proxy";
-      };
+      private_key =
+        {
+          mode = "0400";
+          neededFor = "services";
+        }
+        // pkgs.lib.optionalAttrs config.services.wakeproxy.enable {
+          owner = "wake-proxy";
+        };
       public_key = {
         mode = "0444";
       };
