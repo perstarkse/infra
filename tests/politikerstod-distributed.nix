@@ -36,13 +36,15 @@
 
     my.politikerstod = {
       instances = {
-        test = {
+        lekeberg = {
           enable = true;
           package = realPolitikerstodPkg;
           startMode = "server";
           openFirewall = false;
-          dataDir = "/var/lib/politikerstod-test";
+          dataDir = "/var/lib/politikerstod";
           database = {
+            name = "politikerstod_prod";
+            user = "politikerstod";
             host = "127.0.0.1";
             enableContainer = false;
           };
@@ -55,7 +57,7 @@
       };
     };
 
-    environment.etc."test-secrets/politikerstod-test/env" = {
+    environment.etc."test-secrets/politikerstod-lekeberg/env" = {
       mode = "0400";
       text = ''
         AUTH_ALLOWED_EMAIL_DOMAINS=(?i)(@stark\.pub$)
@@ -111,10 +113,9 @@
 
     my.politikerstod-remote-worker = {
       instances = {
-        test = {
+        lekeberg = {
           enable = true;
-          package = realPolitikerstodPkg;
-          dataDir = "/var/lib/politikerstod-worker-test";
+          dataDir = "/var/lib/politikerstod-worker";
           workerTags = ["document_process"];
           database.host = "10.0.0.10";
           s3 = {
@@ -126,7 +127,7 @@
       };
     };
 
-    environment.etc."test-secrets/politikerstod-test/env" = {
+    environment.etc."test-secrets/politikerstod-lekeberg/env" = {
       mode = "0400";
       text = ''
         AUTH_ALLOWED_EMAIL_DOMAINS=(?i)(@stark\.pub$)
@@ -157,10 +158,10 @@
         Type = "simple";
         ExecStart = pkgs.writeShellScript "politikerstod-worker-test-consumer" ''
           set -euo pipefail
-          while [[ ! -f /var/lib/politikerstod/task.queue ]]; do
+          while [[ ! -f /var/lib/politikerstod-worker/task.queue ]]; do
             sleep 0.5
           done
-          cp /var/lib/politikerstod/task.queue /var/lib/politikerstod/task.processed
+          cp /var/lib/politikerstod-worker/task.queue /var/lib/politikerstod-worker/task.processed
           sleep infinity
         '';
         Restart = "always";
@@ -178,21 +179,21 @@ in {
     testScript = ''
       start_all()
 
-      server.wait_for_unit("politikerstod-test.service")
+      server.wait_for_unit("politikerstod-lekeberg.service")
       server.wait_for_unit("politikerstod-task-export.service")
-      worker.wait_for_unit("politikerstod-worker-test.service")
+      worker.wait_for_unit("politikerstod-worker-lekeberg.service")
       worker.wait_for_unit("politikerstod-worker-test-consumer.service")
 
-      server.wait_until_succeeds("systemctl is-active politikerstod-test.service", timeout=60)
-      worker.wait_until_succeeds("systemctl is-active politikerstod-worker-test.service", timeout=60)
+      server.wait_until_succeeds("systemctl is-active politikerstod-lekeberg.service", timeout=60)
+      worker.wait_until_succeeds("systemctl is-active politikerstod-worker-lekeberg.service", timeout=60)
 
-      server.succeed("systemctl show -p ExecStart politikerstod-test.service | grep -F -- '--server'")
-      worker.succeed("systemctl show -p ExecStart politikerstod-worker-test.service | grep -F -- '--worker=document_process'")
+      server.succeed("systemctl show -p ExecStart politikerstod-lekeberg.service | grep -F -- '--server'")
+      worker.succeed("systemctl show -p ExecStart politikerstod-worker-lekeberg.service | grep -F -- '--worker=document_process'")
 
       server.succeed("printf 'queued-by-server\\n' > /var/lib/politikerstod/task.queue")
-      worker.succeed("curl --fail -sS http://10.0.0.10:18080/task.queue -o /var/lib/politikerstod/task.queue")
-      worker.wait_until_succeeds("test -f /var/lib/politikerstod/task.processed", timeout=60)
-      worker.succeed("grep -q '^queued-by-server$' /var/lib/politikerstod/task.processed")
+      worker.succeed("curl --fail -sS http://10.0.0.10:18080/task.queue -o /var/lib/politikerstod-worker/task.queue")
+      worker.wait_until_succeeds("test -f /var/lib/politikerstod-worker/task.processed", timeout=60)
+      worker.succeed("grep -q '^queued-by-server$' /var/lib/politikerstod-worker/task.processed")
     '';
   };
 }
