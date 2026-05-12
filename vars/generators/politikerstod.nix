@@ -1,5 +1,5 @@
-{
-  "politikerstod" = {
+let
+  mkPolitikerstodSecrets = name: {
     share = true;
     files = {
       env = {
@@ -9,13 +9,12 @@
     };
     prompts = {
       env = {
-        description = "Politikerstöd environment file content (OPENAI_API_KEY=..., JWT_SECRET=..., SMTP_PASSWORD=...)";
+        description = "Politikerstöd (${name}) environment file content (OPENAI_API_KEY=..., JWT_SECRET=..., SMTP_PASSWORD=...)";
         persist = true;
         type = "hidden";
       };
     };
     script = ''
-      # Robust prompts handling
       _prompts_dir="''${prompts:-}"
       if [ -z "$_prompts_dir" ] || [ ! -d "$_prompts_dir" ]; then
          _prompts_dir=""
@@ -24,21 +23,17 @@
       if [ -n "$_prompts_dir" ] && [ -s "$_prompts_dir/env" ]; then
         cp "$_prompts_dir/env" "$out/env"
       else
-        # Auto-generate placeholders and random secrets
-        echo "# Auto-generated secrets for Politikerstöd" > "$out/env"
-
-        # JWT Secret
+        echo "# Auto-generated secrets for Politikerstöd (${name})" > "$out/env"
         jwt=$(head -c 32 /dev/urandom | base64 -w0)
         echo "JWT_SECRET=$jwt" >> "$out/env"
-
-        # OpenAI API Key (Placeholder - needs manual update)
         echo "OPENAI_API_KEY=sk-placeholder-change-me" >> "$out/env"
-
-        # SMTP Credentials (Placeholders)
         echo "SMTP_USERNAME=user@example.com" >> "$out/env"
         echo "SMTP_PASSWORD=change-me" >> "$out/env"
       fi
     '';
-    meta.tags = ["service" "politikerstod"];
+    meta.tags = ["service" "politikerstod" "politikerstod-${name}"];
   };
+in {
+  "politikerstod" = mkPolitikerstodSecrets "default";
+  "politikerstod-lekeberg" = mkPolitikerstodSecrets "lekeberg";
 }

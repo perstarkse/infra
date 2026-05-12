@@ -245,6 +245,10 @@ in {
           readers = [config.my.mainUser.name];
           path = config.my.secrets.getPath "z-ai-env" "env";
         }
+        {
+          readers = ["politikerstod-worker-lekeberg"];
+          path = config.my.secrets.getPath "politikerstod-lekeberg" "env";
+        }
       ];
 
       generateManifest = false;
@@ -382,9 +386,15 @@ in {
 
     # Remote worker for politikerstod OCR/embeddings processing
     politikerstod-remote-worker = {
-      enable = true;
-      numWorkers = 8;
-      workerTags = ["document_process"];
+      instances = {
+        lekeberg = {
+          enable = true;
+          numWorkers = 8;
+          workerTags = ["document_process"];
+          s3.prefix = "lekeberg";
+          scraper.baseUrl = "https://meetings.lekeberg.se";
+        };
+      };
     };
 
     wireguardTunnels = {
