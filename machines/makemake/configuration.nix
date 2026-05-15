@@ -88,7 +88,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "searx" "wireguard-tunnels"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "searx" "wireguard-tunnels"];
       };
 
       generateManifest = false;
@@ -109,6 +109,10 @@
         {
           readers = ["politikerstod-lekeberg"];
           path = config.my.secrets.getPath "politikerstod-lekeberg" "env";
+        }
+        {
+          readers = ["politikerstod-orebro"];
+          path = config.my.secrets.getPath "politikerstod-orebro" "env";
         }
       ];
     };
@@ -394,6 +398,7 @@
           };
 
           scraper.baseUrl = "https://meetings.lekeberg.se";
+          s3.bucket = "politikerstod";
           s3.prefix = "lekeberg";
 
           settings = {
@@ -401,6 +406,47 @@
             prettyBacktrace = true;
             numWorkers = 4;
             pollingHistoricalMonths = 36;
+            openaiModel = "gpt-4.1-mini";
+            evaluationModel = "gpt-4.1-mini";
+          };
+        };
+
+        orebro = {
+          enable = true;
+          port = 5151;
+          host = "https://orebro.politikerstod.stark.pub";
+          openFirewall = true;
+          exposure = {
+            enable = true;
+            public = true;
+            cloudflareProxied = true;
+            router = {
+              enable = true;
+              targets = ["io"];
+            };
+          };
+
+          database = {
+            name = "politikerstod_orebro";
+            user = "politikerstod_orebro";
+            host = "192.168.100.13"; # Container IP
+            port = 5432;
+            enableContainer = true;
+            allowedHosts = ["10.0.0.15"]; # charon - remote worker
+            container = {
+              hostAddress = "192.168.100.11";
+              localAddress = "192.168.100.13";
+            };
+          };
+
+          scraper.baseUrl = "https://politiskamoten.regionorebrolan.se/";
+          s3.prefix = "orebro";
+
+          settings = {
+            logLevel = "info";
+            prettyBacktrace = true;
+            numWorkers = 4;
+            pollingHistoricalMonths = 1;
             openaiModel = "gpt-4.1-mini";
             evaluationModel = "gpt-4.1-mini";
           };
