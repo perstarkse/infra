@@ -14,7 +14,10 @@
     getPathDefault = _name: _file: "/run/empty-secret";
   };
 
-  commonNode = testHelpers.mkCommonNode {inherit stateVersion;};
+  commonNode = testHelpers.mkCommonNode {
+    inherit stateVersion;
+    extraPackages = [pkgs.bind pkgs.python3];
+  };
 
   mkRouterNode = {
     extraRouterConfig ? {},
@@ -116,7 +119,7 @@ in {
       start_all()
       router.wait_for_unit("nginx.service")
       router.wait_for_unit("unbound.service")
-      router.succeed("dig +short @127.0.0.1 test.lan.test A | grep -x '10.0.0.1'")
+      router.succeed("dig +short @127.0.0.1 -p 5354 test.lan.test A | grep -x '10.0.0.1'")
     '';
   };
 
@@ -127,7 +130,7 @@ in {
       extraConfig.my.exposure.services.two-face = {
         upstream = {
           host = "127.0.0.1";
-          port = 80;
+          port = 8080;
         };
         http.virtualHosts = [
           {
@@ -147,20 +150,23 @@ in {
       start_all()
       router.wait_for_unit("nginx.service")
 
-      router_wan_ip = router.succeed(
-          "ip -4 -o addr show dev eth1 | awk '{print $4}' | cut -d/ -f1"
-      ).strip()
-
-      # Open service accessible from WAN side
+      # Start upstream test server on port 8080
       router.succeed(
-          f"curl --fail -sS --max-time 5 -H 'Host: open.lan.test' http://{router_wan_ip}/ | grep -q '<title>NixOS'"
+          "mkdir -p /tmp/upstream && echo '<html><head><title>NixOS</title></head><body>OK</body></html>' > /tmp/upstream/index.html"
+      )
+      router.succeed("systemd-run --unit=test-upstream --working-directory=/tmp/upstream python3 -m http.server 8080")
+      router.wait_for_open_port(8080)
+
+      # Open service: public=true means no ACL, accessible from anywhere
+      router.succeed(
+          "curl --fail -sS --max-time 5 -H 'Host: open.lan.test' http://127.0.0.1/ | grep -q '<title>NixOS'"
       )
 
-      # Locked (lanOnly) blocked from WAN with 403
+      # Locked (lanOnly) blocked from non-LAN IPs with 403
       locked_status = router.succeed(
-          f"curl -sS -o /dev/null -w '%{{http_code}}' --max-time 5 -H 'Host: locked.lan.test' http://{router_wan_ip}/ || true"
+          "curl -sS -o /dev/null -w '%{http_code}' --max-time 5 -H 'Host: locked.lan.test' http://127.0.0.1/ || true"
       ).strip()
-      assert locked_status == "403", f"expected WAN lan-only to be denied, got HTTP {locked_status}"
+      assert locked_status == "403", f"expected non-LAN lan-only to be denied, got HTTP {locked_status}"
     '';
   };
 
@@ -185,7 +191,7 @@ in {
     testScript = ''
       start_all()
       router.wait_for_unit("unbound.service")
-      router.succeed("dig +short @127.0.0.1 auto.lan.test A | grep -x '10.0.0.1'")
+      router.succeed("dig +short @127.0.0.1 -p 5354 auto.lan.test A | grep -x '127.0.0.1'")
     '';
   };
 
@@ -196,12 +202,12 @@ in {
       extraConfig.my.exposure.services.extra-cfg = {
         upstream = {
           host = "127.0.0.1";
-          port = 80;
+          port = 8080;
         };
         http.virtualHosts = [
           {
             domain = "extra.lan.test";
-            lanOnly = true;
+            public = true;
             noAcme = true;
             extraConfig = "add_header X-Exposure-Test extra-config;";
           }
@@ -211,6 +217,11 @@ in {
     testScript = ''
       start_all()
       router.wait_for_unit("nginx.service")
+
+      # Start upstream test server on port 8080
+      router.succeed("mkdir -p /tmp/upstream")
+      router.succeed("systemd-run --unit=test-upstream --working-directory=/tmp/upstream python3 -m http.server 8080")
+      router.wait_for_open_port(8080)
 
       result = router.succeed(
           "curl -sS -I --max-time 5 -H 'Host: extra.lan.test' http://127.0.0.1/"

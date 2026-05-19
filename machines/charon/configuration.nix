@@ -380,13 +380,13 @@ in {
       sharedOpencode = {
         skillSources = [
           ctx.inputs.rust-skills
-          ../../opencode/skills/nixos-deployment
-          ../../opencode/skills/nixos-service-module
-          ../../opencode/skills/nixos-secrets
-          ../../opencode/skills/rust-nix-crane
+          ../../assets/opencode/skills/nixos-deployment
+          ../../assets/opencode/skills/nixos-service-module
+          ../../assets/opencode/skills/nixos-secrets
+          ../../assets/opencode/skills/rust-nix-crane
         ];
-        agentSourceDir = ../../opencode/agents;
-        defaultConfigFile = ../../opencode/opencode-shared.json;
+        agentSourceDir = ../../assets/opencode/agents;
+        defaultConfigFile = ../../assets/opencode/opencode-shared.json;
         environmentFile = config.my.secrets.getPath "context7" "env";
         npmPackageBin = "/home/p/.npm-global/bin/opencode";
       };

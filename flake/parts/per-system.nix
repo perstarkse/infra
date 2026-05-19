@@ -264,9 +264,9 @@
 
       profile_to_checks = {
           "check-profile-fast": [],
-          "check-profile-router": ["router-checks"],
+          "check-profile-router": ["router-checks", "router-exposure-checks"],
           "check-profile-io-predeploy": ["predeploy-check"],
-          "check-profile-io-final": ["final-checks"],
+          "check-profile-io-final": ["final-checks", "router-exposure-checks", "exposure-manifest-check"],
           "check-profile-garage": ["garage-checks"],
           "check-profile-politikerstod": ["politikerstod-checks"],
           "check-profile-wireguard": ["wireguard-checks"],

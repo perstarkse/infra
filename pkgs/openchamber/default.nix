@@ -19,11 +19,11 @@
 }:
 buildNpmPackage rec {
   pname = "openchamber";
-  version = "1.8.5";
+  version = "1.11.1";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@openchamber/web/-/web-${version}.tgz";
-    hash = "sha512-GTg8DYMPbGz8Y8eNa+h3EZxxm6gji+SGtCbVi0JpGxFW5zV/6Wo51XNfjb9era0hheI+Nbj535wOnoZigOCP4g==";
+    hash = "sha256-f9onT25hs6XU+hgK/yE93XFwR40jl2uZBxvHD7lVAQk=";
   };
   sourceRoot = "package";
 
@@ -31,7 +31,8 @@ buildNpmPackage rec {
     cp ${./package-lock.json} package-lock.json
   '';
 
-  npmDepsHash = "sha256-Shhoh9cVmnbDDbOHmbK4QcJCx7AMUDTwtsFPOmmb9FQ=";
+  npmDepsHash = "sha256-IUMpHUYKqeK6bDxW3ZFeUm5Q4TBfgzdQhL1wbk6kZsc=";
+
   dontNpmBuild = true;
 
   nativeBuildInputs = [

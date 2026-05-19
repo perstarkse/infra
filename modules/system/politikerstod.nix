@@ -46,7 +46,7 @@
       )
       enabledInstances;
 
-    mkDbProxyNftRules = lib.concatMapStringsSep "\n" ({value}: let
+    mkDbProxyNftRules = lib.concatMapStringsSep "\n" ({value, ...}: let
       mkSourceRule = source:
         if builtins.match ".*:.*" source != null
         then "ip6 saddr ${source} tcp dport 5432 accept"
@@ -57,7 +57,7 @@
       tcp dport 5432 drop
     '') (lib.attrsToList dbProxyInstances);
 
-    mkDbProxyIptablesRules = lib.concatMapStringsSep "\n" ({name, value}: let
+    mkDbProxyIptablesRules = lib.concatMapStringsSep "\n" ({value, ...}: let
       sources = value.database.allowedHosts or [];
     in ''
       ${lib.concatMapStringsSep "\n" (s: mkFirewallExtraCommands 5432 [s]) sources}
