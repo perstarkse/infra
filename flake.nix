@@ -112,6 +112,11 @@
       url = "github:Maroka-chan/VPN-Confinement";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    rust-skills = {
+      url = "github:leonardomso/rust-skills";
+      flake = false;
+    };
   };
 
   outputs = inputs @ {flake-parts, ...}:

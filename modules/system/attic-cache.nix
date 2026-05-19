@@ -17,6 +17,7 @@
     inherit (cfg) secretName;
     serverEnvFile = config.my.secrets.getPath secretName "server.env";
     publicKeyFile = config.my.secrets.getPath secretName "public-key";
+    privateKeyFile = config.my.secrets.getPath secretName "private-key";
     pushTokenFile =
       if cfg.client.tokenFileName == null
       then null
@@ -109,7 +110,12 @@
       if current_json="$(${pkgs.curl}/bin/curl -fsS -H "Authorization: Bearer $bootstrap_token" "$cache_url" 2>/dev/null)"; then
         current_public_key="$(printf '%s' "$current_json" | ${pkgs.jq}/bin/jq -r '.public_key')"
         if [ "$current_public_key" != "$expected_public_key" ]; then
-          printf '%s\n' "Attic cache ${cfg.server.cacheName} already exists with a different public key (expected: $expected_public_key, got: $current_public_key)." >&2
+          printf '%s\n' "Attic cache ${cfg.server.cacheName} has a different public key; updating keypair to match generated one." >&2
+          private_key="$(${pkgs.coreutils}/bin/tr -d '\n' < ${lib.escapeShellArg privateKeyFile})"
+          ${pkgs.curl}/bin/curl -fsS -X PATCH "$cache_url" \
+            -H "Authorization: Bearer $bootstrap_token" \
+            -H "Content-Type: application/json" \
+            -d "$(${pkgs.jq}/bin/jq -n -c --arg k "$private_key" '{keypair: {Keypair: $k}}')"
         fi
         exit 0
       fi
@@ -124,6 +130,12 @@
 
       HOME="$tmpdir" XDG_CONFIG_HOME="$tmpdir/.config" ${pkgs.attic-client}/bin/attic login local ${lib.escapeShellArg serverEndpoint} "$bootstrap_token"
       HOME="$tmpdir" XDG_CONFIG_HOME="$tmpdir/.config" ${pkgs.attic-client}/bin/attic cache create --public ${lib.escapeShellArg cfg.server.cacheName}
+
+      private_key="$(${pkgs.coreutils}/bin/tr -d '\n' < ${lib.escapeShellArg privateKeyFile})"
+      ${pkgs.curl}/bin/curl -fsS -X PATCH "$cache_url" \
+        -H "Authorization: Bearer $bootstrap_token" \
+        -H "Content-Type: application/json" \
+        -d "$(${pkgs.jq}/bin/jq -n -c --arg k "$private_key" '{keypair: {Keypair: $k}}')"
     '';
   in {
     options.my.attic-cache = {
