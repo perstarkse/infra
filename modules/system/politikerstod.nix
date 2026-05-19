@@ -46,19 +46,19 @@
       )
       enabledInstances;
 
-    mkDbProxyNftRules = lib.concatMapStringsSep "\n" (_name: instance: let
+    mkDbProxyNftRules = lib.concatMapStringsSep "\n" ({value}: let
       mkSourceRule = source:
         if builtins.match ".*:.*" source != null
         then "ip6 saddr ${source} tcp dport 5432 accept"
         else "ip saddr ${source} tcp dport 5432 accept";
-      sources = instance.database.allowedHosts or [];
+      sources = value.database.allowedHosts or [];
     in ''
       ${lib.concatMapStringsSep "\n" mkSourceRule sources}
       tcp dport 5432 drop
     '') (lib.attrsToList dbProxyInstances);
 
-    mkDbProxyIptablesRules = lib.concatMapStringsSep "\n" (_name: instance: let
-      sources = instance.database.allowedHosts or [];
+    mkDbProxyIptablesRules = lib.concatMapStringsSep "\n" ({name, value}: let
+      sources = value.database.allowedHosts or [];
     in ''
       ${lib.concatMapStringsSep "\n" (s: mkFirewallExtraCommands 5432 [s]) sources}
     '') (lib.attrsToList dbProxyInstances);
@@ -69,7 +69,8 @@
       authAllowedRegex =
         if domains == ["*"] || domains == []
         then "@"
-        else "(?i)("
+        else
+          "(?i)("
           + (builtins.concatStringsSep "|" (
             map (d: "@" + (escapeForSystemd (lib.strings.escapeRegex d)) + "$$") domains
           ))

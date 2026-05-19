@@ -375,6 +375,7 @@
           openFirewall = true;
           exposure = {
             enable = true;
+            domain = "politikerstod.stark.pub";
             public = true;
             cloudflareProxied = true;
             router = {
@@ -418,6 +419,7 @@
           openFirewall = true;
           exposure = {
             enable = true;
+            domain = "orebro.politikerstod.stark.pub";
             public = true;
             cloudflareProxied = true;
             router = {

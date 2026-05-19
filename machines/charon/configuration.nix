@@ -204,7 +204,7 @@ in {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "openchamber" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache"];
       };
 
       exposeUserSecrets = [
@@ -248,6 +248,10 @@ in {
         {
           readers = ["politikerstod-worker-lekeberg"];
           path = config.my.secrets.getPath "politikerstod-lekeberg" "env";
+        }
+        {
+          readers = ["politikerstod-worker-orebro"];
+          path = config.my.secrets.getPath "politikerstod-orebro" "env";
         }
       ];
 
@@ -373,6 +377,19 @@ in {
         "10.0.0.1"
         "10.0.0.15"
       ];
+      sharedOpencode = {
+        skillSources = [
+          ctx.inputs.rust-skills
+          ../../opencode/skills/nixos-deployment
+          ../../opencode/skills/nixos-service-module
+          ../../opencode/skills/nixos-secrets
+          ../../opencode/skills/rust-nix-crane
+        ];
+        agentSourceDir = ../../opencode/agents;
+        defaultConfigFile = ../../opencode/opencode-shared.json;
+        environmentFile = config.my.secrets.getPath "context7" "env";
+        npmPackageBin = "/home/p/.npm-global/bin/opencode";
+      };
     };
 
     # Auto-suspend when system is idle (load < threshold + no user input)
@@ -391,8 +408,22 @@ in {
           enable = true;
           numWorkers = 8;
           workerTags = ["document_process"];
+          s3.bucket = "politikerstod";
           s3.prefix = "lekeberg";
           scraper.baseUrl = "https://meetings.lekeberg.se";
+        };
+
+        orebro = {
+          enable = true;
+          numWorkers = 8;
+          workerTags = ["document_process"];
+          s3.prefix = "orebro";
+          scraper.baseUrl = "https://politiskamoten.regionorebrolan.se/";
+          database = {
+            host = "10.0.0.10";
+            name = "politikerstod_orebro";
+            user = "politikerstod_orebro";
+          };
         };
       };
     };

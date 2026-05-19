@@ -505,6 +505,7 @@ in {
                 "minne-demo.stark.pub"
                 "mail.stark.pub"
                 "politikerstod.stark.pub"
+                "orebro.politikerstod.stark.pub"
                 "wake.stark.pub"
               ];
               passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
