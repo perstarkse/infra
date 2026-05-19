@@ -25,7 +25,7 @@ let
       else
         echo "# Auto-generated secrets for Politikerstöd (${name})" > "$out/env"
         jwt=$(head -c 32 /dev/urandom | base64 -w0)
-        aws_access=$(echo -n "AKID" && head -c 20 /dev/urandom | xxd -p -c 20)
+        aws_access=$(echo -n "AKID" && head -c 20 /dev/urandom | od -A n -t x1 | tr -d ' \n')
         aws_secret=$(head -c 32 /dev/urandom | base64 -w0)
         admin_pass=$(head -c 16 /dev/urandom | base64 -w0)
         echo "JWT_SECRET=$jwt" >> "$out/env"

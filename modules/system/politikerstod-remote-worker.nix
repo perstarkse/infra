@@ -15,7 +15,8 @@
       authAllowedRegex =
         if domains == ["*"] || domains == []
         then "@"
-        else "(?i)("
+        else
+          "(?i)("
           + (builtins.concatStringsSep "|" (
             map (d: "@" + (escapeForSystemd (lib.strings.escapeRegex d)) + "$$") domains
           ))
