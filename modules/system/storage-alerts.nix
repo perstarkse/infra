@@ -88,9 +88,10 @@ _: {
         local key="$1"
         local title="$2"
         local message="$3"
+        local priority="''${4:-high}"
         local state_file="$state_dir/$key"
         if [ ! -e "$state_file" ]; then
-          ${notifier} "$title" "$message" high
+          ${notifier} "$title" "$message" "$priority"
           : > "$state_file"
         fi
       }
@@ -114,6 +115,43 @@ _: {
           fi
         '')
         cfg.mounts}
+
+      ${lib.optionalString cfg.capacity.enable ''
+        # Disk capacity check
+        if ${
+          if cfg.capacity.onlyMonitoredMounts
+          then "true"
+          else "false"
+        }; then
+          capacity_targets="${lib.concatStringsSep " " cfg.mounts}"
+        else
+          capacity_targets="$(${pkgs.coreutils}/bin/df -l -x tmpfs -x devtmpfs -x squashfs -x proc -x sysfs -x cgroup2 -x devpts -x ramfs -x overlay --output=target 2>/dev/null | tail -n +2)"
+        fi
+
+        exclude_list="${lib.concatStringsSep " " cfg.capacity.excludeMounts}"
+        for target in $capacity_targets; do
+          [ -z "$target" ] && continue
+          skip=false
+          for excl in $exclude_list; do
+            if [ "$target" = "$excl" ]; then
+              skip=true
+              break
+            fi
+          done
+          $skip && continue
+
+          pct=$(${pkgs.coreutils}/bin/df --output=pcent "$target" 2>/dev/null | tail -n +2 | tr -d ' %')
+          if [ -n "$pct" ] && [ "$pct" -ge ${toString cfg.capacity.warnPercent} ]; then
+            mark_problem "capacity-$(sanitize "$target")" \
+              "${config.networking.hostName}: disk usage warning" \
+              "Disk $target is at ''${pct}% capacity on ${config.networking.hostName} (threshold: ${toString cfg.capacity.warnPercent}%)."
+          else
+            clear_problem "capacity-$(sanitize "$target")" \
+              "${config.networking.hostName}: disk usage recovered" \
+              "Disk $target is at ''${pct}% capacity on ${config.networking.hostName}."
+          fi
+        done
+      ''}
 
       shopt -s nullglob
       for md_path in /sys/block/md*/md; do
@@ -162,6 +200,36 @@ _: {
           type = lib.types.str;
           default = "-a";
           description = "Base smartd monitoring options for devices.";
+        };
+      };
+
+      capacity = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Enable disk capacity threshold alerts.";
+        };
+
+        warnPercent = lib.mkOption {
+          type = lib.types.ints.between 1 100;
+          default = 85;
+          description = "Alert when disk usage exceeds this percentage.";
+        };
+
+        excludeMounts = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          example = ["/boot" "/efi"];
+          description = "Mount paths excluded from capacity alerts.";
+        };
+
+        onlyMonitoredMounts = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            If true, only check capacity on the explicit `mounts` list.
+            If false, auto-detect all local physical filesystems.
+          '';
         };
       };
 
