@@ -621,6 +621,8 @@
 
   time.timeZone = "Europe/Stockholm";
 
+  services.deleterr.enable = true;
+
   services.paperless.settings = {
     # Consume dir is an rclone/FUSE mount from Garage S3; use polling instead of inotify.
     PAPERLESS_CONSUMER_POLLING = 30;
