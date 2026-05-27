@@ -968,6 +968,8 @@
         config.treefmt.build.wrapper
         pkgs.statix
         pkgs.deadnix
+        pkgs.gnutar
+        pkgs.gzip
         machineUpdatePlanScript
         machineUpdateScript
         pkgsUpdateScript
