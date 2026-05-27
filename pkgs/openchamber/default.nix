@@ -13,6 +13,8 @@
   bashInteractive,
   coreutils,
   gnugrep,
+  ripgrep,
+  gnutar,
   gawk,
   findutils,
   python3,
@@ -53,6 +55,8 @@ buildNpmPackage rec {
       bashInteractive
       coreutils
       gnugrep
+      ripgrep
+      gnutar
       gawk
       findutils
     ]}
