@@ -144,6 +144,8 @@ _: {
         bashInteractive
         coreutils
         gnugrep
+        ripgrep
+        gnutar
         gawk
         findutils
         nix
