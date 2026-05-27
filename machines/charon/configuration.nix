@@ -421,6 +421,7 @@ in {
           scraper.baseUrl = "https://politiskamoten.regionorebrolan.se/";
           database = {
             host = "10.0.0.10";
+            port = 5433;
             name = "politikerstod_orebro";
             user = "politikerstod_orebro";
           };

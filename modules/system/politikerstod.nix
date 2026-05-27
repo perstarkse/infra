@@ -201,6 +201,11 @@
                   default = "192.168.100.12";
                 };
               };
+              proxyPort = lib.mkOption {
+                type = lib.types.port;
+                default = 5432;
+                description = "Port for the host-side DB proxy (socat) listener. Must be unique per instance when multiple containers expose port 5432.";
+              };
             };
             s3 = {
               endpoint = lib.mkOption {
@@ -286,11 +291,14 @@
               groupName = serviceName;
               dataDir = instance.dataDir or "/var/lib/${serviceName}";
               secretName = "politikerstod-${name}";
+              containerName = instance.database.container.name or "politikerstod-db-${name}";
+              hasContainer = instance.database.enableContainer or false;
             in
               lib.nameValuePair serviceName {
                 description = "Politikerstöd Service (${name})";
                 wantedBy = ["multi-user.target"];
-                after = ["network.target" "garage-provision-${name}.service"];
+                after = ["network.target" "garage-provision-${name}.service"] ++ lib.optionals hasContainer ["container@${containerName}.service"];
+                wants = lib.optionals hasContainer ["container@${containerName}.service"];
                 serviceConfig = {
                   Type = "simple";
                   User = userName;
@@ -319,7 +327,7 @@
                 wants = ["container@${containerName}.service"];
                 serviceConfig = {
                   Type = "simple";
-                  ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:5432,bind=${config.my.listenNetworkAddress},fork,reuseaddr TCP:${instance.database.container.localAddress or "192.168.100.12"}:5432";
+                  ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${toString instance.database.proxyPort},bind=${config.my.listenNetworkAddress},fork,reuseaddr TCP:${instance.database.container.localAddress or "192.168.100.12"}:5432";
                   Restart = "always";
                   RestartSec = "5";
                 };
@@ -467,9 +475,10 @@
                     }
                   ];
                   initialScript = pkgs.writeText "init-${containerName}" ''
-                    CREATE EXTENSION IF NOT EXISTS vector;
                     GRANT ALL PRIVILEGES ON DATABASE ${instance.database.name or "politikerstod"} TO ${instance.database.user or "politikerstod"};
                     ALTER DATABASE ${instance.database.name or "politikerstod"} OWNER TO ${instance.database.user or "politikerstod"};
+                    \c ${instance.database.name or "politikerstod"}
+                    CREATE EXTENSION IF NOT EXISTS vector;
                     GRANT ALL ON SCHEMA public TO ${instance.database.user or "politikerstod"};
                   '';
                 };

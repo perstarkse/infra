@@ -31,7 +31,7 @@
 
       paperless
       storage-alerts
-      searxng
+      # searxng
       wireguard-tunnels
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
@@ -434,6 +434,7 @@
             host = "192.168.100.13"; # Container IP
             port = 5432;
             enableContainer = true;
+            proxyPort = 5433;
             allowedHosts = ["10.0.0.15"]; # charon - remote worker
             container = {
               hostAddress = "192.168.100.11";
@@ -516,36 +517,36 @@
     };
 
     # SearXNG metasearch engine (VPN-routed)
-    searxng = {
-      enable = true;
-      port = 8088;
-      address = "127.0.0.1";
-      baseUrl = "https://search.lan.stark.pub";
-      exposure = {
-        enable = true;
-        useWildcard = "lanstark";
-        router = {
-          enable = true;
-          targets = ["io"];
-        };
-      };
-      # address = "10.0.0.10";
-      vpn = {
-        enable = true;
-        wireguardConfigFile = config.my.secrets.getPath "wireguard-tunnels-genome-worktree-zenith" "wg.conf";
-        accessibleFrom = [
-          "10.0.0.0/24"
-          "192.168.0.0/24"
-          "127.0.0.0/8"
-        ];
-        portMappings = [
-          {
-            from = 8088;
-            to = 8088;
-          }
-        ];
-      };
-    };
+    # searxng = {
+    #   enable = true;
+    #   port = 8088;
+    #   address = "127.0.0.1";
+    #   baseUrl = "https://search.lan.stark.pub";
+    #   exposure = {
+    #     enable = true;
+    #     useWildcard = "lanstark";
+    #     router = {
+    #       enable = true;
+    #       targets = ["io"];
+    #     };
+    #   };
+    #   # address = "10.0.0.10";
+    #   vpn = {
+    #     enable = true;
+    #     wireguardConfigFile = config.my.secrets.getPath "wireguard-tunnels-genome-worktree-zenith" "wg.conf";
+    #     accessibleFrom = [
+    #       "10.0.0.0/24"
+    #       "192.168.0.0/24"
+    #       "127.0.0.0/8"
+    #     ];
+    #     portMappings = [
+    #       {
+    #         from = 8088;
+    #         to = 8088;
+    #       }
+    #     ];
+    #   };
+    # };
 
     # WireGuard tunnels (declares the secret used by searxng)
     wireguardTunnels = {

@@ -18,7 +18,7 @@ in {
         };
       };
       searchEngines = {
-        DEFAULT = "https://search.lan.stark.pub/search?q={}";
+        DEFAULT = "https://duckduckgo.com/?q={}";
         sx = "https://search.lan.stark.pub/search?q={}";
         ddg = "https://duckduckgo.com/?q={}";
         nw = "https://nixos.wiki/index.php?search={}&go=Go";
@@ -26,7 +26,7 @@ in {
       };
       settings =
         {
-          url.start_pages = "https://search.lan.stark.pub";
+          # url.start_pages = "https://search.lan.stark.pub";
           editor.command = [osConfig.my.gui._terminalCommand "hx" "{file}"];
           content = {
             javascript.clipboard = "access-paste";
