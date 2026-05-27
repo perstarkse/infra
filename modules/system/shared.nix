@@ -44,6 +44,7 @@
       fd
       bat
       nix-index
+      comma
     ];
 
     i18n.defaultLocale = "en_US.UTF-8";

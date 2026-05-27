@@ -38,7 +38,8 @@ in {
       sunshine
       atuin
       codenomad
-      openchamber
+openchamber
+      opencode
       rclone-s3
       wake-proxy
       auto-suspend
@@ -366,6 +367,7 @@ in {
 
     openchamber = {
       enable = true;
+      useOpencode = true;
       runAsMainUser = true;
       listenAddress = "0.0.0.0";
       port = 3000;
@@ -377,19 +379,36 @@ in {
         "10.0.0.1"
         "10.0.0.15"
       ];
-      sharedOpencode = {
-        skillSources = [
-          ctx.inputs.rust-skills
-          ../../assets/opencode/skills/nixos-deployment
-          ../../assets/opencode/skills/nixos-service-module
-          ../../assets/opencode/skills/nixos-secrets
-          ../../assets/opencode/skills/rust-nix-crane
-        ];
-        agentSourceDir = ../../assets/opencode/agents;
-        defaultConfigFile = ../../assets/opencode/opencode-shared.json;
-        environmentFile = config.my.secrets.getPath "context7" "env";
-        npmPackageBin = "/home/p/.npm-global/bin/opencode";
-      };
+    };
+
+    opencode = {
+      enable = true;
+      skillSources = [
+        {
+          name = "rust-skills";
+          path = ctx.inputs.rust-skills;
+        }
+        {
+          name = "nixos-deployment";
+          path = ../../assets/opencode/skills/nixos-deployment;
+        }
+        {
+          name = "nixos-service-module";
+          path = ../../assets/opencode/skills/nixos-service-module;
+        }
+        {
+          name = "nixos-secrets";
+          path = ../../assets/opencode/skills/nixos-secrets;
+        }
+        {
+          name = "rust-nix-crane";
+          path = ../../assets/opencode/skills/rust-nix-crane;
+        }
+      ];
+      agentSourceDir = ../../assets/opencode/agents;
+      defaultConfigFile = ../../assets/opencode/opencode-shared.json;
+      environmentFile = config.my.secrets.getPath "context7" "env";
+      npmPackageBin = "/home/p/.npm-global/bin/opencode";
     };
 
     # Auto-suspend when system is idle (load < threshold + no user input)
@@ -448,7 +467,7 @@ in {
   time.timeZone = "Europe/Stockholm";
 
   environment.systemPackages = with pkgs; [
-    code-cursor-fhs
+    unstable.code-cursor-fhs
     devenv
     localsend
     bluetuith
