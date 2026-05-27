@@ -931,6 +931,33 @@
         statix.enable = true;
         deadnix.enable = true;
       };
+      build.check = self:
+        pkgs.runCommandLocal "treefmt-check" {
+          buildInputs = [pkgs.git pkgs.git-lfs config.treefmt.build.wrapper];
+          meta.description = "Check that the project tree is formatted";
+        } ''
+          set -e
+          PRJ=$TMP/project
+          cp -r ${self} $PRJ
+          chmod -R a+w $PRJ
+          cd $PRJ
+          # Remove all embedded .git dirs so a fresh repo can be initialized for diff detection
+          find . -name .git -prune -exec rm -rf {} +
+          export HOME=$TMPDIR
+          git config --global user.name Nix
+          git config --global user.email nix@localhost
+          git config --global init.defaultBranch main
+          git init --quiet
+          git add .
+          git commit -m init --quiet
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
+          treefmt --version
+          treefmt --no-cache
+          git status --short
+          git --no-pager diff --exit-code
+          touch $out
+        '';
     };
 
     formatter = config.treefmt.build.wrapper;
