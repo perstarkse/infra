@@ -65,7 +65,12 @@ _: {
     opencodeSharedBin = pkgs.writeShellScriptBin "opencode-shared" ''
       export HOME=${cfg.home}
       export XDG_CONFIG_HOME=${cfg.configDir}
-      exec ${opencodeBin} "$@"
+      ocbin=${opencodeBin}
+      npmbin="${cfg.home}/.local/bin/opencode"
+      if [ -x "$npmbin" ]; then
+        ocbin="$npmbin"
+      fi
+      exec "$ocbin" "$@"
     '';
   in {
     options.my.opencode = {
@@ -174,7 +179,7 @@ _: {
         extraGroups = ["users"];
       };
 
-      users.groups.${cfg.group} = lib.mkIf (cfg.group != config.my.mainUser.group) {};
+      
 
       environment.systemPackages = [opencodeSharedBin];
 
