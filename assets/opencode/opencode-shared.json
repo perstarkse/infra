@@ -3,7 +3,6 @@
   "plugin": [
     "@iam-brain/opencode-codex-auth@latest",
     "opencode-vibeguard",
-    "@otto-assistant/opencode-cursor-oauth",
     "@simonwjackson/opencode-direnv"
   ],
   "mcp": {
@@ -16,10 +15,7 @@
     }
   },
   "provider": {
-    "openrouter": {},
-    "cursor": {
-      "name": "Cursor"
-    }
+    "openrouter": {}
   },
   "permission": {
     "skill": { "*": "allow" }

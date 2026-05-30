@@ -18,7 +18,7 @@
         "ls-files" = "${pkgs.eza}/bin/eza -f --icons=auto";
         "wlc" = "${pkgs.wl-clipboard}/bin/wl-copy";
         "sccache-stats" = "${pkgs.sccache}/bin/sccache --show-stats";
-        "ocs" = "opencode-shared";
+        "ocs" = "oc-attach";
       };
       functions = {
         sccache-flush = ''
@@ -158,7 +158,7 @@
           end
           complete -c gui -w command
         '';
-        opencode-shared = ''
+        oc-attach = ''
                     set -l server_url http://127.0.0.1:4096
                     if set -q OPENCODE_SHARED_URL
                       set server_url $OPENCODE_SHARED_URL
@@ -167,7 +167,7 @@
                     set -l directory (pwd -P)
 
                     if not type -q node
-                      echo "opencode-shared: node is required" >&2
+                      echo "oc-attach: node is required" >&2
                       return 127
                     end
 

@@ -5,9 +5,9 @@ _: {
     pkgs,
     ...
 }: let
-    oc = config.my.opencode;
+    oc = config.my.opencode or {};
     cfg = config.my.openchamber;
-    ocEnabled = oc.enable && cfg.useOpencode;
+    ocEnabled = (oc.enable or false) && cfg.useOpencode;
     defaultPackage = pkgs.callPackage ../../../pkgs/openchamber {};
     serviceUser =
       if cfg.runAsMainUser
@@ -160,6 +160,7 @@ _: {
       opencodeHost = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = if ocEnabled then "http://${oc.listenAddress}:${toString oc.port}" else null;
+        defaultText = lib.literalExpression ''"http://''${config.my.opencode.listenAddress}:''${toString config.my.opencode.port}"'';
         description = "External OpenCode base URL. Automatically derived from my.opencode when useOpencode is true.";
       };
 

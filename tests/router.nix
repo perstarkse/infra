@@ -150,6 +150,7 @@
     };
     my.openchamber = {
       enable = true;
+      useOpencode = false;
       package = fakeOpenChamberPackage;
       runAsMainUser = false;
       listenAddress = "0.0.0.0";
