@@ -79,8 +79,9 @@ window-rule {
 binds {
   // Applications / utilities.
   Mod+Return { spawn "kitty"; }
-  Mod+D { spawn "wofi" "--show" "drun"; }
+  Mod+D { spawn "noctalia-shell" "ipc" "call" "launcher" "toggle"; }
   Mod+A { spawn "rofi-rbw"; }
+  Mod+Escape { spawn "noctalia-shell" "ipc" "call" "lockScreen" "lock"; }
   Mod+V repeat=false { spawn "voxtype" "record" "toggle"; }
   Mod+Shift+Q { close-window; }
   Mod+O repeat=false { toggle-overview; }

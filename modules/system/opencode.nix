@@ -179,8 +179,6 @@ _: {
         extraGroups = ["users"];
       };
 
-      
-
       environment.systemPackages = [opencodeSharedBin];
 
       systemd.services.opencode-shared = {

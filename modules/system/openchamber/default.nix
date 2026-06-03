@@ -4,7 +4,7 @@ _: {
     lib,
     pkgs,
     ...
-}: let
+  }: let
     oc = config.my.opencode or {};
     cfg = config.my.openchamber;
     ocEnabled = (oc.enable or false) && cfg.useOpencode;
@@ -45,25 +45,24 @@ _: {
         fi
       ''}
     '';
-    commonPath = with pkgs;
-      [
-        git
-        openssh
-        opencode
-        bun
-        cloudflared
-        nodejs
-        nodePackages.pnpm
-        bashInteractive
-        coreutils
-        gnugrep
-        ripgrep
-        gnutar
-        gawk
-        findutils
-        nix
-        devenv
-      ];
+    commonPath = with pkgs; [
+      git
+      openssh
+      opencode
+      bun
+      cloudflared
+      nodejs
+      nodePackages.pnpm
+      bashInteractive
+      coreutils
+      gnugrep
+      ripgrep
+      gnutar
+      gawk
+      findutils
+      nix
+      devenv
+    ];
     firewallSourceRules = lib.concatMapStringsSep "\n" (source:
       if builtins.match ".*:.*" source != null
       then "ip6 saddr ${source} tcp dport ${toString cfg.port} accept"
@@ -159,7 +158,10 @@ _: {
 
       opencodeHost = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
-        default = if ocEnabled then "http://${oc.listenAddress}:${toString oc.port}" else null;
+        default =
+          if ocEnabled
+          then "http://${oc.listenAddress}:${toString oc.port}"
+          else null;
         defaultText = lib.literalExpression ''"http://''${config.my.opencode.listenAddress}:''${toString config.my.opencode.port}"'';
         description = "External OpenCode base URL. Automatically derived from my.opencode when useOpencode is true.";
       };
