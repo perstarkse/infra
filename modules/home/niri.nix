@@ -74,6 +74,15 @@
           Provide values compatible with the fonts available in your bar.
         '';
       };
+
+      extraSpawnAtStartup = lib.mkOption {
+        type = lib.types.listOf (lib.types.listOf lib.types.str);
+        default = [];
+        description = ''
+          Extra spawn-at-startup command lists appended to niri-config.kdl.
+          Used by modules like noctalia to register shell/bar startup.
+        '';
+      };
     };
 
     config = lib.mkIf (guiCfg.enable && guiCfg.session == "niri") {
@@ -94,7 +103,14 @@
 
       # stylix.targets.niri.enable = lib.mkDefault true;
 
-      xdg.configFile."niri/config.kdl".source = ./niri-config.kdl;
+      xdg.configFile."niri/config.kdl".text =
+        builtins.readFile ./niri-config.kdl
+        + lib.concatMapStringsSep "\n" (
+          cmd: let
+            kdlStr = s: ''"${builtins.replaceStrings ["\\" "\""] ["\\\\" "\\\""] s}"'';
+          in "spawn-at-startup ${lib.concatMapStringsSep " " kdlStr cmd}"
+        )
+        config.my.niri.extraSpawnAtStartup;
 
       # systemd.user.services.swaybg = {
       #   Unit = {

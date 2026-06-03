@@ -38,7 +38,7 @@ in {
       sunshine
       atuin
       codenomad
-openchamber
+      openchamber
       opencode
       rclone-s3
       wake-proxy
@@ -56,7 +56,8 @@ openchamber
       [
         options
         sops
-        waybar
+        # waybar  # replaced by noctalia
+        noctalia
         helix
         rofi
         git
@@ -65,7 +66,7 @@ openchamber
         fish
         sccache
         kitty
-        dunst
+        # dunst  # replaced by noctalia notification center
         ncspot
         zellij
         starship
@@ -135,8 +136,12 @@ openchamber
         };
       };
 
-      waybar = {
-        windowManager = "niri";
+      # waybar = {
+      #   windowManager = "niri";
+      # };
+
+      noctalia = {
+        enable = true;
       };
 
       secrets.wrappedHomeBinaries = [
@@ -473,7 +478,7 @@ openchamber
     bluetuith
     codex
     discord
-    prismlauncher
+    unstable.prismlauncher
     virt-manager
     gamescope
     pkgs.unstable.playwright-mcp
@@ -551,6 +556,9 @@ openchamber
   hardware.cpu.amd.updateMicrocode = true;
 
   powerManagement.enable = true;
+
+  services.power-profiles-daemon.enable = true;
+  services.upower.enable = true;
 
   programs.virt-manager.enable = true;
 
