@@ -46,6 +46,7 @@ in {
       wireguard-tunnels
       paperless-consumption-mount
       politikerstod-remote-worker
+      vpn-browser
       # steam-gamescope
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
@@ -165,10 +166,9 @@ in {
 
       voxtype = {
         enable = true;
-        model = "large-v3-turbo";
-        # modelHash = "sha256-kh5M+Ghv3Zk9zQgaXaW2w2W/3hFi5ysI11rHUomSCx8=";
-        enableService = true;
-        enableVulkan = true;
+        model.name = "large-v3-turbo";
+        service.enable = true;
+        package = ctx.inputs.voxtype.packages.${pkgs.stdenv.hostPlatform.system}.vulkan;
       };
 
       agent-browser = {
@@ -386,35 +386,36 @@ in {
       ];
     };
 
-    opencode = {
-      enable = true;
-      skillSources = [
-        {
-          name = "rust-skills";
-          path = ctx.inputs.rust-skills;
-        }
-        {
-          name = "nixos-deployment";
-          path = ../../assets/opencode/skills/nixos-deployment;
-        }
-        {
-          name = "nixos-service-module";
-          path = ../../assets/opencode/skills/nixos-service-module;
-        }
-        {
-          name = "nixos-secrets";
-          path = ../../assets/opencode/skills/nixos-secrets;
-        }
-        {
-          name = "rust-nix-crane";
-          path = ../../assets/opencode/skills/rust-nix-crane;
-        }
-      ];
-      agentSourceDir = ../../assets/opencode/agents;
-      defaultConfigFile = ../../assets/opencode/opencode-shared.json;
-      environmentFile = config.my.secrets.getPath "context7" "env";
-      npmPackageBin = "/home/p/.npm-global/bin/opencode";
-    };
+       opencode = {
+         enable = true;
+         opencodePackage = ctx.inputs.llm-agents.packages.${pkgs.system}.opencode;
+         skillSources = [
+           {
+             name = "rust-skills";
+             path = ctx.inputs.rust-skills;
+           }
+           {
+             name = "nixos-deployment";
+             path = ../../assets/opencode/skills/nixos-deployment;
+           }
+           {
+             name = "nixos-service-module";
+             path = ../../assets/opencode/skills/nixos-service-module;
+           }
+           {
+             name = "nixos-secrets";
+             path = ../../assets/opencode/skills/nixos-secrets;
+           }
+           {
+             name = "rust-nix-crane";
+             path = ../../assets/opencode/skills/rust-nix-crane;
+           }
+         ];
+         agentSourceDir = ../../assets/opencode/agents;
+         defaultConfigFile = ../../assets/opencode/opencode-shared.json;
+         environmentFile = config.my.secrets.getPath "context7" "env";
+       };
+
 
     # Auto-suspend when system is idle (load < threshold + no user input)
     autoSuspend = {
@@ -464,6 +465,10 @@ in {
         # };
       };
     };
+
+    vpn-browser = {
+      enable = true;
+    };
   };
 
   # Battlemage + xe is currently stable on 6.12.74 here; newer 6.12.x regressed GPU init.
@@ -493,14 +498,6 @@ in {
     # Allow localsend receive port
     # Allow 3000/1 and 5000/1 for dev server and tooling
     firewall.allowedTCPPorts = [53317 3001 5000 5001];
-
-    interfaces.enp4s0.ipv4.routes = [
-      {
-        address = "192.168.200.0";
-        prefixLength = 24;
-        via = "10.0.0.1";
-      }
-    ];
   };
 
   # services.blueman.enable = true;
