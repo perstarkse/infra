@@ -10,7 +10,10 @@ _: {
     opencodeBin =
       if cfg.npmPackageBin != null
       then "${cfg.home}/.local/bin/opencode"
+      else if cfg.opencodePackage != null
+      then lib.getExe cfg.opencodePackage
       else lib.getExe pkgs.opencode;
+
     initScript = pkgs.writeShellScript "opencode-shared-init" ''
       set -eu
       ${pkgs.coreutils}/bin/install -d -m 0750 -o ${cfg.user} -g ${cfg.group} "${ocConfigDir}"
@@ -45,6 +48,7 @@ _: {
         fi
       ''}
     '';
+
     copyOpencodeBin = pkgs.writeShellScript "copy-opencode-bin" ''
       set -eu
       src="${cfg.npmPackageBin}"
@@ -54,22 +58,17 @@ _: {
         ${pkgs.coreutils}/bin/install -m 0755 -o ${cfg.user} -g ${cfg.group} "$src" "$dst"
       fi
     '';
-    daemonPath = with pkgs; [
-      git
-      openssh
-      opencode
-      nodejs
-      coreutils
-      bashInteractive
-    ];
+
     opencodeSharedBin = pkgs.writeShellScriptBin "opencode-shared" ''
       export HOME=${cfg.home}
       export XDG_CONFIG_HOME=${cfg.configDir}
       ocbin=${opencodeBin}
-      npmbin="${cfg.home}/.local/bin/opencode"
-      if [ -x "$npmbin" ]; then
-        ocbin="$npmbin"
-      fi
+      ${lib.optionalString (cfg.npmPackageBin != null) ''
+        npmbin="${cfg.home}/.local/bin/opencode"
+        if [ -x "$npmbin" ]; then
+          ocbin="$npmbin"
+        fi
+      ''}
       exec "$ocbin" "$@"
     '';
   in {
@@ -163,6 +162,12 @@ _: {
         description = "Path to a systemd EnvironmentFile for the daemon.";
       };
 
+      opencodePackage = lib.mkOption {
+        type = lib.types.package;
+        default = null;
+        description = "The opencode package to use instead of nixpkgs.";
+      };
+
       npmPackageBin = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
@@ -171,7 +176,22 @@ _: {
       };
     };
 
-    config = lib.mkIf cfg.enable {
+    config = lib.mkIf cfg.enable (let
+      opencodePkg = if cfg.opencodePackage != null then cfg.opencodePackage else pkgs.opencode;
+      daemonPath = with pkgs; [
+        git
+        openssh
+        opencodePkg
+        nodejs
+        coreutils
+        bashInteractive
+      ];
+      daemonEnvironment = {
+        HOME = toString cfg.home;
+        XDG_CONFIG_HOME = toString cfg.configDir;
+      }
+      // cfg.environment;
+    in {
       users.users.${cfg.user} = lib.mkIf (cfg.user != config.my.mainUser.name) {
         isSystemUser = true;
         inherit (cfg) group home;
@@ -210,16 +230,14 @@ _: {
             RestartSec = "5s";
             NoNewPrivileges = true;
             PrivateTmp = true;
-          }
-          // lib.optionalAttrs (cfg.environment != {}) {
             Environment = lib.concatStringsSep " " (
-              lib.mapAttrsToList (k: v: "${k}=${v}") cfg.environment
+              lib.mapAttrsToList (k: v: "${k}=${v}") daemonEnvironment
             );
           }
           // lib.optionalAttrs (cfg.environmentFile != null) {
             EnvironmentFile = cfg.environmentFile;
           };
       };
-    };
+    });
   };
 }
