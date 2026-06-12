@@ -14,6 +14,7 @@
     primarySegment = helpers.primarySegment or null;
     primaryZoneInterface = helpers.primaryInterface;
     wanZone = lib.findFirst (zone: zone.kind == "wan") null zones;
+    workSegment = lib.findFirst (segment: segment.name == "work") null (helpers.segments or []);
     wan =
       if wanZone != null
       then wanZone.interface
@@ -326,6 +327,8 @@
 
     forwardCommonRulesV4 = ''
       ct state established,related accept
+      ${lib.optionalString (workSegment != null) ''iifname "${workSegment.interface}" tcp flags syn tcp option maxseg size set 1280''}
+      tcp flags syn tcp option maxseg size set rt mtu
       ${forwardSameZoneRules}
       ${dohTransportBlockRules}
       ${castingRulesCommon}

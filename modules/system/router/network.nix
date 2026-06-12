@@ -120,6 +120,9 @@
                     networkConfig.ConfigureWithoutCarrier = true;
                     linkConfig.RequiredForOnline = "no";
                   }
+                  // lib.optionalAttrs (segment.linkMtu != null) {
+                    linkConfig.MTUBytes = toString segment.linkMtu;
+                  }
                   // lib.optionalAttrs segment.isPrimary {
                     address = [
                       "${segment.routerIp}/${toString segment.cidrPrefix}"

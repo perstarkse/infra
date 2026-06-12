@@ -552,6 +552,7 @@ in {
       router.wait_for_unit("kea-dhcp4-server.service")
 
       accessIotClient.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10\\.0\\.20\\.'", timeout=180)
+      router.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '192\\.168\\.100\\.'", timeout=120)
       accessIotClient.succeed("ping -c1 -W2 10.0.20.1")
       accessIotClient.succeed("ping -c1 -W2 192.168.100.1")
       accessIotClient.fail("ping -c1 -W2 10.0.0.10")

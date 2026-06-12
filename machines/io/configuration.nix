@@ -243,17 +243,17 @@ in {
         enp2s0 = {
           mode = "trunk";
           nativeSegment = "trusted";
-          taggedSegments = ["iot" "kids" "guests" "cameras"];
+          taggedSegments = ["iot" "work" "kids" "guests" "cameras"];
         };
         enp3s0 = {
           mode = "trunk";
           nativeSegment = "trusted";
-          taggedSegments = ["iot" "kids" "guests" "cameras"];
+          taggedSegments = ["iot" "work" "kids" "guests" "cameras"];
         };
         enp4s0 = {
           mode = "trunk";
           nativeSegment = "trusted";
-          taggedSegments = ["iot" "kids" "guests" "cameras"];
+          taggedSegments = ["iot" "work" "kids" "guests" "cameras"];
         };
       };
       segments = {
@@ -289,6 +289,26 @@ in {
                 udpPorts = [1900 5353];
               }
             ];
+          };
+        };
+
+        work = {
+          vlan.id = 60;
+          subnet = "10.0.60";
+          linkMtu = 1400;
+          dhcp = {
+            range = {
+              start = 10;
+              end = 200;
+            };
+            pushDns = false;
+            domainName = "";
+            interfaceMtu = 1400;
+          };
+          policy = {
+            internet = true;
+            isolateClients = false;
+            canReach = [];
           };
         };
 
@@ -484,8 +504,9 @@ in {
           };
         };
         profiles.default.denyDomains = ["use-application-dns.net"];
-        enforcement.exemptSegments = [];
-        dohBlocking.exemptSegments = [];
+        filterAaaa = true;
+        enforcement.exemptSegments = ["work"];
+        dohBlocking.exemptSegments = ["work"];
       };
 
       nginx = {
