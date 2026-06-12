@@ -180,8 +180,32 @@
           domainName = mkOption {
             type = types.nullOr types.str;
             default = null;
-            description = "Optional DHCP domain for this segment; defaults to my.router.dhcp.domainName";
+            description = ''
+              Optional DHCP domain for this segment; defaults to my.router.dhcp.domainName.
+              Set to an empty string to omit the DHCP domain-name option.
+            '';
           };
+          pushDns = mkOption {
+            type = types.bool;
+            default = true;
+            description = ''
+              Advertise this segment's router IP as a DNS server via DHCP. Disable on
+              segments where clients should rely on VPN-provided or other DNS instead.
+            '';
+          };
+          interfaceMtu = mkOption {
+            type = types.nullOr types.int;
+            default = null;
+            description = ''
+              Optional DHCP option 26 (interface MTU) advertised to clients on this segment.
+            '';
+          };
+        };
+
+        linkMtu = mkOption {
+          type = types.nullOr types.int;
+          default = null;
+          description = "Optional link MTU for this segment's VLAN interface (bytes).";
         };
 
         dns.profile = mkOption {
@@ -426,6 +450,15 @@
               default = "24h";
               description = "Refresh interval for downloaded DNS blocklists.";
             };
+          };
+          filterAaaa = mkOption {
+            type = types.bool;
+            default = false;
+            description = ''
+              Drop AAAA (IPv6) DNS answers from the router resolver. Useful when
+              downstream VLANs are IPv4-only and dual-stack names would otherwise
+              prefer unreachable IPv6 targets.
+            '';
           };
           enforcement = {
             redirectPort53 = mkOption {
@@ -1150,6 +1183,7 @@
           vlanId = segment.vlan.id;
           inherit (segment) subnet;
           inherit (segment) cidrPrefix;
+          linkMtu = segment.linkMtu or null;
           subnetCidr = "${segment.subnet}.0/${toString segment.cidrPrefix}";
           subnets = ["${segment.subnet}.0/${toString segment.cidrPrefix}"];
           routerIp = "${segment.subnet}.1";
@@ -1170,6 +1204,8 @@
             poolStart = "${segment.subnet}.${toString segment.dhcp.range.start}";
             poolEnd = "${segment.subnet}.${toString segment.dhcp.range.end}";
             reservations = directReservations ++ machineReservations;
+            inherit (segment.dhcp) pushDns;
+            interfaceMtu = segment.dhcp.interfaceMtu or null;
           };
           dnsProfile = segment.dns.profile;
           dnsRedirectEnabled = cfg.dns.enable && cfg.dns.enforcement.redirectPort53 && !(lib.elem name cfg.dns.enforcement.exemptSegments);

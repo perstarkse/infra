@@ -12,7 +12,7 @@
         inputs = {
           privateInfra = inputs.private-infra;
           varsHelper = inputs.vars-helper;
-          inherit (inputs) nous rust-skills voxtype llm-agents;
+          inherit (inputs) nous rust-skills voxtype;
         };
       };
       inherit ((import ../lib/exposure-options.nix {inherit (inputs.nixpkgs) lib;})) mkStandardExposureOptions;

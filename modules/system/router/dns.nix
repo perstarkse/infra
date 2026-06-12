@@ -216,6 +216,9 @@
             prefetching = true;
             cacheTimeNegative = "30m";
           };
+          filtering = lib.optionalAttrs dnsCfg.filterAaaa {
+            queryTypes = ["AAAA"];
+          };
           specialUseDomains.enable = false;
           prometheus = {
             enable = true;

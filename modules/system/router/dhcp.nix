@@ -33,6 +33,7 @@
               persist = true;
               "lfc-interval" = 3600;
             };
+            authoritative = true;
             "valid-lifetime" = cfg.dhcp.validLifetime;
             "renew-timer" = cfg.dhcp.renewTimer;
             "rebind-timer" = cfg.dhcp.rebindTimer;
@@ -53,20 +54,33 @@
                     }
                   )
                   (segment.dhcp.reservations or []);
-                "option-data" = [
-                  {
-                    name = "routers";
-                    data = segment.routerIp;
-                  }
-                  {
-                    name = "domain-name-servers";
-                    data = segment.routerIp;
-                  }
-                  {
-                    name = "domain-name";
-                    data = segment.dhcp.domainName or cfg.dhcp.domainName;
-                  }
-                ];
+                "option-data" =
+                  [
+                    {
+                      name = "routers";
+                      data = segment.routerIp;
+                    }
+                  ]
+                  ++ lib.optionals (segment.dhcp.pushDns or false) [
+                    {
+                      name = "domain-name-servers";
+                      data = segment.routerIp;
+                    }
+                  ]
+                  ++ lib.optionals (
+                    (segment.dhcp.domainName or cfg.dhcp.domainName) != ""
+                  ) [
+                    {
+                      name = "domain-name";
+                      data = segment.dhcp.domainName or cfg.dhcp.domainName;
+                    }
+                  ]
+                  ++ lib.optionals (segment.dhcp.interfaceMtu != null) [
+                    {
+                      name = "interface-mtu";
+                      data = toString segment.dhcp.interfaceMtu;
+                    }
+                  ];
               })
               enabledSegments;
           };
