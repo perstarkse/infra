@@ -47,6 +47,7 @@
         xdg-mimeapps
         firefox
         node
+        llm-agents-cli
       ]
       ++ (with ctx.inputs.varsHelper.homeModules; [default])
       ++ (with ctx.inputs.privateInfra.homeModules; [
@@ -88,11 +89,16 @@
         name = "z-claude";
         title = "z-claude";
         setTerminalTitle = true;
-        command = "/home/p/.npm-global/bin/claude";
+        command = "claude";
         environmentFile = config.my.secrets.getPath "z-ai-env" "env";
         useSystemdRun = false;
       }
     ];
+
+    programs.llm-agents = {
+      enable = true;
+      packages = ["claude-code"];
+    };
 
     home.stateVersion = "25.11";
   };

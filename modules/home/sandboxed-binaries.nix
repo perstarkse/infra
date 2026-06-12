@@ -108,7 +108,7 @@
             type = types.str;
             description = ''
               Program to execute inside the sandbox
-              (e.g. "/home/p/.npm-global/bin/codex" or "codex").
+              (e.g. "codex" from home.packages, or an absolute path).
             '';
           };
 

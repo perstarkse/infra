@@ -164,8 +164,9 @@ _: {
 
       opencodePackage = lib.mkOption {
         type = lib.types.package;
-        default = null;
-        description = "The opencode package to use instead of nixpkgs.";
+        default = pkgs.llm-agents.opencode or pkgs.opencode;
+        defaultText = lib.literalExpression "pkgs.llm-agents.opencode or pkgs.opencode";
+        description = "The opencode package to use for the shared daemon.";
       };
 
       npmPackageBin = lib.mkOption {
@@ -177,7 +178,7 @@ _: {
     };
 
     config = lib.mkIf cfg.enable (let
-      opencodePkg = if cfg.opencodePackage != null then cfg.opencodePackage else pkgs.opencode;
+      opencodePkg = cfg.opencodePackage;
       daemonPath = with pkgs; [
         git
         openssh
@@ -186,11 +187,12 @@ _: {
         coreutils
         bashInteractive
       ];
-      daemonEnvironment = {
-        HOME = toString cfg.home;
-        XDG_CONFIG_HOME = toString cfg.configDir;
-      }
-      // cfg.environment;
+      daemonEnvironment =
+        {
+          HOME = toString cfg.home;
+          XDG_CONFIG_HOME = toString cfg.configDir;
+        }
+        // cfg.environment;
     in {
       users.users.${cfg.user} = lib.mkIf (cfg.user != config.my.mainUser.name) {
         isSystemUser = true;
