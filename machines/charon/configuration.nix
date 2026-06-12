@@ -40,6 +40,7 @@ in {
       codenomad
       openchamber
       opencode
+      oh-my-opencode
       rclone-s3
       wake-proxy
       auto-suspend
@@ -57,7 +58,6 @@ in {
       [
         options
         sops
-        # waybar  # replaced by noctalia
         noctalia
         helix
         rofi
@@ -67,7 +67,6 @@ in {
         fish
         sccache
         kitty
-        # dunst  # replaced by noctalia notification center
         ncspot
         zellij
         starship
@@ -85,7 +84,8 @@ in {
         node
         voxtype
         wtp
-        agent-browser
+        llm-agents-cli
+        oh-my-opencode
         sandboxed-binaries
         local-ai
         swayidle
@@ -99,7 +99,7 @@ in {
       sandboxedHomeBinaries = [
         {
           name = "sb-codex";
-          program = "/home/p/.npm-global/bin/codex";
+          program = "codex";
           defaultArgs = [
             "--sandbox"
             "danger-full-access"
@@ -112,10 +112,7 @@ in {
           allowNetwork = true;
 
           extraWritableDirs = [
-            "/home/p/.npm-global"
-            # "/home/p/.npm"
             "/home/p/.cache/sccache"
-            # "/home/p/.config"
             "/home/p/.codex"
             "/home/p/.nix-profile/bin"
           ];
@@ -137,10 +134,6 @@ in {
         };
       };
 
-      # waybar = {
-      #   windowManager = "niri";
-      # };
-
       noctalia = {
         enable = true;
       };
@@ -150,7 +143,7 @@ in {
           name = "z-claude";
           title = "z-claude";
           setTerminalTitle = true;
-          command = "/home/p/.npm-global/bin/claude";
+          command = "claude";
           environmentFile = config.my.secrets.getPath "z-ai-env" "env";
           useSystemdRun = false;
         }
@@ -171,9 +164,26 @@ in {
         package = ctx.inputs.voxtype.packages.${pkgs.stdenv.hostPlatform.system}.vulkan;
       };
 
-      agent-browser = {
+      llm-agents = {
         enable = true;
+        packages = [
+          "opencode"
+          "codex"
+          "claude-code"
+          "amp"
+          "agent-browser"
+        ];
       };
+
+      oh-my-opencode = {
+        enable = true;
+        defaultConfigFile = ../../assets/opencode/oh-my-opencode.json;
+        openagentConfigFile = ../../assets/opencode/oh-my-openagent.json;
+      };
+
+      fish.interactiveShellInit = lib.mkAfter ''
+        set -gx OPENCODE_OMO_URL http://127.0.0.1:4098
+      '';
     };
 
     my.swayidle = {
@@ -238,6 +248,18 @@ in {
         {
           readers = [config.my.mainUser.name];
           path = config.my.secrets.getPath "api-key-openrouter" "api_key";
+        }
+        {
+          readers = ["oh-my-opencode"];
+          path = config.my.secrets.getPath "context7" "env";
+        }
+        {
+          readers = ["oh-my-opencode"];
+          path = config.my.secrets.getPath "api-key-openrouter" "api_key";
+        }
+        {
+          readers = ["oh-my-opencode"];
+          path = config.my.secrets.getPath "api-key-openai" "api_key";
         }
         {
           readers = [config.my.mainUser.name];
@@ -386,36 +408,42 @@ in {
       ];
     };
 
-       opencode = {
-         enable = true;
-         opencodePackage = ctx.inputs.llm-agents.packages.${pkgs.system}.opencode;
-         skillSources = [
-           {
-             name = "rust-skills";
-             path = ctx.inputs.rust-skills;
-           }
-           {
-             name = "nixos-deployment";
-             path = ../../assets/opencode/skills/nixos-deployment;
-           }
-           {
-             name = "nixos-service-module";
-             path = ../../assets/opencode/skills/nixos-service-module;
-           }
-           {
-             name = "nixos-secrets";
-             path = ../../assets/opencode/skills/nixos-secrets;
-           }
-           {
-             name = "rust-nix-crane";
-             path = ../../assets/opencode/skills/rust-nix-crane;
-           }
-         ];
-         agentSourceDir = ../../assets/opencode/agents;
-         defaultConfigFile = ../../assets/opencode/opencode-shared.json;
-         environmentFile = config.my.secrets.getPath "context7" "env";
-       };
+    opencode = {
+      enable = true;
+      skillSources = [
+        {
+          name = "rust-skills";
+          path = ctx.inputs.rust-skills;
+        }
+        {
+          name = "nixos-deployment";
+          path = ../../assets/opencode/skills/nixos-deployment;
+        }
+        {
+          name = "nixos-service-module";
+          path = ../../assets/opencode/skills/nixos-service-module;
+        }
+        {
+          name = "nixos-secrets";
+          path = ../../assets/opencode/skills/nixos-secrets;
+        }
+        {
+          name = "rust-nix-crane";
+          path = ../../assets/opencode/skills/rust-nix-crane;
+        }
+      ];
+      agentSourceDir = ../../assets/opencode/agents;
+      defaultConfigFile = ../../assets/opencode/opencode-shared.json;
+      environmentFile = config.my.secrets.getPath "context7" "env";
+    };
 
+    oh-my-opencode = {
+      enable = true;
+      port = 4098;
+      reposPath = "/home/p/repos";
+      defaultConfigFile = ../../assets/opencode/oh-my-opencode.json;
+      environmentFile = config.my.secrets.getPath "context7" "env";
+    };
 
     # Auto-suspend when system is idle (load < threshold + no user input)
     autoSuspend = {
@@ -481,15 +509,12 @@ in {
     devenv
     localsend
     bluetuith
-    codex
     discord
     unstable.prismlauncher
     virt-manager
     gamescope
-    pkgs.unstable.playwright-mcp
     bun
     google-cloud-sdk
-    unstable.amp-cli
   ];
 
   networking = {

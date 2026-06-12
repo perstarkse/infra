@@ -19,6 +19,7 @@
         "wlc" = "${pkgs.wl-clipboard}/bin/wl-copy";
         "sccache-stats" = "${pkgs.sccache}/bin/sccache --show-stats";
         "ocs" = "oc-attach";
+        "ocmo" = "oc-omo-attach";
       };
       functions = {
         sccache-flush = ''
@@ -215,6 +216,70 @@
                       command opencode attach $server_url --dir $directory --session $session_id $argv
                     else
                       command opencode attach $server_url --dir $directory $argv
+                    end
+        '';
+        oc-omo-attach = ''
+                    set -l server_url http://127.0.0.1:4097
+                    if set -q OPENCODE_OMO_URL
+                      set server_url $OPENCODE_OMO_URL
+                    end
+
+                    set -l directory (pwd -P)
+
+                    if not type -q node
+                      echo "oc-omo-attach: node is required" >&2
+                      return 127
+                    end
+
+                    if not type -q opencode-omo
+                      echo "oc-omo-attach: opencode-omo is required" >&2
+                      return 127
+                    end
+
+                    set -l session_id (
+                      node -e '
+          const http = require("http")
+          const { URL } = require("url")
+          const [serverUrl, directory] = process.argv.slice(1)
+          const target = new URL("/session", serverUrl)
+          target.searchParams.set("directory", directory)
+          http.get(target, (res) => {
+            let data = ""
+            res.on("data", (chunk) => data += chunk)
+            res.on("end", () => {
+              if (res.statusCode !== 200) {
+                process.exit(0)
+                return
+              }
+              let payload
+              try {
+                payload = JSON.parse(data)
+              } catch {
+                process.exit(0)
+                return
+              }
+              if (!Array.isArray(payload) || payload.length === 0) {
+                process.exit(0)
+                return
+              }
+              payload.sort((left, right) => {
+                const leftTime = left?.time?.updated ?? left?.time?.created ?? 0
+                const rightTime = right?.time?.updated ?? right?.time?.created ?? 0
+                return rightTime - leftTime
+              })
+              const sessionId = payload[0]?.id
+              if (typeof sessionId === "string" && sessionId.length > 0) {
+                process.stdout.write(sessionId)
+              }
+            })
+          }).on("error", () => process.exit(0))
+          ' $server_url $directory
+                    )
+
+                    if test -n "$session_id"
+                      command opencode-omo attach $server_url --dir $directory --session $session_id $argv
+                    else
+                      command opencode-omo attach $server_url --dir $directory $argv
                     end
         '';
       };
