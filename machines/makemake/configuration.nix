@@ -31,7 +31,6 @@
 
       paperless
       storage-alerts
-      # searxng
       wireguard-tunnels
       indicator-alert-daemon
     ]
@@ -89,7 +88,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "searx" "wireguard-tunnels"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels"];
       };
 
       generateManifest = false;
@@ -311,7 +310,7 @@
       enable = true;
       bucket = "shared";
       endpoint = "http://127.0.0.1:3900";
-      bindAddress = "0.0.0.0";
+      bindAddress = "10.0.0.10";
       port = 8081;
       htpasswdFile = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
       exposure = {
@@ -517,39 +516,6 @@
       };
     };
 
-    # SearXNG metasearch engine (VPN-routed)
-    # searxng = {
-    #   enable = true;
-    #   port = 8088;
-    #   address = "127.0.0.1";
-    #   baseUrl = "https://search.lan.stark.pub";
-    #   exposure = {
-    #     enable = true;
-    #     useWildcard = "lanstark";
-    #     router = {
-    #       enable = true;
-    #       targets = ["io"];
-    #     };
-    #   };
-    #   # address = "10.0.0.10";
-    #   vpn = {
-    #     enable = true;
-    #     wireguardConfigFile = config.my.secrets.getPath "wireguard-tunnels-genome-worktree-zenith" "wg.conf";
-    #     accessibleFrom = [
-    #       "10.0.0.0/24"
-    #       "192.168.0.0/24"
-    #       "127.0.0.0/8"
-    #     ];
-    #     portMappings = [
-    #       {
-    #         from = 8088;
-    #         to = 8088;
-    #       }
-    #     ];
-    #   };
-    # };
-
-    # WireGuard tunnels (declares the secret used by searxng)
     wireguardTunnels = {
       enable = true;
       tunnels = {

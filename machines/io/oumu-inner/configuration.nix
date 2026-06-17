@@ -102,7 +102,7 @@
     home = {
       username = "oumu";
       homeDirectory = "/home/oumu";
-      stateVersion = "24.11";
+      stateVersion = "25.11";
     };
 
     programs.openclaw = {
@@ -172,5 +172,5 @@
     secrets = {};
   };
 
-  system.stateVersion = "24.11";
+  system.stateVersion = "25.11";
 }

@@ -114,8 +114,6 @@ _: {
       systemd = {
         services.garage.serviceConfig.DynamicUser = lib.mkForce false;
 
-        services.garage.environment.GARAGE_ALLOW_WORLD_READABLE_SECRETS = "true";
-
         tmpfiles.rules = [
           "d /var/lib/garage 0700 garage garage -"
           "d ${cfg.dataDir} 0700 garage garage -"
