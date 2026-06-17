@@ -33,6 +33,7 @@
       storage-alerts
       # searxng
       wireguard-tunnels
+      indicator-alert-daemon
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
@@ -617,6 +618,55 @@
         };
       };
     };
+  };
+
+  services.indicator-alert-daemon = {
+    enable = true;
+    intervalType = "1wk";
+    pollFrequency = 86400;
+    tickers = [
+      {
+        symbol = "ETH-USD";
+        intervalType = "1d";
+        indicators = [
+          {
+            type = "rsi";
+            threshold = 30.0;
+            period = 14;
+          }
+        ];
+      }
+      {
+        symbol = "ETH-USD";
+        indicators = [
+          {
+            type = "rsi";
+            threshold = 30.0;
+            period = 14;
+          }
+        ];
+      }
+      {
+        symbol = "BOTZ";
+        indicators = [
+          {
+            type = "rsi";
+            threshold = 30.0;
+            period = 14;
+          }
+        ];
+      }
+      {
+        symbol = "SEKEUR=X";
+        indicators = [
+          {
+            type = "rsi";
+            threshold = 30.0;
+            period = 14;
+          }
+        ];
+      }
+    ];
   };
 
   time.timeZone = "Europe/Stockholm";

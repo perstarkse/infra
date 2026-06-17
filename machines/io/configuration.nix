@@ -391,6 +391,7 @@ in {
             ip = 2;
             autoGenerate = true;
             persistentKeepalive = 25;
+            clientAllowedIPs = ["10.0.0.0/16"];
           }
           {
             name = "bro";

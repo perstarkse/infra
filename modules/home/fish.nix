@@ -18,6 +18,7 @@
         "ls-files" = "${pkgs.eza}/bin/eza -f --icons=auto";
         "wlc" = "${pkgs.wl-clipboard}/bin/wl-copy";
         "sccache-stats" = "${pkgs.sccache}/bin/sccache --show-stats";
+        "pi" = "PI_FFF_MODE=override command pi";
         "ocs" = "oc-attach";
         "ocmo" = "oc-omo-attach";
       };
