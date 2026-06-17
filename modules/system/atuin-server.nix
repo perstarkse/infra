@@ -40,7 +40,7 @@ _: {
         enable = true;
         inherit (cfg) port;
         host = cfg.address;
-        openRegistration = true;
+        openRegistration = false;
         database = {
           createLocally = true;
         };

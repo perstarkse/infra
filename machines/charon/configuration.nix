@@ -9,7 +9,6 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     config = {
       allowUnfree = true;
-      nvidia.acceptLicense = true;
     };
   };
 in {
