@@ -108,6 +108,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    indicator-alert-daemon = {
+      url = "github:perstarkse/symbol-alert-notifier";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     vpn-confinement = {
       url = "github:Maroka-chan/VPN-Confinement";
       inputs.nixpkgs.follows = "nixpkgs";
