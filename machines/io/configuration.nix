@@ -362,7 +362,7 @@ in {
 
       wireguard = {
         enable = true;
-        defaultEndpoint = "mail.stark.pub:51820";
+        defaultEndpoint = "wg.stark.pub:51820";
         peers = [
           {
             name = "phone";
@@ -431,6 +431,10 @@ in {
       ];
 
       services = [
+        {
+          name = "wg.stark.pub";
+          target = "10.0.0.1";
+        }
         {
           name = "mail.stark.pub";
           target = "10.0.0.10";
@@ -507,6 +511,7 @@ in {
                 "politikerstod.stark.pub"
                 "orebro.politikerstod.stark.pub"
                 "wake.stark.pub"
+                "wg.stark.pub"
               ];
               passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
             }
