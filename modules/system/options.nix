@@ -407,7 +407,6 @@
           then "${pkgs.kitty}/bin/kitty"
           else "${pkgs.kitty}/bin/kitty";
 
-        # Required by vpn-confinement module (accessed at top level before networking module loads)
         networking.enableIPv6 = true;
 
         assertions = [

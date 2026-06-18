@@ -45,8 +45,6 @@ in {
       garage
       atuin
       libvirt
-      # oumu-vm
-      # go2rtc
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default]);
 
@@ -212,26 +210,6 @@ in {
       ];
 
       declarations = [
-        (config.my.secrets.mkMachineSecret {
-          name = "oumu-deploy-key";
-          share = false;
-          runtimeInputs = [pkgs.openssh];
-          files = {
-            private_key = {
-              mode = "0400";
-              owner = "root";
-              neededFor = "services";
-            };
-            public_key = {
-              mode = "0444";
-              # secret = true; # Treat as secret to avoid store warning, but readable
-            };
-          };
-          script = ''
-            ssh-keygen -t ed25519 -C "oumu-vm-deploy-key" -f "$out/private_key" -N ""
-            mv "$out/private_key.pub" "$out/public_key"
-          '';
-        })
       ];
     };
 

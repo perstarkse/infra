@@ -1577,7 +1577,6 @@
         "treefmt-nix": "treefmt-nix_4",
         "vars-helper": "vars-helper",
         "voxtype": "voxtype",
-        "vpn-confinement": "vpn-confinement",
         "wol-web-proxy": "wol-web-proxy"
       }
     },
@@ -2147,21 +2146,6 @@
       "original": {
         "owner": "peteonrails",
         "repo": "voxtype",
-        "type": "github"
-      }
-    },
-    "vpn-confinement": {
-      "locked": {
-        "lastModified": 1767604552,
-        "narHash": "sha256-FddhMxnc99KYOZ/S3YNqtDSoxisIhVtJ7L4s8XD2u0A=",
-        "owner": "Maroka-chan",
-        "repo": "VPN-Confinement",
-        "rev": "a6b2da727853886876fd1081d6bb2880752937f3",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Maroka-chan",
-        "repo": "VPN-Confinement",
         "type": "github"
       }
     },

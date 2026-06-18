@@ -29,7 +29,6 @@ in {
       libvirt
       fonts
       intel-gpu
-      # nvidia
       docker
       attic-cache
       steam
@@ -47,7 +46,6 @@ in {
       paperless-consumption-mount
       politikerstod-remote-worker
       vpn-browser
-      # steam-gamescope
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
@@ -524,7 +522,6 @@ in {
     firewall.allowedTCPPorts = [53317 3001 5000 5001];
   };
 
-  # services.blueman.enable = true;
   hardware.bluetooth = {
     enable = true;
     powerOnBoot = true;
