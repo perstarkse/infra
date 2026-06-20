@@ -4,18 +4,8 @@
 
     programs.git = {
       enable = true;
-      delta = {
-        enable = true;
-        options = {
-          navigate = true;
-          line-numbers = true;
-          side-by-side = true;
-        };
-      };
-      extraConfig = {
-        merge.conflictstyle = "diff3";
-      };
       settings = {
+        merge.conflictstyle = "diff3";
         user = {
           name = "Per Stark";
           email = "per@stark.pub";
@@ -26,6 +16,16 @@
         push = {
           autoSetupRemote = true;
         };
+      };
+    };
+
+    programs.delta = {
+      enable = true;
+      enableGitIntegration = true;
+      options = {
+        navigate = true;
+        line-numbers = true;
+        side-by-side = true;
       };
     };
   };

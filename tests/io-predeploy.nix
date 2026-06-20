@@ -5,7 +5,7 @@
   ...
 }: let
   pkgsUnfree = import pkgs.path {
-    inherit (pkgs.stdenv.hostPlatform) system;
+    localSystem = {inherit (pkgs.stdenv.hostPlatform) system;};
     config.allowUnfree = true;
   };
 
