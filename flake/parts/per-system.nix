@@ -917,9 +917,10 @@
     };
   in {
     clan.pkgs = import inputs.nixpkgs {
-      inherit system;
+      localSystem = {inherit system;};
       config = {
         allowUnfree = true;
+        nvidia.acceptLicense = true;
       };
     };
 

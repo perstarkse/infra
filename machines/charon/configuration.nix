@@ -6,7 +6,7 @@
   ...
 }: let
   pinnedKernelPkgs = import (builtins.getFlake "github:NixOS/nixpkgs/afbbf774e2087c3d734266c22f96fca2e78d3620") {
-    inherit (pkgs.stdenv.hostPlatform) system;
+    localSystem = {inherit (pkgs.stdenv.hostPlatform) system;};
     config = {
       allowUnfree = true;
     };
