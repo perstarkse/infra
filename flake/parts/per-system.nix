@@ -64,6 +64,11 @@
       inherit pkgs;
       privateMailserverModule = inputs.private-infra.nixosModules.mailserver;
     };
+    sednaFailoverChecks = import ../../tests/sedna-failover.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+    };
     exposureManifestData = inputs.self.lib.exposure.mkExposureManifest systemNixosConfigs;
 
     exposureManifest = pkgs.writeText "exposure-manifest.json" (builtins.toJSON exposureManifestData);
@@ -255,6 +260,7 @@
         inherit (backupsSystemChecks) backups-failing-backend;
       };
       mailserver-checks = mkCheckBundle "mailserver-checks" mailserverSystemChecks;
+      sedna-failover-checks = mkCheckBundle "sedna-failover-checks" sednaFailoverChecks;
     };
 
     machineUpdatePlanResolverPy = pkgs.writeText "machine-update-plan-resolver.py" ''
@@ -998,6 +1004,7 @@
       // routerExposureChecks
       // paperlessSystemChecks
       // backupsSystemChecks
-      // mailserverSystemChecks;
+      // mailserverSystemChecks
+      // sednaFailoverChecks;
   };
 }

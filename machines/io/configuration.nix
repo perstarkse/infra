@@ -127,7 +127,11 @@ in {
       syncAddress = "http://10.0.0.10:8888";
     };
 
-    heartbeat.push.enable = true;
+    heartbeat.push = {
+      enable = true;
+      schedule = "*:0/5";
+      endpointUrl = "http://[fd77:a57c:f840:b526:8299:93f5:160:8bb0]:18080/heartbeat";
+    };
 
     frigate.exposure = {
       enable = true;
