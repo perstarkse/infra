@@ -30,6 +30,7 @@ _: {
       EXPECTED_PATH = "${endpointPath}"
       PUSH_TOKEN = os.environ["HEARTBEAT_PUSH_TOKEN"]
       GATUS_URL = "http://127.0.0.1:${toString cfg.receiver.gatusPort}/api/v1/endpoints/${receiverEndpointApiId}/external?success=true&duration=1ms"
+      TIMESTAMP_FILE = "${lib.optionalString (cfg.receiver.heartbeatTimestampFile != null) cfg.receiver.heartbeatTimestampFile}"
 
 
       class Handler(http.server.BaseHTTPRequestHandler):
@@ -70,6 +71,14 @@ _: {
                   self.send_response(502)
                   self.end_headers()
                   return
+
+              try:
+                  import time as _time
+                  if TIMESTAMP_FILE:
+                      with open(TIMESTAMP_FILE, "w") as _f:
+                          _f.write(str(int(_time.time())))
+              except Exception:
+                  pass
 
               self.send_response(204)
               self.end_headers()
@@ -224,6 +233,12 @@ _: {
           type = lib.types.str;
           default = "20m";
           description = "Expected heartbeat interval for Gatus deadman endpoint.";
+        };
+
+        heartbeatTimestampFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.path;
+          default = null;
+          description = "File path to write the last heartbeat Unix timestamp on each valid heartbeat reception. Used by external failover monitors.";
         };
 
         deadmanAlert = {

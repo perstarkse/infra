@@ -1,5 +1,6 @@
 {
   ctx,
+  config,
   lib,
   ...
 }: {
@@ -9,6 +10,7 @@
       shared
       heartbeat
       remote-monitoring
+      sedna-failover
     ])
     ++ (with ctx.inputs.varsHelper.nixosModules; [default]);
 
@@ -34,10 +36,68 @@
         includeTags = [
           "gatus"
           "heartbeat"
+          "cloudflare"
         ];
       };
 
       generateManifest = false;
+
+      allowReadAccess = [
+        {
+          readers = ["failover-check"];
+          path = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+        }
+      ];
+    };
+
+    sedna-failover = {
+      enable = true;
+
+      maintenancePage = {
+        title = "stark.pub — The cats are napping";
+        heading = "The cats are napping";
+        bodyLines = [
+          "Our server cats have unionized and are demanding better treats."
+          "We've sent someone to negotiate, but they got distracted petting the cats."
+          "Services will resume shortly."
+        ];
+        statusText = "Infrastructure offline — automatic recovery pending cat nap";
+        links = [
+          {
+            label = "Contact";
+            url = "mailto:services@stark.pub";
+          }
+        ];
+      };
+
+      dnsFailover = {
+        enable = true;
+        sednaPublicIp = "130.61.55.4";
+        heartbeatTimeoutMinutes = 20;
+        skipDnsRevert = true;
+        cloudflareApiTokenFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+
+        zones = [
+          {
+            zone = "stark.pub";
+            zoneId = "5b35b4cd4229d502a964e052f18dd650";
+            domains = [
+              "minne.stark.pub"
+              "minne-demo.stark.pub"
+              "vault.stark.pub"
+              "request.stark.pub"
+              "politikerstod.stark.pub"
+              "orebro.politikerstod.stark.pub"
+              "wake.stark.pub"
+            ];
+          }
+          {
+            zone = "nous.fyi";
+            zoneId = "88916637654e3923f7669c7fd59ca76a";
+            domains = ["nous.fyi"];
+          }
+        ];
+      };
     };
 
     remote-monitoring = {
@@ -78,7 +138,6 @@
                 }
               ];
             }) [
-              "chat.stark.pub"
               "request.stark.pub"
               "minne.stark.pub"
               "nous.fyi"
@@ -172,8 +231,10 @@
       listenAddress = "::";
       port = 18080;
       externalEndpointName = "io-heartbeat";
-      deadmanInterval = "25m";
+      deadmanInterval = "15m";
       deadmanAlert.description = "io heartbeat missing";
+      # /var/lib/heartbeat/ via StateDirectory (outside PrivateTmp namespace)
+      heartbeatTimestampFile = "/var/lib/heartbeat/last-heartbeat";
     };
   };
 
@@ -196,7 +257,10 @@
     };
   };
 
-  networking.firewall.allowedTCPPorts = [2222];
+  networking.firewall.allowedTCPPorts = [
+    80
+    2222
+  ];
 
   users = {
     groups.heartbeat = {};
@@ -219,6 +283,8 @@
     NoNewPrivileges = true;
     PrivateDevices = true;
     PrivateTmp = true;
+    StateDirectory = "heartbeat";
+    StateDirectoryMode = "0755";
     ProtectClock = true;
     ProtectControlGroups = true;
     ProtectHome = true;
@@ -234,6 +300,6 @@
     RestrictNamespaces = true;
     RestrictRealtime = true;
     SystemCallArchitectures = "native";
-    UMask = "0077";
+    UMask = "0022";
   };
 }
