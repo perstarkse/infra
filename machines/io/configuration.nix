@@ -277,20 +277,15 @@ in {
         work = {
           vlan.id = 60;
           subnet = "10.0.60";
-          linkMtu = 1400;
           dhcp = {
             range = {
               start = 10;
               end = 200;
             };
-            pushDns = false;
-            domainName = "";
-            interfaceMtu = 1400;
           };
           policy = {
             internet = true;
             isolateClients = false;
-            canReach = [];
           };
         };
 
