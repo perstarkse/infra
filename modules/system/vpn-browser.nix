@@ -15,6 +15,49 @@
     subnet = "10.200.200.0/24";
     hostAddress = "10.200.200.1";
     nsAddress = "10.200.200.2";
+
+    balancedQutebrowserConfig = pkgs.writeText "vpn-browser-balanced-config.py" ''
+      # Managed by Nix (my.vpn-browser). Loaded via -C on every launch.
+      config.load_autoconfig(False)
+
+      # canvas_reading must stay enabled — disabling it maps to Chromium's
+      # --disable-reading-from-canvas and breaks YouTube/video players.
+      c.content.headers.do_not_track = None
+      c.content.webrtc_ip_handling_policy = 'disable-non-proxied-udp'
+      c.content.blocking.enabled = True
+      c.content.cookies.accept = 'no-3rdparty'
+      c.content.geolocation = False
+      c.content.desktop_capture = False
+      c.content.dns_prefetch = False
+    '';
+
+    strictQutebrowserConfig = pkgs.writeText "vpn-browser-strict-config.py" ''
+      # Managed by Nix (my.vpn-browser). Loaded via -C on every launch.
+      config.load_autoconfig(False)
+
+      c.content.webgl = False
+      c.content.canvas_reading = False
+      c.content.headers.do_not_track = None
+      c.content.webrtc_ip_handling_policy = 'disable-non-proxied-udp'
+      c.content.blocking.enabled = True
+      c.content.cookies.accept = 'no-3rdparty'
+      c.content.geolocation = False
+      c.content.media.audio_capture = False
+      c.content.media.video_capture = False
+      c.content.media.audio_video_capture = False
+      c.content.desktop_capture = False
+      c.content.dns_prefetch = False
+      c.qt.args = [
+          'disable-webgl',
+          'disable-webgl2',
+          'disable-3d-apis',
+      ]
+    '';
+
+    privacyConfigs = {
+      balanced = balancedQutebrowserConfig;
+      strict = strictQutebrowserConfig;
+    };
   in {
     options.my.vpn-browser = {
       enable = lib.mkEnableOption "VPN-isolated browser";
@@ -48,6 +91,27 @@
         default = "/home/${config.my.mainUser.name}/.local/share/${cfg.wrapperName}";
         defaultText = lib.literalExpression ''"/home/<user>/.local/share/<wrapperName>"'';
         description = "Data directory for the VPN browser instance (separate from default profile)";
+      };
+
+      timezone = lib.mkOption {
+        type = lib.types.str;
+        default = "UTC";
+        description = "TZ for the VPN browser process (reduces timezone fingerprinting).";
+      };
+
+      privacyProfile = lib.mkOption {
+        type = lib.types.enum ["none" "balanced" "strict"];
+        default = "balanced";
+        description = ''
+          Qutebrowser fingerprint-hardening preset for the VPN profile.
+
+          balanced (default): UTC timezone, no DNT header, WebRTC lockdown, and
+          built-in adblock. Canvas reading and WebGL stay enabled so video sites
+          like YouTube keep working.
+
+          strict: balanced plus canvas read blocking and WebGL disabled. Breaks
+          video sites; use only when you need maximum GPU/canvas protection.
+        '';
       };
     };
 
@@ -168,9 +232,30 @@
         (pkgs.writeShellScriptBin cfg.wrapperName ''
           set -euo pipefail
           basedir="${cfg.dataDir}"
+          mkdir -p "$basedir"
+
+          qb_args=(--basedir "$basedir")
+          ${lib.optionalString (cfg.privacyProfile == "balanced") ''
+            qb_args+=(
+              -C ${privacyConfigs.balanced}
+              -s content.headers.do_not_track ""
+              -s content.webrtc_ip_handling_policy disable-non-proxied-udp
+            )
+          ''}
+          ${lib.optionalString (cfg.privacyProfile == "strict") ''
+            qb_args+=(
+              -C ${privacyConfigs.strict}
+              -s content.webgl false
+              -s content.canvas_reading false
+              -s content.headers.do_not_track ""
+              -s content.webrtc_ip_handling_policy disable-non-proxied-udp
+            )
+          ''}
+
           exec sudo -n ${pkgs.iproute2}/bin/ip netns exec "${cfg.namespaceName}" \
             sudo -u "${config.my.mainUser.name}" \
-            ${cfg.browserPackage}/bin/qutebrowser --basedir "$basedir" "$@"
+            env TZ="${cfg.timezone}" \
+            ${lib.getExe cfg.browserPackage} "''${qb_args[@]}" "$@"
         '')
         (pkgs.makeDesktopItem {
           name = cfg.wrapperName;
