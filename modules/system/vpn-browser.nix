@@ -234,6 +234,12 @@
           basedir="${cfg.dataDir}"
           mkdir -p "$basedir"
 
+          # Capture user-session env vars before sudo strips them.
+          # PipeWire lives at $XDG_RUNTIME_DIR/pipewire-0; without these,
+          # QtWebEngine/Chromium can't find the audio server → no sound.
+          runtime_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+          dbus_addr="''${DBUS_SESSION_BUS_ADDRESS:-unix:path=$runtime_dir/bus}"
+
           qb_args=(--basedir "$basedir")
           ${lib.optionalString (cfg.privacyProfile == "balanced") ''
             qb_args+=(
@@ -255,6 +261,8 @@
           exec sudo -n ${pkgs.iproute2}/bin/ip netns exec "${cfg.namespaceName}" \
             sudo -u "${config.my.mainUser.name}" \
             env TZ="${cfg.timezone}" \
+              XDG_RUNTIME_DIR="$runtime_dir" \
+              DBUS_SESSION_BUS_ADDRESS="$dbus_addr" \
             ${lib.getExe cfg.browserPackage} "''${qb_args[@]}" "$@"
         '')
         (pkgs.makeDesktopItem {

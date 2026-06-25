@@ -19,21 +19,6 @@
         };
       })
       inputs.llm-agents.overlays.default
-      (_final: prev: {
-        llm-agents =
-          prev.llm-agents
-          // {
-            oh-my-opencode = prev.llm-agents.oh-my-opencode.overrideAttrs (oldAttrs: {
-              postBuild =
-                (oldAttrs.postBuild or "")
-                + ''
-                  substituteInPlace dist/cli/index.js \
-                    --replace "return resolved.resolvedName;" \
-                            "return getAgentDisplayName(resolved.configKey) ?? resolved.resolvedName;"
-                '';
-            });
-          };
-      })
     ];
 
     nix.gc = {
