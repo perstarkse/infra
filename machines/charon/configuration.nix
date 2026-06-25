@@ -37,8 +37,6 @@ in {
       atuin
       codenomad
       openchamber
-      opencode
-      oh-my-opencode
       rclone-s3
       wake-proxy
       auto-suspend
@@ -48,7 +46,8 @@ in {
       vpn-browser
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
-    ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
+    ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service])
+    ++ (with ctx.inputs."agentTooling".nixosModules; [opencode-daemon]);
 
   home-manager.users.${config.my.mainUser.name} = {
     imports = with ctx.flake.homeModules;
@@ -82,7 +81,6 @@ in {
         voxtype
         wtp
         llm-agents-cli
-        oh-my-opencode
         sandboxed-binaries
         local-ai
         swayidle
@@ -91,6 +89,10 @@ in {
       ++ (with ctx.inputs.privateInfra.homeModules; [
         mail-clients
         rbw
+      ])
+      ++ (with ctx.inputs."agentTooling".homeModules; [
+        pi-agent
+        shared-skills
       ]);
     my = {
       sandboxedHomeBinaries = [
@@ -145,6 +147,16 @@ in {
           useSystemdRun = false;
         }
       ];
+
+      "agentTooling" = {
+        pi-agent = {
+          enable = true;
+          shellAlias = "PI_FFF_MODE=override command pi";
+        };
+        shared-skills = {
+          enable = true;
+        };
+      };
     };
 
     programs = {
@@ -172,15 +184,7 @@ in {
         ];
       };
 
-      oh-my-opencode = {
-        enable = true;
-        defaultConfigFile = ../../assets/opencode/oh-my-opencode.json;
-        openagentConfigFile = ../../assets/opencode/oh-my-openagent.json;
-      };
-
-      fish.interactiveShellInit = lib.mkAfter ''
-        set -gx OPENCODE_OMO_URL http://127.0.0.1:4098
-      '';
+      fish.interactiveShellInit = lib.mkAfter "";
     };
 
     my.swayidle = {
@@ -245,18 +249,6 @@ in {
         {
           readers = [config.my.mainUser.name];
           path = config.my.secrets.getPath "api-key-openrouter" "api_key";
-        }
-        {
-          readers = ["oh-my-opencode"];
-          path = config.my.secrets.getPath "context7" "env";
-        }
-        {
-          readers = ["oh-my-opencode"];
-          path = config.my.secrets.getPath "api-key-openrouter" "api_key";
-        }
-        {
-          readers = ["oh-my-opencode"];
-          path = config.my.secrets.getPath "api-key-openai" "api_key";
         }
         {
           readers = [config.my.mainUser.name];
@@ -405,41 +397,11 @@ in {
       ];
     };
 
-    opencode = {
-      enable = true;
-      skillSources = [
-        {
-          name = "rust-skills";
-          path = ctx.inputs.rust-skills;
-        }
-        {
-          name = "nixos-deployment";
-          path = ../../assets/opencode/skills/nixos-deployment;
-        }
-        {
-          name = "nixos-service-module";
-          path = ../../assets/opencode/skills/nixos-service-module;
-        }
-        {
-          name = "nixos-secrets";
-          path = ../../assets/opencode/skills/nixos-secrets;
-        }
-        {
-          name = "rust-nix-crane";
-          path = ../../assets/opencode/skills/rust-nix-crane;
-        }
-      ];
-      agentSourceDir = ../../assets/opencode/agents;
-      defaultConfigFile = ../../assets/opencode/opencode-shared.json;
-      environmentFile = config.my.secrets.getPath "context7" "env";
-    };
-
-    oh-my-opencode = {
-      enable = true;
-      port = 4098;
-      reposPath = "/home/p/repos";
-      defaultConfigFile = ../../assets/opencode/oh-my-opencode.json;
-      environmentFile = config.my.secrets.getPath "context7" "env";
+    "agentTooling" = {
+      opencode-daemon = {
+        enable = true;
+        environmentFile = config.my.secrets.getPath "context7" "env";
+      };
     };
 
     # Auto-suspend when system is idle (load < threshold + no user input)

@@ -118,9 +118,8 @@
       inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
 
-    rust-skills = {
-      url = "github:leonardomso/rust-skills";
-      flake = false;
+    agentTooling = {
+      url = "git+file:///home/p/repos/agent-tooling";
     };
 
     voxtype = {

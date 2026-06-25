@@ -5,7 +5,7 @@ _: {
     pkgs,
     ...
   }: let
-    oc = config.my.opencode or {};
+    oc = config.my.agentTooling.opencode-daemon or {};
     cfg = config.my.openchamber;
     ocEnabled = (oc.enable or false) && cfg.useOpencode;
     defaultPackage = pkgs.callPackage ../../../pkgs/openchamber {};
@@ -92,7 +92,7 @@ _: {
       useOpencode = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = "Connect to the shared OpenCode daemon (my.opencode). Set to false to start a bundled OpenCode server instead.";
+        description = "Connect to the shared OpenCode daemon. Set to false to start a bundled OpenCode server instead.";
       };
 
       package = lib.mkOption {
@@ -162,7 +162,7 @@ _: {
           if ocEnabled
           then "http://${oc.listenAddress}:${toString oc.port}"
           else null;
-        defaultText = lib.literalExpression ''"http://''${config.my.opencode.listenAddress}:''${toString config.my.opencode.port}"'';
+        defaultText = lib.literalExpression ''"http://''${config.my.agentTooling.opencode-daemon.listenAddress}:''${toString config.my.agentTooling.opencode-daemon.port}"'';
         description = "External OpenCode base URL. Automatically derived from my.opencode when useOpencode is true.";
       };
 
@@ -213,8 +213,8 @@ _: {
       systemd.services.openchamber = {
         description = "OpenChamber Web UI";
         wantedBy = ["multi-user.target"];
-        after = ["network-online.target"] ++ lib.optionals ocEnabled ["opencode-shared.service"];
-        wants = ["network-online.target"] ++ lib.optionals ocEnabled ["opencode-shared.service"];
+        after = ["network-online.target"] ++ lib.optionals ocEnabled ["opencode-daemon.service"];
+        wants = ["network-online.target"] ++ lib.optionals ocEnabled ["opencode-daemon.service"];
 
         environment =
           {
