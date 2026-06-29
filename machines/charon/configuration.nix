@@ -48,7 +48,7 @@ in {
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service])
-    ++ (with ctx.inputs."agentTooling".nixosModules; [opencode-daemon]);
+    ++ (with ctx.inputs.agentTooling.nixosModules; [opencode-daemon]);
 
   home-manager.users.${config.my.mainUser.name} = {
     imports = with ctx.flake.homeModules;
@@ -91,7 +91,7 @@ in {
         mail-clients
         rbw
       ])
-      ++ (with ctx.inputs."agentTooling".homeModules; [
+      ++ (with ctx.inputs.agentTooling.homeModules; [
         pi-agent
         pi-web
         shared-skills
@@ -149,13 +149,14 @@ in {
         }
       ];
 
-      "agentTooling" = {
+      agentTooling = {
         pi-agent = {
           enable = true;
           shellAlias = "PI_FFF_MODE=override command pi";
         };
         pi-web = {
           enable = true;
+          host = "0.0.0.0";
           pathAccess.allowedPaths = [
             "~/repos"
             "/mnt/sdb/repos"
@@ -390,27 +391,13 @@ in {
       openFirewall = true;
     };
 
-    openchamber = {
-      enable = true;
-      useOpencode = true;
-      runAsMainUser = true;
-      listenAddress = "0.0.0.0";
-      port = 3000;
-      projectId = "charon";
-      projectPath = "/home/p/repos";
-      projectLabel = "charon";
-      openFirewall = true;
-      allowedFirewallSources = [
-        "10.0.0.1"
-        "10.0.0.15"
-      ];
-    };
+    openchamber.enable = false;
 
     sccache-daemon = {
       enable = true;
     };
 
-    "agentTooling" = {
+    agentTooling = {
       opencode-daemon = {
         enable = true;
         environmentFile = config.my.secrets.getPath "context7" "env";
@@ -498,6 +485,16 @@ in {
     # Allow localsend receive port
     # Allow 3000/1 and 5000/1 for dev server and tooling
     firewall.allowedTCPPorts = [53317 3001 5000 5001];
+    # PI WEB for wakeproxy upstream (io only)
+    firewall.extraInputRules = lib.mkAfter ''
+      ip saddr 10.0.0.1 tcp dport 8504 accept
+      tcp dport 8504 drop
+    '';
+    firewall.extraCommands = lib.mkIf (!config.networking.nftables.enable) (lib.mkAfter ''
+      ${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp -s 10.0.0.1 --dport 8504 -j ACCEPT
+      ${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp --dport 8504 -j DROP
+      ${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp --dport 8504 -j DROP
+    '');
   };
 
   hardware.bluetooth = {

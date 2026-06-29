@@ -63,10 +63,12 @@
 
     minne = {
       url = "github:perstarkse/minne";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     saas-minne = {
       url = "git+ssh://git@github.com/perstarkse/saas-minne.git?ref=main&submodules=1";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     NixVirt = {
@@ -97,10 +99,12 @@
 
     nous = {
       url = "git+ssh://git@github.com/perstarkse/nous.git";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     politikerstod = {
       url = "git+ssh://git@github.com/perstarkse/politikerstod.git";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     wol-web-proxy = {
@@ -118,8 +122,9 @@
       inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
 
-    agentTooling = {
+    agent-tooling = {
       url = "git+file:///home/p/repos/agent-tooling";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     voxtype = {

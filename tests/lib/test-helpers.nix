@@ -1,4 +1,4 @@
-_: let
+{lib}: let
   unwrapSingletonImports = m:
     if builtins.isAttrs m && m ? imports && builtins.length m.imports == 1
     then unwrapSingletonImports (builtins.elemAt m.imports 0)
@@ -24,6 +24,12 @@ _: let
     system.stateVersion = stateVersion;
     environment.systemPackages = extraPackages;
   };
+
+  mkUnfreePkgs = pkgs:
+    import pkgs.path {
+      localSystem = {inherit (pkgs.stdenv.hostPlatform) system;};
+      config.allowUnfree = true;
+    };
 in {
-  inherit unwrapSingletonImports mkRouterModule mkCommonNode;
+  inherit unwrapSingletonImports mkRouterModule mkCommonNode mkUnfreePkgs;
 }
