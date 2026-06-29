@@ -5,9 +5,9 @@
     config,
     ...
   }: let
-    cacheBase =
-      lib.attrByPath ["xdg" "cacheHome"] (config.home.homeDirectory + "/.cache") config;
-    sccacheDir = cacheBase + "/sccache";
+    # Shared with modules/system/sccache-daemon.nix so devshell cargo builds,
+    # the bubblewrap codex sandbox, and nix flake check all hit one cache.
+    sccacheDir = "/var/cache/sccache-daemon";
   in {
     config = {
       home = {
@@ -18,9 +18,6 @@
           SCCACHE_CACHE_SIZE = "150G";
           CARGO_INCREMENTAL = "0";
         };
-        activation.ensureSccacheDir = lib.hm.dag.entryAfter ["writeBoundary"] ''
-          mkdir -p ${lib.escapeShellArg sccacheDir}
-        '';
       };
       programs.fish.interactiveShellInit =
         lib.mkIf (config.programs.fish.enable or false)

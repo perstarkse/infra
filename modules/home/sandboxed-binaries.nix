@@ -7,13 +7,10 @@
   }: let
     inherit (lib) mkOption types mkIf concatMapStringsSep escapeShellArg;
 
-    # Same pattern as your sccache module
-    cacheBase =
-      lib.attrByPath ["xdg" "cacheHome"]
-      (config.home.homeDirectory + "/.cache")
-      config;
-
-    sccacheDir = cacheBase + "/sccache";
+    # Shared cache dir; matches modules/home/sccache.nix and
+    # modules/system/sccache-daemon.nix so the codex sandbox writes to the
+    # same store nix flake check reads.
+    sccacheDir = "/var/cache/sccache-daemon";
 
     cfg = config.my.sandboxedHomeBinaries or [];
 
