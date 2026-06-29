@@ -471,28 +471,43 @@
                   ensureUsers = [
                     {
                       name = instance.database.user or "politikerstod";
-                      ensureDBOwnership = false;
+                      ensureClause = "LOGIN";
                     }
                   ];
                   initialScript = pkgs.writeText "init-${containerName}" ''
-                    GRANT ALL PRIVILEGES ON DATABASE ${instance.database.name or "politikerstod"} TO ${instance.database.user or "politikerstod"};
-                    ALTER DATABASE ${instance.database.name or "politikerstod"} OWNER TO ${instance.database.user or "politikerstod"};
-                    \c ${instance.database.name or "politikerstod"}
+                    -- Install vector in template1 so all new databases inherit it
+                    \c template1
                     CREATE EXTENSION IF NOT EXISTS vector;
-                    GRANT ALL ON SCHEMA public TO ${instance.database.user or "politikerstod"};
                   '';
                 };
 
                 systemd.services.fix-db-permissions = {
                   description = "Fix DB permissions for ${name}";
-                  after = ["postgresql.service"];
-                  requires = ["postgresql.service"];
+                  after = ["postgresql.service" "postgresql-setup.service"];
+                  requires = ["postgresql.service" "postgresql-setup.service"];
                   wantedBy = ["multi-user.target"];
                   serviceConfig = {
                     Type = "oneshot";
                     User = "postgres";
-                    ExecStart = "${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} -c 'CREATE EXTENSION IF NOT EXISTS vector; GRANT ALL ON SCHEMA public TO ${instance.database.user or "politikerstod"}'";
                   };
+                  script = ''
+                    ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} <<'SQL'
+                      CREATE EXTENSION IF NOT EXISTS vector;
+                      GRANT ALL ON SCHEMA public TO ${instance.database.user or "politikerstod"};
+SQL
+                    ${pkgs.postgresql}/bin/psql -d postgres -c "ALTER DATABASE ${instance.database.name or "politikerstod"} OWNER TO ${instance.database.user or "politikerstod"}"
+                    ${pkgs.postgresql}/bin/psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${instance.database.name or "politikerstod"} TO ${instance.database.user or "politikerstod"}"
+                    ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} <<'SQL'
+                      GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${instance.database.user or "politikerstod"};
+                      GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${instance.database.user or "politikerstod"};
+SQL
+                    ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} -c \
+                      "SELECT format('ALTER TABLE public.%I OWNER TO ${instance.database.user or "politikerstod"};', tablename) FROM pg_tables WHERE schemaname = 'public'" \
+                      | ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"}
+                    ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} -c \
+                      "SELECT format('ALTER SEQUENCE public.%I OWNER TO ${instance.database.user or "politikerstod"};', sequencename) FROM pg_sequences WHERE schemaname = 'public'" \
+                      | ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"}
+                  '';
                 };
 
                 system.stateVersion = "25.11";

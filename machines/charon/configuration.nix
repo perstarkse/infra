@@ -37,6 +37,7 @@ in {
       atuin
       codenomad
       openchamber
+      sccache-daemon
       rclone-s3
       wake-proxy
       auto-suspend
@@ -92,6 +93,7 @@ in {
       ])
       ++ (with ctx.inputs."agentTooling".homeModules; [
         pi-agent
+        pi-web
         shared-skills
       ]);
     my = {
@@ -111,7 +113,6 @@ in {
           allowNetwork = true;
 
           extraWritableDirs = [
-            "/home/p/.cache/sccache"
             "/home/p/.codex"
             "/home/p/.nix-profile/bin"
           ];
@@ -152,6 +153,14 @@ in {
         pi-agent = {
           enable = true;
           shellAlias = "PI_FFF_MODE=override command pi";
+        };
+        pi-web = {
+          enable = true;
+          pathAccess.allowedPaths = [
+            "~/repos"
+            "/mnt/sdb/repos"
+            "/home/p/repos"
+          ];
         };
         shared-skills = {
           enable = true;
@@ -397,6 +406,10 @@ in {
       ];
     };
 
+    sccache-daemon = {
+      enable = true;
+    };
+
     "agentTooling" = {
       opencode-daemon = {
         enable = true;
@@ -457,6 +470,9 @@ in {
       enable = true;
     };
   };
+
+  # PI WEB user services should survive logout/reboot.
+  users.users.p.linger = true;
 
   # Battlemage + xe is currently stable on 6.12.74 here; newer 6.12.x regressed GPU init.
   boot.kernelPackages = pinnedKernelPkgs.linuxPackages;
@@ -547,5 +563,12 @@ in {
     IOSchedulingClass = lib.mkForce "idle";
     IOSchedulingPriority = lib.mkForce 7;
     LimitNOFILE = "infinity";
+  };
+
+  fileSystems."/home/p/repos" = {
+    device = "/mnt/sdb/repos";
+    fsType = "none";
+    options = ["bind"];
+    depends = ["/mnt/sdb" "/home"];
   };
 }

@@ -29,11 +29,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1782398886,
-        "narHash": "sha256-6sImFQTBrGyxsYsgEGM8QT1AxYrNuy6nNgW5leLCtmU=",
+        "lastModified": 1782666693,
+        "narHash": "sha256-MFo64+hwet2u96IcQ1i+xXL4n3z7IO/3SG5qZQyeVOA=",
         "ref": "refs/heads/main",
-        "rev": "a1d7dd937154d4f1e0d4075b804360a004eee0e1",
-        "revCount": 29,
+        "rev": "afba6d84c9fa8082bf857ae94ddf04e3761d9fa1",
+        "revCount": 32,
         "type": "git",
         "url": "file:///home/p/repos/agent-tooling"
       },
