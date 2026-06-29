@@ -12,7 +12,8 @@
         inputs = {
           privateInfra = inputs.private-infra;
           varsHelper = inputs.vars-helper;
-          inherit (inputs) nous voxtype agentTooling;
+          inherit (inputs) nous voxtype;
+          agentTooling = inputs."agent-tooling";
         };
       };
       inherit ((import ../lib/exposure-options.nix {inherit (inputs.nixpkgs) lib;})) mkStandardExposureOptions;
@@ -24,6 +25,7 @@
           deploy.buildHost = "root@charon.lan";
           tags = [
             "server"
+            "check-profile-sedna"
           ];
         };
         io = {
@@ -31,6 +33,7 @@
           tags = [
             "server"
             "check-profile-io-final"
+            "check-profile-sedna"
           ];
         };
         makemake = {

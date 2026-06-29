@@ -4,12 +4,8 @@
   nixosModules,
   ...
 }: let
-  pkgsUnfree = import pkgs.path {
-    localSystem = {inherit (pkgs.stdenv.hostPlatform) system;};
-    config.allowUnfree = true;
-  };
-
   testHelpers = import ./lib/test-helpers.nix {inherit lib;};
+  pkgsUnfree = testHelpers.mkUnfreePkgs pkgs;
   routerModule = testHelpers.mkRouterModule nixosModules;
 
   testNixosModules =
