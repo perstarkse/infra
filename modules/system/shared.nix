@@ -21,6 +21,16 @@
       inputs.llm-agents.overlays.default
     ];
 
+    # electron 39.8.10 is EOL in nixpkgs 26.05; bitwarden-desktop pins to it.
+    # Allow it here until upstream bumps the electron version.
+    nixpkgs.config = {
+      allowUnfree = true;
+      nvidia.acceptLicense = true;
+      permittedInsecurePackages = [
+        "electron-39.8.10"
+      ];
+    };
+
     nix.gc = {
       automatic = true;
       dates = "weekly";

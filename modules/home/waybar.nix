@@ -437,7 +437,9 @@
         enable = true;
         systemd = {
           enable = true;
-          target = "graphical-session.target";
+          # Home Manager 26.05 renamed `systemd.target` (string) to
+          # `systemd.targets` (list of strings).
+          targets = ["graphical-session.target"];
         };
         style = ''
           #workspaces {

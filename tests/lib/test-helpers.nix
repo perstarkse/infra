@@ -1,4 +1,4 @@
-{lib}: let
+_: let
   unwrapSingletonImports = m:
     if builtins.isAttrs m && m ? imports && builtins.length m.imports == 1
     then unwrapSingletonImports (builtins.elemAt m.imports 0)

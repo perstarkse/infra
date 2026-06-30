@@ -37,6 +37,7 @@
         fish
         dunst
         ncspot
+        nix-scaffold
         zellij
         starship
         qutebrowser
@@ -202,7 +203,9 @@
     networkmanager.enable = lib.mkForce true;
 
     # wpa_supplicant managed at runtime to keep PSK out of Nix store
-    wireless.enable = false;
+    # Force the NetworkManager-side `wireless.enable = true` back off so the
+    # declarative wpa_supplicant path stays the single owner of Wi-Fi.
+    wireless.enable = lib.mkForce false;
   };
 
   # Generate wpa_supplicant.conf at runtime from secrets

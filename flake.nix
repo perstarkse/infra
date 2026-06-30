@@ -2,7 +2,7 @@
   description = "A dendritic clan configuration with flake-parts";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     "nixpkgs-unstable".url = "github:NixOS/nixpkgs/nixos-unstable";
 
     flake-parts = {
@@ -21,12 +21,12 @@
     import-tree.url = "github:vic/import-tree";
 
     home-manager = {
-      url = "github:nix-community/home-manager/release-25.11";
+      url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     stylix = {
-      url = "github:danth/stylix/release-25.11";
+      url = "github:danth/stylix/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -63,7 +63,10 @@
 
     minne = {
       url = "github:perstarkse/minne";
-      inputs.nixpkgs.follows = "nixpkgs";
+      # Don't follow infra's nixpkgs: minne's build pins to onnxruntime 1.23.2
+      # via nix/versions.nix, and its own nixpkgs pin (nixos-unstable at flake
+      # lock time) is the only revision that still ships that exact version.
+      # Letting it follow 26.05 would break makemake with a version mismatch.
     };
 
     saas-minne = {
@@ -104,7 +107,10 @@
 
     politikerstod = {
       url = "git+ssh://git@github.com/perstarkse/politikerstod.git";
-      inputs.nixpkgs.follows = "nixpkgs";
+      # Don't follow infra's nixpkgs: politikerstod pins its own node/pnpm
+      # toolchain and frontend build via its pinned nixpkgs. Mismatches there
+      # would surface here as `fetchPnpmDeps`/node version warnings that are
+      # not ours to fix in this repo.
     };
 
     wol-web-proxy = {
@@ -124,7 +130,9 @@
 
     agent-tooling = {
       url = "git+file:///home/p/repos/agent-tooling";
-      inputs.nixpkgs.follows = "nixpkgs";
+      # Do not follow infra's nixpkgs: pi-web's vendored npmDepsHash is generated
+      # against agent-tooling's own pinned nixpkgs, and its prefetch-npm-deps
+      # cacache format must match the toolchain that produced the hash.
     };
 
     voxtype = {
