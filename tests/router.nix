@@ -12,8 +12,6 @@
     getPathDefault = _name: _file: "/run/empty-secret";
   };
 
-  stateVersion = "25.11";
-
   wireguardTestKeys = {
     routerPrivate = "eAcrKw/di4rNdd4YdfEMbawFXB7j2AKR2nM8WnxRu2o=";
     routerPublic = "Tx4IUngFH9q+qGdSr/BxIWnUlSbmWoxxRY+Juf/jnHs=";
@@ -22,7 +20,6 @@
   };
 
   commonNode = testHelpers.mkCommonNode {
-    inherit stateVersion;
     extraPackages = with pkgs; [curl dnsutils iproute2 iputils];
   };
 

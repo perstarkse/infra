@@ -1,4 +1,6 @@
 _: let
+  versions = import ../../flake/lib/versions.nix;
+
   unwrapSingletonImports = m:
     if builtins.isAttrs m && m ? imports && builtins.length m.imports == 1
     then unwrapSingletonImports (builtins.elemAt m.imports 0)
@@ -12,7 +14,7 @@ _: let
     else nixosModules.router;
 
   mkCommonNode = {
-    stateVersion ? "25.11",
+    stateVersion ? versions.stateVersion,
     extraPackages ? [],
   }: {
     networking = {

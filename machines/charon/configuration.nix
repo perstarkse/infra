@@ -98,28 +98,6 @@ in {
         shared-skills
       ]);
     my = {
-      sandboxedHomeBinaries = [
-        {
-          name = "sb-codex";
-          program = "codex";
-          defaultArgs = [
-            "--sandbox"
-            "danger-full-access"
-            "--ask-for-approval"
-            "never"
-          ];
-
-          bindCwd = true;
-          enableRustCache = true;
-          allowNetwork = true;
-
-          extraWritableDirs = [
-            "/home/p/.codex"
-            "/home/p/.nix-profile/bin"
-          ];
-        }
-      ];
-
       programs = {
         mail = {
           clients = ["aerc" "thunderbird"];
@@ -138,17 +116,6 @@ in {
       noctalia = {
         enable = true;
       };
-
-      secrets.wrappedHomeBinaries = [
-        {
-          name = "z-claude";
-          title = "z-claude";
-          setTerminalTitle = true;
-          command = "claude";
-          environmentFile = config.my.secrets.getPath "z-ai-env" "env";
-          useSystemdRun = false;
-        }
-      ];
 
       agentTooling = {
         pi-agent = {
@@ -195,8 +162,6 @@ in {
         ];
       };
 
-      fish.interactiveShellInit = lib.mkAfter "";
-
       # Fast agent-tooling dev loop: rebuild against the working tree of
       # agent-tooling without committing or re-locking. Picks up uncommitted
       # edits to pi-agent.nix etc. immediately. Commit + `nix flake update
@@ -209,17 +174,6 @@ in {
       idleSeconds = 300; # 5 min no input -> mark session idle
     };
 
-    home.stateVersion = "25.11";
-  };
-  services.wakeproxy = {
-    enable = false;
-    keepAwake = {
-      maxDurationSeconds = 14400;
-      sshTarget = {
-        enable = true;
-        authorizedKeysFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "public_key";
-      };
-    };
   };
 
   my = {
@@ -283,10 +237,11 @@ in {
           readers = ["politikerstod-worker-lekeberg"];
           path = config.my.secrets.getPath "politikerstod-lekeberg" "env";
         }
-        {
-          readers = ["politikerstod-worker-orebro"];
-          path = config.my.secrets.getPath "politikerstod-orebro" "env";
-        }
+        # Add back again when deploying politikerstod-orebro again
+        # {
+        #   readers = ["politikerstod-worker-orebro"];
+        #   path = config.my.secrets.getPath "politikerstod-orebro" "env";
+        # }
       ];
 
       generateManifest = false;
@@ -433,7 +388,7 @@ in {
         };
 
         orebro = {
-          enable = true;
+          enable = false;
           numWorkers = 8;
           workerTags = ["document_process"];
           s3.prefix = "orebro";
@@ -567,12 +522,5 @@ in {
     IOSchedulingClass = lib.mkForce "idle";
     IOSchedulingPriority = lib.mkForce 7;
     LimitNOFILE = "infinity";
-  };
-
-  fileSystems."/home/p/repos" = {
-    device = "/mnt/sdb/repos";
-    fsType = "none";
-    options = ["bind"];
-    depends = ["/mnt/sdb" "/home"];
   };
 }

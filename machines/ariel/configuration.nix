@@ -101,7 +101,6 @@
       packages = ["claude-code"];
     };
 
-    home.stateVersion = "25.11";
   };
 
   time.timeZone = "Europe/Stockholm";

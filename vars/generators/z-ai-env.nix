@@ -10,9 +10,8 @@
     prompts = {
       env = {
         description = "A set of environment variables needed to work with z.ai LLMs";
-        multiline = true;
         persist = true;
-        type = "hidden";
+        type = "multiline-hidden";
       };
     };
     script = ''

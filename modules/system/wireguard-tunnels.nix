@@ -36,12 +36,12 @@
             mode = "0400";
           };
         };
-        prompts."conf".input = {
+        prompts."conf" = {
           description = ''
             Paste your WireGuard config for tunnel '${name}'.
             This is the full [Interface]/[Peer] config from your VPN provider.
           '';
-          type = "hidden";
+          type = "multiline-hidden";
           persist = true;
         };
         script = ''

@@ -335,7 +335,10 @@ _: {
       };
 
       # PostgreSQL container (isolated like politikerstod)
-      containers.paperless-db = lib.mkIf cfg.database.enableContainer {
+      containers.paperless-db = lib.mkIf cfg.database.enableContainer (
+        let
+          hostStateVersion = config.my.stateVersion;
+        in {
         autoStart = true;
         privateNetwork = true;
         inherit (cfg.database.container) hostAddress;
@@ -395,10 +398,11 @@ _: {
             };
           };
 
-          system.stateVersion = "25.11";
+          system.stateVersion = hostStateVersion;
           networking.firewall.allowedTCPPorts = [5432];
         };
-      };
+      }
+    );
 
       # S3 consumption mount (for distributed document ingestion)
       environment.systemPackages = lib.mkIf cfg.s3Consumption.enable [pkgs.rclone];

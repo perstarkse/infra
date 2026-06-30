@@ -6,6 +6,11 @@
     home-manager = {
       useGlobalPkgs = true;
       backupFileExtension = "backup";
+      sharedModules = [
+        ({osConfig, ...}: {
+          home.stateVersion = osConfig.my.stateVersion;
+        })
+      ];
     };
   };
 }

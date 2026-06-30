@@ -46,12 +46,12 @@
         "client.qr" = {mode = "0400";};
       };
       prompts = {
-        "server-public-key".input = {
+        "server-public-key" = {
           description = "WireGuard server public key (fallback if not readable from existing secret)";
           persist = true;
           type = "hidden";
         };
-        endpoint.input = {
+        endpoint = {
           description = "WireGuard endpoint (host:port) for ${peer.name}";
           persist = true;
           type = "hidden";
@@ -189,7 +189,7 @@
                 secret = false;
               };
             };
-            prompts."private-key".input = {
+            prompts."private-key" = {
               description = "WireGuard private key";
               type = "hidden";
               persist = true;

@@ -9,4 +9,5 @@
   systems = ["x86_64-linux"];
 
   flake.lib.exposure = import ../lib/exposure.nix {inherit (inputs.nixpkgs) lib;};
+  flake.lib.versions = import ../lib/versions.nix;
 }
