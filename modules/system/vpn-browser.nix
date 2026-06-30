@@ -288,13 +288,13 @@
           files = {
             "wg.conf" = {mode = "0400";};
           };
-          prompts."conf".input = {
+          prompts."conf" = {
             description = ''
               Paste your WireGuard config for the '${cfg.desktopName}' VPN browser.
               This is the full [Interface]/[Peer] config from your VPN provider.
               Must include a DNS = ... line.
             '';
-            type = "hidden";
+            type = "multiline-hidden";
             persist = true;
           };
           script = ''

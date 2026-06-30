@@ -47,15 +47,15 @@ layout {
     off
   }
 
-  opacity-transition {
-     on                 
-     duration-ms 250
-     flash {
-       on               
-       flash-opacity 0.80
-       disable-on-solo  
-     }
-  }
+  // opacity-transition {
+  //    on                 
+  //    duration-ms 250
+  //    flash {
+  //      on               
+  //      flash-opacity 0.80
+  //      disable-on-solo  
+  //    }
+  // }
 }
 
 prefer-no-csd

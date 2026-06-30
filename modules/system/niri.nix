@@ -1,4 +1,4 @@
-{inputs, ...}: {
+_: {
   config.flake.nixosModules.niri = {
     pkgs,
     lib,
@@ -10,7 +10,7 @@
     config = lib.mkIf (cfg.enable && cfg.session == "niri") {
       programs.niri = {
         enable = true;
-        package = inputs.niri.packages.${pkgs.stdenv.hostPlatform.system}.niri;
+        package = pkgs.niri;
       };
 
       environment.systemPackages = [

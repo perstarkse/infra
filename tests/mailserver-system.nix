@@ -4,6 +4,8 @@
   privateMailserverModule,
   ...
 }: let
+  versions = import ../flake/lib/versions.nix;
+
   sopsStubModule = {lib, ...}: {
     options.sops = {
       defaultSopsFile = lib.mkOption {
@@ -47,7 +49,7 @@
     };
 
     systemd.network.enable = true;
-    system.stateVersion = "25.11";
+    system.stateVersion = versions.stateVersion;
 
     imports = [
       privateMailserverModule

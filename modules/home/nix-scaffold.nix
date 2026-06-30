@@ -2,7 +2,6 @@
   config.flake.homeModules.nix-scaffold = _: {
     programs.fish.functions.nix-init-project = {
       description = "Scaffold a new project from ~/repos/nix-scaffold (--default|--rust).";
-      wraps = "nix";
       body = ''
         # Where the nix-scaffold flake lives. Override with NIX_SCAFFOLD_DIR.
         set -l scaffold_dir $NIX_SCAFFOLD_DIR

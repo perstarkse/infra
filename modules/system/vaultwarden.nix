@@ -100,7 +100,7 @@
               additionalReaders = ["vaultwarden"];
             };
           };
-          prompts."admin-token".input = {
+          prompts."admin-token" = {
             description = "Vaultwarden admin token";
             type = "hidden";
             persist = true;

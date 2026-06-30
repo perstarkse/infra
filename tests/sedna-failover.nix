@@ -8,10 +8,50 @@
 
   secretsStubModule = import ./lib/secrets-stub.nix {
     inherit lib;
-    getPathDefault = _name: _file: "/run/empty-secret";
+    getPathDefault = _name: _file: "/var/lib/sedna-failover/cf-token";
     withDiscover = true;
     withAllowReadAccess = true;
   };
+
+  cloudflareMock = pkgs.writeScript "cloudflare-mock" ''
+    #!${pkgs.python3}/bin/python3
+    import json
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, _format, *_args):
+            pass
+
+        def _json(self, status, body):
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(body).encode())
+
+        def do_GET(self):
+            self._json(
+                200,
+                {
+                    "success": True,
+                    "result": [
+                        {
+                            "id": "rec-test",
+                            "content": "192.0.2.2",
+                            "proxied": True,
+                        }
+                    ],
+                },
+            )
+
+        def do_PATCH(self):
+            length = int(self.headers.get("Content-Length", 0))
+            self.rfile.read(length)
+            self._json(200, {"success": True, "result": {}})
+
+
+    HTTPServer(("127.0.0.1", 8787), Handler).serve_forever()
+  '';
 
   nodeBase = testHelpers.mkCommonNode {
     extraPackages = with pkgs; [curl jq nginx];
@@ -22,6 +62,18 @@
       nixosModules.sedna-failover
       secretsStubModule
     ];
+
+    networking.firewall.allowedTCPPorts = [80 8787];
+
+    systemd.services.cloudflare-mock = {
+      description = "Mock Cloudflare API for sedna-failover tests";
+      wantedBy = ["multi-user.target"];
+      before = ["failover-check.service"];
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = cloudflareMock;
+      };
+    };
 
     my.sedna-failover = {
       enable = true;
@@ -46,7 +98,9 @@
         enable = true;
         sednaPublicIp = "192.0.2.1";
         heartbeatTimeoutMinutes = 5;
-        cloudflareApiTokenFile = "/run/empty-secret";
+        cloudflareApiTokenFile = "/var/lib/sedna-failover/cf-token";
+        cloudflareApiBaseUrl = "http://127.0.0.1:8787";
+        heartbeatTimestampFile = "/var/lib/sedna-failover/last-heartbeat";
         zones = [
           {
             zone = "example.test";
@@ -98,14 +152,24 @@ in {
       start_all()
       machine.wait_for_unit("multi-user.target")
       machine.wait_for_unit("nginx.service")
+      machine.wait_for_unit("cloudflare-mock.service")
       machine.sleep(2)
+
+      heartbeat_file = "/var/lib/sedna-failover/last-heartbeat"
+      token_file = "/var/lib/sedna-failover/cf-token"
 
       # The failover-check timer should be registered
       machine.succeed("systemctl list-timers --no-pager | grep -q failover-check")
 
+      # Seed token readable by the sandboxed failover-check user
+      machine.succeed("mkdir -p /var/lib/sedna-failover && chown failover-check:failover-check /var/lib/sedna-failover")
+      machine.succeed(
+          f"printf 'dummy-token' | install -o failover-check -g failover-check -m 0400 /dev/stdin {token_file}"
+      )
+
       # Write a recent heartbeat timestamp (within timeout of 5min)
       now = int(time.time())
-      machine.succeed(f"echo {now} > /var/tmp/sedna-last-heartbeat")
+      machine.succeed(f"echo {now} > {heartbeat_file}")
 
       # Run the failover-check service manually. Since heartbeat is recent, should exit clean.
       machine.succeed("systemctl start failover-check")
@@ -125,11 +189,9 @@ in {
       assert state_result.strip() == "absent", "DNS state should not exist when heartbeat is recent"
 
       # Now test: stale heartbeat should trigger failover
-      # First create a dummy token file so the failover script proceeds
-      machine.succeed("mkdir -p /run/empty-secret && echo 'dummy-token' > /run/empty-secret/token")
       # 400 seconds in the past > 5 minute timeout
       stale = now - 400
-      machine.succeed(f"echo {stale} > /var/tmp/sedna-last-heartbeat")
+      machine.succeed(f"echo {stale} > {heartbeat_file}")
       machine.succeed("systemctl start failover-check")
       machine.sleep(2)
 

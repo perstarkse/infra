@@ -6,8 +6,8 @@
   }: let
     mainUser = config.my.mainUser.name;
   in {
-    system.stateVersion = "25.11";
-
+    system.stateVersion = config.my.stateVersion;
+    clan.core.networking.forwardAgent = true;
     nixpkgs.overlays = [
       (_final: prev: {
         unstable = import inputs."nixpkgs-unstable" {

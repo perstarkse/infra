@@ -42,6 +42,13 @@ _: {
     };
 
     config = lib.mkIf cfg.enable {
+      users.groups.gatus = {};
+      users.users.gatus = {
+        isSystemUser = true;
+        group = "gatus";
+        description = "Gatus monitoring service";
+      };
+
       my.secrets.allowReadAccess =
         map (reader: {
           readers = [reader];
@@ -54,6 +61,9 @@ _: {
         environmentFile = envFile;
         settings = lib.recursiveUpdate {web.port = cfg.webPort;} cfg.settings;
       };
+
+      # Gatus upstream uses DynamicUser; setfacl needs a static passwd entry.
+      systemd.services.gatus.serviceConfig.DynamicUser = lib.mkForce false;
     };
   };
 }

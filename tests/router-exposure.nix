@@ -4,8 +4,6 @@
   nixosModules,
   ...
 }: let
-  stateVersion = "25.11";
-
   testHelpers = import ./lib/test-helpers.nix {inherit lib;};
   routerModule = testHelpers.mkRouterModule nixosModules;
 
@@ -15,7 +13,6 @@
   };
 
   commonNode = testHelpers.mkCommonNode {
-    inherit stateVersion;
     extraPackages = [pkgs.bind pkgs.python3];
   };
 

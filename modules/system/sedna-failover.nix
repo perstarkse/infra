@@ -7,8 +7,8 @@ _: {
   }: let
     cfg = config.my.sedna-failover;
 
-    # Resolve the Cloudflare API token file: explicit path > inline token > default Clan path
     tokenFile = cfg.dnsFailover.cloudflareApiTokenFile;
+    apiBaseUrl = cfg.dnsFailover.cloudflareApiBaseUrl;
 
     # Derive a maintenance page from the branded HTML asset
     maintenancePage = pkgs.writeText "maintenance.html" ''
@@ -200,7 +200,7 @@ _: {
             resp=$(${pkgs.curl}/bin/curl -fsS \
               -H "Authorization: Bearer $CF_TOKEN" \
               -H "Content-Type: application/json" \
-              "https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=$domain")
+              "${apiBaseUrl}/zones/${zoneId}/dns_records?type=A&name=$domain")
 
             record_id=$(echo "$resp" | ${pkgs.jq}/bin/jq -r '.result[0].id // empty')
             current_ip=$(echo "$resp" | ${pkgs.jq}/bin/jq -r '.result[0].content // empty')
@@ -227,7 +227,7 @@ _: {
               -H "Authorization: Bearer $CF_TOKEN" \
               -H "Content-Type: application/json" \
               -d "{\"content\":\"$SEDNA_IP\",\"ttl\":120,\"proxied\":$proxied}" \
-              "https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/$record_id")
+              "${apiBaseUrl}/zones/${zoneId}/dns_records/$record_id")
 
             if echo "$update_resp" | ${pkgs.jq}/bin/jq -e '.success == true' >/dev/null 2>&1; then
               echo "  ✓ $domain → $SEDNA_IP"
@@ -279,7 +279,7 @@ _: {
             resp=$(${pkgs.curl}/bin/curl -fsS \
               -H "Authorization: Bearer $CF_TOKEN" \
               -H "Content-Type: application/json" \
-              "https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=$domain")
+              "${apiBaseUrl}/zones/${zoneId}/dns_records?type=A&name=$domain")
 
             record_id=$(echo "$resp" | ${pkgs.jq}/bin/jq -r '.result[0].id // empty')
 
@@ -308,7 +308,7 @@ _: {
               -H "Authorization: Bearer $CF_TOKEN" \
               -H "Content-Type: application/json" \
               -d "{\"content\":\"$original_ip\",\"ttl\":120,\"proxied\":$original_proxied}" \
-              "https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/$record_id")
+              "${apiBaseUrl}/zones/${zoneId}/dns_records/$record_id")
 
             if echo "$update_resp" | ${pkgs.jq}/bin/jq -e '.success == true' >/dev/null 2>&1; then
               echo "  ✓ $domain → $original_ip"
@@ -485,6 +485,12 @@ _: {
           type = lib.types.path;
           default = "/run/secrets/vars/api-key-cloudflare-dns/api-token";
           description = "Path to a file containing the Cloudflare API token. The file must be readable by the failover-check user.";
+        };
+
+        cloudflareApiBaseUrl = lib.mkOption {
+          type = lib.types.str;
+          default = "https://api.cloudflare.com/client/v4";
+          description = "Cloudflare API base URL. Override in tests with a local mock server.";
         };
 
         heartbeatTimestampFile = lib.mkOption {

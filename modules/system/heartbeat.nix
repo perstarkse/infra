@@ -331,11 +331,7 @@ _: {
       (lib.mkIf cfg.receiver.enable {
         my.secrets.allowReadAccess = [
           {
-            readers = [cfg.receiver.user];
-            path = envFile;
-          }
-          {
-            readers = ["gatus"];
+            readers = [cfg.receiver.user "gatus"];
             path = envFile;
           }
         ];

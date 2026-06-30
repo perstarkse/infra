@@ -444,6 +444,7 @@
         lib.mapAttrs' (
           name: instance: let
             containerName = instance.database.container.name or "politikerstod-db-${name}";
+            hostStateVersion = config.my.stateVersion;
           in
             lib.nameValuePair containerName {
               autoStart = true;
@@ -494,26 +495,26 @@
                     User = "postgres";
                   };
                   script = ''
-                    ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} <<'SQL'
-                      CREATE EXTENSION IF NOT EXISTS vector;
-                      GRANT ALL ON SCHEMA public TO ${instance.database.user or "politikerstod"};
-SQL
-                    ${pkgs.postgresql}/bin/psql -d postgres -c "ALTER DATABASE ${instance.database.name or "politikerstod"} OWNER TO ${instance.database.user or "politikerstod"}"
-                    ${pkgs.postgresql}/bin/psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${instance.database.name or "politikerstod"} TO ${instance.database.user or "politikerstod"}"
-                    ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} <<'SQL'
-                      GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${instance.database.user or "politikerstod"};
-                      GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${instance.database.user or "politikerstod"};
-SQL
-                    ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} -c \
-                      "SELECT format('ALTER TABLE public.%I OWNER TO ${instance.database.user or "politikerstod"};', tablename) FROM pg_tables WHERE schemaname = 'public'" \
-                      | ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"}
-                    ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} -c \
-                      "SELECT format('ALTER SEQUENCE public.%I OWNER TO ${instance.database.user or "politikerstod"};', sequencename) FROM pg_sequences WHERE schemaname = 'public'" \
-                      | ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"}
+                                        ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} <<'SQL'
+                                          CREATE EXTENSION IF NOT EXISTS vector;
+                                          GRANT ALL ON SCHEMA public TO ${instance.database.user or "politikerstod"};
+                    SQL
+                                        ${pkgs.postgresql}/bin/psql -d postgres -c "ALTER DATABASE ${instance.database.name or "politikerstod"} OWNER TO ${instance.database.user or "politikerstod"}"
+                                        ${pkgs.postgresql}/bin/psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${instance.database.name or "politikerstod"} TO ${instance.database.user or "politikerstod"}"
+                                        ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} <<'SQL'
+                                          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${instance.database.user or "politikerstod"};
+                                          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${instance.database.user or "politikerstod"};
+                    SQL
+                                        ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} -c \
+                                          "SELECT format('ALTER TABLE public.%I OWNER TO ${instance.database.user or "politikerstod"};', tablename) FROM pg_tables WHERE schemaname = 'public'" \
+                                          | ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"}
+                                        ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} -c \
+                                          "SELECT format('ALTER SEQUENCE public.%I OWNER TO ${instance.database.user or "politikerstod"};', sequencename) FROM pg_sequences WHERE schemaname = 'public'" \
+                                          | ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"}
                   '';
                 };
 
-                system.stateVersion = "25.11";
+                system.stateVersion = hostStateVersion;
                 networking.firewall.allowedTCPPorts = [5432];
               };
             }
