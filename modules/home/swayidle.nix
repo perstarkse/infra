@@ -20,12 +20,11 @@
     config = lib.mkIf cfg.enable {
       services.swayidle = {
         enable = true;
-        events = [
-          {
-            event = "before-sleep";
-            command = "${pkgs.systemd}/bin/loginctl lock-session";
-          }
-        ];
+        # Home Manager 26.05 changed the events shape from a list to an
+        # attrset keyed by event name.
+        events = {
+          "before-sleep" = "${pkgs.systemd}/bin/loginctl lock-session";
+        };
         timeouts = [
           {
             timeout = cfg.idleSeconds;

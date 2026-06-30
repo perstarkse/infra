@@ -5,6 +5,24 @@
     config,
     ...
   }: let
+    # MinIO is used as an S3-compatible backend in backup/paperless tests and
+    # is marked insecure in nixpkgs 26.05. Permit it on the perSystem pkgs so
+    # the test framework can build the package; the real machine configurations
+    # don't reference minio, so this doesn't widen the security surface.
+    # electron 39.8.10 is EOL in nixpkgs 26.05; openchamber pins to it via
+    # npmDeps. Allow it here until openchamber bumps its electron.
+    pkgs = import inputs.nixpkgs {
+      localSystem = {inherit system;};
+      config = {
+        allowUnfree = true;
+        nvidia.acceptLicense = true;
+        permittedInsecurePackages = [
+          "minio-2025-10-15T17-29-55Z"
+          "electron-39.8.10"
+        ];
+      };
+    };
+
     inherit (pkgs) lib;
     nixosConfigs = inputs.self.nixosConfigurations or {};
     systemNixosConfigs =
@@ -121,19 +139,19 @@
       import os
       import pathlib
 
-profile_to_checks = {
-"check-profile-fast": [],
-"check-profile-router": ["router-checks", "router-exposure-checks"],
-"check-profile-io-predeploy": ["predeploy-check"],
-"check-profile-io-final": ["final-checks", "router-exposure-checks", "exposure-manifest-check"],
-"check-profile-garage": ["garage-checks"],
-"check-profile-politikerstod": ["politikerstod-checks"],
-"check-profile-wireguard": ["wireguard-checks"],
-"check-profile-paperless": ["paperless-checks"],
-"check-profile-backups": ["backups-checks", "backups-multi-checks", "backups-failure-checks"],
-"check-profile-mailserver": ["mailserver-checks"],
-"check-profile-sedna": ["sedna-failover-checks"],
-}
+      profile_to_checks = {
+          "check-profile-fast": [],
+          "check-profile-router": ["router-checks", "router-exposure-checks"],
+          "check-profile-io-predeploy": ["predeploy-check"],
+          "check-profile-io-final": ["final-checks", "router-exposure-checks", "exposure-manifest-check"],
+          "check-profile-garage": ["garage-checks"],
+          "check-profile-politikerstod": ["politikerstod-checks"],
+          "check-profile-wireguard": ["wireguard-checks"],
+          "check-profile-paperless": ["paperless-checks"],
+          "check-profile-backups": ["backups-checks", "backups-multi-checks", "backups-failure-checks"],
+          "check-profile-mailserver": ["mailserver-checks"],
+          "check-profile-sedna": ["sedna-failover-checks"],
+      }
 
       machine = os.environ["MU_PLAN_MACHINE"]
       default_profile = os.environ["MU_PLAN_DEFAULT_PROFILE"]
@@ -822,6 +840,11 @@ profile_to_checks = {
       config = {
         allowUnfree = true;
         nvidia.acceptLicense = true;
+        # electron 39.8.10 is EOL in nixpkgs 26.05; openchamber pins to it via
+        # npmDeps. Allow it here until openchamber bumps its electron.
+        permittedInsecurePackages = [
+          "electron-39.8.10"
+        ];
       };
     };
 

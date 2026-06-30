@@ -471,7 +471,10 @@
                   ensureUsers = [
                     {
                       name = instance.database.user or "politikerstod";
-                      ensureClause = "LOGIN";
+                      # NixOS 25.05+ renamed ensureClause (string) to
+                      # ensureClauses (attrset of bool). Re-encode "LOGIN" as
+                      # the corresponding clause flag.
+                      ensureClauses.LOGIN = true;
                     }
                   ];
                   initialScript = pkgs.writeText "init-${containerName}" ''

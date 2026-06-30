@@ -72,9 +72,11 @@
         keyFile = "/etc/mailserver/key.pem";
       };
 
-    services.dovecot2 = {
-      sslServerCert = lib.mkForce "/etc/mailserver/cert.pem";
-      sslServerKey = lib.mkForce "/etc/mailserver/key.pem";
+    services.dovecot2.settings = {
+      # dovecot 2.4 (nixpkgs 26.05) renamed these from sslServerCert/Key
+      # to the snake_case settings.* keys.
+      ssl_server_cert_file = lib.mkForce "/etc/mailserver/cert.pem";
+      ssl_server_key_file = lib.mkForce "/etc/mailserver/key.pem";
     };
 
     security.acme.certs = lib.mkForce {};

@@ -65,6 +65,7 @@ in {
         sccache
         kitty
         ncspot
+        nix-scaffold
         zellij
         starship
         qutebrowser
@@ -195,6 +196,12 @@ in {
       };
 
       fish.interactiveShellInit = lib.mkAfter "";
+
+      # Fast agent-tooling dev loop: rebuild against the working tree of
+      # agent-tooling without committing or re-locking. Picks up uncommitted
+      # edits to pi-agent.nix etc. immediately. Commit + `nix flake update
+      # agent-tooling` once when satisfied.
+      fish.shellAliases.hm-dev = "sudo nixos-rebuild switch --flake /home/p/repos/infra#${config.networking.hostName} --override-input agent-tooling path:/home/p/repos/agent-tooling";
     };
 
     my.swayidle = {

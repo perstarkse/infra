@@ -132,7 +132,8 @@
         enable = true;
         # Disable DNSSEC - let your upstream resolver (unbound) handle validation
         # This avoids "no-signature" failures for internal domains
-        dnssec = "false";
+        # Renamed to settings.Resolve.DNSSEC in NixOS 26.05.
+        settings.Resolve.DNSSEC = "no";
       };
 
       # Ensure wg-quick's dependencies are available

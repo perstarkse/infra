@@ -14,7 +14,7 @@
   };
 
   nodeBase = testHelpers.mkCommonNode {
-    extraPackages = with pkgs; [curl jq];
+    extraPackages = with pkgs; [curl jq nginx];
   };
 
   maintenanceNode = lib.recursiveUpdate nodeBase {
@@ -73,13 +73,13 @@ in {
       # Maintenance page should be served on port 80
       response = machine.succeed("curl -fsS --max-time 5 http://127.0.0.1/")
       assert "Test heading" in response, f"Expected 'Test heading' in response, got: {response}"
-      assert "Test body line 1" in response, f"Expected body text in response"
-      assert "stark.pub" in response, f"Expected 'stark.pub' branding in response"
-      assert "Test status" in response, f"Expected status text in response"
+      assert "Test body line 1" in response, "Expected body text in response"
+      assert "stark.pub" in response, "Expected 'stark.pub' branding in response"
+      assert "Test status" in response, "Expected status text in response"
 
       # Check Content-Type is set
       headers = machine.succeed("curl -fsS -I --max-time 5 http://127.0.0.1/")
-      assert "text/html" in headers, f"Expected text/html content type"
+      assert "text/html" in headers, "Expected text/html content type"
 
       # Default catch-all should respond for any hostname
       response2 = machine.succeed("curl -fsS --max-time 5 -H 'Host: random.example.com' http://127.0.0.1/")
@@ -94,6 +94,7 @@ in {
     nodes.machine = maintenanceNode;
 
     testScript = ''
+      import time
       start_all()
       machine.wait_for_unit("multi-user.target")
       machine.wait_for_unit("nginx.service")
@@ -103,8 +104,8 @@ in {
       machine.succeed("systemctl list-timers --no-pager | grep -q failover-check")
 
       # Write a recent heartbeat timestamp (within timeout of 5min)
-      NOW=$(date +%s)
-      machine.succeed(f"echo $NOW > /var/tmp/sedna-last-heartbeat")
+      now = int(time.time())
+      machine.succeed(f"echo {now} > /var/tmp/sedna-last-heartbeat")
 
       # Run the failover-check service manually. Since heartbeat is recent, should exit clean.
       machine.succeed("systemctl start failover-check")
@@ -125,9 +126,10 @@ in {
 
       # Now test: stale heartbeat should trigger failover
       # First create a dummy token file so the failover script proceeds
-      machine.succeed("mkdir -p /run/empty-secret && echo 'dummy-token' > /run/empty-secret")
-      STALE=$(( NOW - 400 ))  # 400 seconds > 5 minute timeout
-      machine.succeed(f"echo $STALE > /var/tmp/sedna-last-heartbeat")
+      machine.succeed("mkdir -p /run/empty-secret && echo 'dummy-token' > /run/empty-secret/token")
+      # 400 seconds in the past > 5 minute timeout
+      stale = now - 400
+      machine.succeed(f"echo {stale} > /var/tmp/sedna-last-heartbeat")
       machine.succeed("systemctl start failover-check")
       machine.sleep(2)
 
@@ -136,7 +138,7 @@ in {
       assert state_result.strip() == "exists", "DNS state should exist after stale heartbeat triggers failover"
 
       # Verify state file has non-empty content
-      content = machine.succeed(f"cat /var/lib/sedna-failover/dns-state.json")
+      content = machine.succeed("cat /var/lib/sedna-failover/dns-state.json")
       print(f"DNS state content: {content}")
 
       print("✓ DNS failover check test passed")

@@ -52,7 +52,7 @@ _: {
       bun
       cloudflared
       nodejs
-      nodePackages.pnpm
+      pnpm
       bashInteractive
       coreutils
       gnugrep

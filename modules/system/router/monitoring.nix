@@ -2,6 +2,7 @@
   config.flake.nixosModules.router-monitoring = {
     lib,
     config,
+    pkgs,
     ...
   }: let
     cfg = config.my.router;
@@ -9,6 +10,11 @@
     helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     bindAddress = helpers.primaryRouterIp;
     enabled = cfg.enable && mon.enable;
+    # NixOS 26.05 requires grafana to have an explicit secret_key. Hardcoded
+    # value is acceptable per the NixOS changelog when the DB has no secrets
+    # needing special protection; this is a LAN-only grafana without any
+    # provisioned datasources yet.
+    grafanaSecretKeyFile = pkgs.writeText "grafana-secret-key" "SW2YcwTIb9zpOOhoPsMm";
     monitoringServicePorts =
       lib.optionals (enabled && mon.netdata.enable) [
         {
@@ -71,6 +77,7 @@
               else bindAddress;
             http_port = mon.grafana.httpPort;
           };
+          settings.security.secret_key = "file:${grafanaSecretKeyFile}";
           inherit (mon.grafana) dataDir;
         };
 
