@@ -29,6 +29,7 @@ in {
     [
       ./hardware-configuration.nix
       ./boot.nix
+      ./agent-microvm.nix
       interception-tools
       system-stylix
       shared
@@ -45,6 +46,7 @@ in {
       garage
       atuin
       libvirt
+      agent-microvm
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default]);
 

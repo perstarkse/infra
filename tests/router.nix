@@ -5,7 +5,7 @@
   ...
 }: let
   testHelpers = import ./lib/test-helpers.nix {inherit lib;};
-  routerModule = testHelpers.mkRouterModule nixosModules;
+  routerModule = nixosModules.router;
 
   secretsStubModule = import ./lib/secrets-stub.nix {
     inherit lib;
