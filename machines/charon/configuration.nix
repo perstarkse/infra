@@ -173,7 +173,6 @@ in {
       enable = true;
       idleSeconds = 300; # 5 min no input -> mark session idle
     };
-
   };
 
   my = {
@@ -440,6 +439,15 @@ in {
     bun
     google-cloud-sdk
   ];
+
+  # Accept keep-awake lease requests from io's wake-proxy.
+  services.wakeproxy.keepAwake = {
+    maxDurationSeconds = 14400;
+    sshTarget = {
+      enable = true;
+      authorizedKeysFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "public_key";
+    };
+  };
 
   networking = {
     interfaces.enp4s0.wakeOnLan.enable = true;
