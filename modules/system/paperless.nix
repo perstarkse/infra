@@ -339,70 +339,70 @@ _: {
         let
           hostStateVersion = config.my.stateVersion;
         in {
-        autoStart = true;
-        privateNetwork = true;
-        inherit (cfg.database.container) hostAddress;
-        inherit (cfg.database.container) localAddress;
+          autoStart = true;
+          privateNetwork = true;
+          inherit (cfg.database.container) hostAddress;
+          inherit (cfg.database.container) localAddress;
 
-        config = {
-          pkgs,
-          lib,
-          ...
-        }: {
-          services.postgresql = {
-            enable = true;
-            enableTCPIP = true;
-            settings.listen_addresses = lib.mkForce "*";
+          config = {
+            pkgs,
+            lib,
+            ...
+          }: {
+            services.postgresql = {
+              enable = true;
+              enableTCPIP = true;
+              settings.listen_addresses = lib.mkForce "*";
 
-            authentication = pkgs.lib.mkOverride 10 ''
-              # TYPE  DATABASE        USER            ADDRESS                 METHOD
-              host    all             all             ${cfg.database.container.hostAddress}/32       trust
-              host    all             all             169.254.0.0/16          trust
-              local   all             all                                     peer
-            '';
+              authentication = pkgs.lib.mkOverride 10 ''
+                # TYPE  DATABASE        USER            ADDRESS                 METHOD
+                host    all             all             ${cfg.database.container.hostAddress}/32       trust
+                host    all             all             169.254.0.0/16          trust
+                local   all             all                                     peer
+              '';
 
-            ensureDatabases = [cfg.database.name];
-            ensureUsers = [
-              {
-                name = cfg.database.user;
-                ensureDBOwnership = false;
-              }
-            ];
+              ensureDatabases = [cfg.database.name];
+              ensureUsers = [
+                {
+                  name = cfg.database.user;
+                  ensureDBOwnership = false;
+                }
+              ];
 
-            initialScript = pkgs.writeText "init-paperless-db" ''
-              -- Grant database ownership
-              ALTER DATABASE ${cfg.database.name} OWNER TO ${cfg.database.user};
-              -- Connect to the database and fix schema permissions
-              \c ${cfg.database.name}
-              ALTER SCHEMA public OWNER TO ${cfg.database.user};
-              GRANT ALL ON SCHEMA public TO ${cfg.database.user};
-              GRANT CREATE ON SCHEMA public TO ${cfg.database.user};
-            '';
-          };
-
-          systemd.services.fix-db-permissions = {
-            description = "Fix DB permissions for paperless";
-            after = ["postgresql.service"];
-            requires = ["postgresql.service"];
-            wantedBy = ["multi-user.target"];
-            serviceConfig = {
-              Type = "oneshot";
-              User = "postgres";
-              ExecStart = pkgs.writeShellScript "fix-paperless-db-perms" ''
-                ${pkgs.postgresql}/bin/psql -d ${cfg.database.name} <<EOF
+              initialScript = pkgs.writeText "init-paperless-db" ''
+                -- Grant database ownership
+                ALTER DATABASE ${cfg.database.name} OWNER TO ${cfg.database.user};
+                -- Connect to the database and fix schema permissions
+                \c ${cfg.database.name}
                 ALTER SCHEMA public OWNER TO ${cfg.database.user};
                 GRANT ALL ON SCHEMA public TO ${cfg.database.user};
                 GRANT CREATE ON SCHEMA public TO ${cfg.database.user};
-                EOF
               '';
             };
-          };
 
-          system.stateVersion = hostStateVersion;
-          networking.firewall.allowedTCPPorts = [5432];
-        };
-      }
-    );
+            systemd.services.fix-db-permissions = {
+              description = "Fix DB permissions for paperless";
+              after = ["postgresql.service"];
+              requires = ["postgresql.service"];
+              wantedBy = ["multi-user.target"];
+              serviceConfig = {
+                Type = "oneshot";
+                User = "postgres";
+                ExecStart = pkgs.writeShellScript "fix-paperless-db-perms" ''
+                  ${pkgs.postgresql}/bin/psql -d ${cfg.database.name} <<EOF
+                  ALTER SCHEMA public OWNER TO ${cfg.database.user};
+                  GRANT ALL ON SCHEMA public TO ${cfg.database.user};
+                  GRANT CREATE ON SCHEMA public TO ${cfg.database.user};
+                  EOF
+                '';
+              };
+            };
+
+            system.stateVersion = hostStateVersion;
+            networking.firewall.allowedTCPPorts = [5432];
+          };
+        }
+      );
 
       # S3 consumption mount (for distributed document ingestion)
       environment.systemPackages = lib.mkIf cfg.s3Consumption.enable [pkgs.rclone];

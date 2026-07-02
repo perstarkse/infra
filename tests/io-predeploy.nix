@@ -6,7 +6,7 @@
 }: let
   testHelpers = import ./lib/test-helpers.nix {inherit lib;};
   pkgsUnfree = testHelpers.mkUnfreePkgs pkgs;
-  routerModule = testHelpers.mkRouterModule nixosModules;
+  routerModule = nixosModules.router;
 
   testNixosModules =
     nixosModules

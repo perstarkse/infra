@@ -1,6 +1,5 @@
-_: {
+{inputs, ...}: {
   config.flake.nixosModules.nous = {
-    ctx,
     config,
     lib,
     pkgs,
@@ -8,7 +7,7 @@ _: {
     ...
   }: let
     cfg = config.my.nous;
-    nousPkg = ctx.inputs.nous.packages.${pkgs.stdenv.hostPlatform.system}.default;
+    nousPkg = inputs.nous.packages.${pkgs.stdenv.hostPlatform.system}.default;
   in {
     options.my.nous = {
       enable = lib.mkEnableOption "Enable Nous burnout prevention app";

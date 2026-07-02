@@ -100,7 +100,6 @@
       enable = true;
       packages = ["claude-code"];
     };
-
   };
 
   time.timeZone = "Europe/Stockholm";

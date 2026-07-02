@@ -1,6 +1,8 @@
-{
-  config.flake.nixosModules.router = {ctx, ...}: {
-    imports = with ctx.flake.nixosModules; [
+{config, ...}: let
+  inherit (config) flake;
+in {
+  config.flake.nixosModules.router = {
+    imports = with flake.nixosModules; [
       router-core
       router-network
       router-firewall
