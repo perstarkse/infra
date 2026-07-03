@@ -368,21 +368,11 @@ _: {
                   ensureDBOwnership = false;
                 }
               ];
-
-              initialScript = pkgs.writeText "init-paperless-db" ''
-                -- Grant database ownership
-                ALTER DATABASE ${cfg.database.name} OWNER TO ${cfg.database.user};
-                -- Connect to the database and fix schema permissions
-                \c ${cfg.database.name}
-                ALTER SCHEMA public OWNER TO ${cfg.database.user};
-                GRANT ALL ON SCHEMA public TO ${cfg.database.user};
-                GRANT CREATE ON SCHEMA public TO ${cfg.database.user};
-              '';
             };
 
             systemd.services.fix-db-permissions = {
               description = "Fix DB permissions for paperless";
-              after = ["postgresql.service"];
+              after = ["postgresql.service" "postgresql-setup.service"];
               requires = ["postgresql.service"];
               wantedBy = ["multi-user.target"];
               serviceConfig = {
@@ -390,6 +380,7 @@ _: {
                 User = "postgres";
                 ExecStart = pkgs.writeShellScript "fix-paperless-db-perms" ''
                   ${pkgs.postgresql}/bin/psql -d ${cfg.database.name} <<EOF
+                  ALTER DATABASE ${cfg.database.name} OWNER TO ${cfg.database.user};
                   ALTER SCHEMA public OWNER TO ${cfg.database.user};
                   GRANT ALL ON SCHEMA public TO ${cfg.database.user};
                   GRANT CREATE ON SCHEMA public TO ${cfg.database.user};

@@ -327,7 +327,18 @@
   }:
     lib.recursiveUpdate (lib.recursiveUpdate commonNode extraConfig) {
       virtualisation.vlans = [1 2];
-      imports = [routerModule secretsStubModule];
+      imports = [
+        routerModule
+        secretsStubModule
+        # blocky 0.29.0 (nixpkgs 26.05) blocks ALL startup, including binding
+        # :53, on `upstreams.init.strategy = "blocking"` until upstreams resolve.
+        # The offline test VM can't reach unbound's real Cloudflare DoT
+        # forwarders, so blocky hangs and never serves DNS. Use "fast" in tests
+        # so blocky binds and forwards immediately; local records
+        # (router.lan.test etc.) resolve via unbound local-data without
+        # internet. Production keeps "blocking".
+        {services.blocky.settings.upstreams.init.strategy = lib.mkForce "fast";}
+      ];
 
       my.router =
         lib.recursiveUpdate

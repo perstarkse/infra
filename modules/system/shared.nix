@@ -8,6 +8,20 @@
   in {
     system.stateVersion = config.my.stateVersion;
     clan.core.networking.forwardAgent = true;
+
+    # Opt out of the clan-core state-version vars generator.
+    # The fleet's single source of truth is `my.stateVersion` (defaulting from
+    # flake/lib/versions.nix), which this module wires into
+    # system.stateVersion / home.stateVersion at higher priority than the
+    # generator's mkDefault. The generator is enabled by default via
+    # clan.core.enableRecommendedDefaults and would otherwise write
+    # vars/per-machine/<machine>/state-version/version/value on every
+    # `clan machines update` for no functional benefit in this fleet.
+    # Lives in `shared` (not `options`) so offline NixOS tests that import
+    # `options` for `my.exposure`/`my.stateVersion` but stub out `shared`
+    # don't evaluate a `clan.core.settings.*` option that only clan-core
+    # (nixos class) declares.
+    clan.core.settings.state-version.enable = false;
     nixpkgs.overlays = [
       (_final: prev: {
         unstable = import inputs."nixpkgs-unstable" {

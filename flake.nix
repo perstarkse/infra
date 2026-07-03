@@ -50,7 +50,12 @@
     };
 
     private-infra = {
-      url = "git+ssh://git@github.com/perstarkse/private-infra.git";
+      # TEMP (26.05 upgrade): point at the local checkout so infra picks up
+      # private-infra's refreshed flake.lock (new simple-nixos-mailserver rev
+      # 661ec59, which migrates to the Dovecot 2.4 settings API). Flip back to
+      # "git+ssh://git@github.com/perstarkse/private-infra.git" once the
+      # private-infra changes are pushed and infra's lock is re-resolved.
+      url = "git+file:///home/p/repos/private-infra";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs."nixpkgs-stable".follows = "nixpkgs";
       inputs."simple-nixos-mailserver".inputs.nixpkgs.follows = "nixpkgs";

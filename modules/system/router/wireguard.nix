@@ -11,6 +11,11 @@
 
     interfaceName = wg.interfaceName or "wg0";
     listenPort = toString (wg.listenPort or 51820);
+    privateKeyCred = "wireguard-${interfaceName}-private-key";
+    privateKeyPath =
+      if wg.privateKeyFile != null
+      then wg.privateKeyFile
+      else (config.my.secrets.getPath "wireguard-server" "private-key");
 
     subnetBase = wg.subnet or "10.6.0";
     cidrPrefix = toString (wg.cidrPrefix or 24);
@@ -180,9 +185,12 @@
             name = "wireguard-server";
             runtimeInputs = [pkgs.wireguard-tools];
             files = {
+              # Production passes the key via systemd-networkd LoadCredential (root
+              # reads /run/secrets); group ownership is a fallback for direct reads.
               "private-key" = {
-                mode = "0400";
-                additionalReaders = ["systemd-network"];
+                mode = "0440";
+                owner = "root";
+                group = "systemd-network";
               };
               "public-key" = {
                 mode = "0400";
@@ -215,20 +223,23 @@
         ]
         ++ map mkPeerSecret generatedPeers;
 
+      sops.secrets."vars/wireguard-server/private-key".restartUnits = lib.mkAfter [
+        "systemd-networkd.service"
+      ];
+
       systemd = {
         network.netdevs."30-${interfaceName}" = {
           netdevConfig = {
             Kind = "wireguard";
             Name = interfaceName;
           };
-          wireguardConfig = {
-            PrivateKeyFile =
-              if wg.privateKeyFile != null
-              then wg.privateKeyFile
-              else (config.my.secrets.getPath "wireguard-server" "private-key");
-            ListenPort = listenPort;
-            RouteTable = "main";
-          };
+          wireguardConfig =
+            {
+              ListenPort = listenPort;
+              RouteTable = "main";
+            }
+            // lib.optionalAttrs (wg.privateKeyFile != null) { PrivateKeyFile = privateKeyPath; }
+            // lib.optionalAttrs (wg.privateKeyFile == null) { PrivateKey = "@${privateKeyCred}"; };
           wireguardPeers = map mkPeer staticPeers;
         };
 
@@ -243,11 +254,17 @@
           linkConfig.MTUBytes = "1420";
         };
 
-        services = lib.listToAttrs (map (peer: {
-            name = "wireguard-apply-${peer.name}";
-            value = mkPeerService peer;
-          })
-          generatedPeers);
+        services =
+          lib.listToAttrs (map (peer: {
+              name = "wireguard-apply-${peer.name}";
+              value = mkPeerService peer;
+            })
+            generatedPeers)
+          // lib.optionalAttrs (wg.privateKeyFile == null) {
+            systemd-networkd.serviceConfig.LoadCredential = [
+              "${privateKeyCred}:${privateKeyPath}"
+            ];
+          };
       };
     };
   };

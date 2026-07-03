@@ -206,10 +206,6 @@ in {
           path = config.my.secrets.getPath "wake-proxy" "env";
         }
         {
-          readers = ["systemd-network"];
-          path = config.my.secrets.getPath "wireguard-server" "private-key";
-        }
-        {
           readers = ["nginx"];
           path = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
         }

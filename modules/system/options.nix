@@ -407,16 +407,6 @@
     config = mkMerge [
       {
         _module.args.mkStandardExposureOptions = mkStandardExposureOptions;
-
-        # Opt out of the clan-core state-version vars generator.
-        # The fleet's single source of truth is `my.stateVersion` (defaulting
-        # from flake/lib/versions.nix) which this same module already wires
-        # into system.stateVersion / home.stateVersion at higher priority than
-        # the generator's mkDefault. The generator is enabled by default via
-        # clan.core.enableRecommendedDefaults and would otherwise write
-        # vars/per-machine/<machine>/state-version/version/value on every
-        # `clan machines update` for no functional benefit in this fleet.
-        clan.core.settings.state-version.enable = false;
       }
       {
         my.gui._terminalCommand =
