@@ -30,7 +30,7 @@
 
             storage_token=""
             has_storage_user=""
-            fallback_storage_hash='$2b$05$eB0b8OHKgPgEHmrJsw5gB.HEneuR064tnHVgqTk94v/4.J6ruAwVe'
+            fallback_storage_hash='$2b$10$QqZS0iP8PwNX1ddWX7ynCeLKM72wyx1PQYUt8sOd08mXQIQwe8U9G'
 
             if [ -n "$_prompts_dir" ] && [ -s "$_prompts_dir/env" ]; then
               cp "$_prompts_dir/env" "$out/env"

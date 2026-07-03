@@ -94,10 +94,10 @@
       generateManifest = false;
 
       allowReadAccess = [
-        {
-          readers = ["minne"];
-          path = config.my.secrets.getPath "minne-env" "env";
-        }
+        # {
+        #   readers = ["minne"];
+        #   path = config.my.secrets.getPath "minne-env" "env";
+        # }
         {
           readers = ["nous"];
           path = config.my.secrets.getPath "nous" "env";
@@ -110,10 +110,10 @@
           readers = ["politikerstod-lekeberg"];
           path = config.my.secrets.getPath "politikerstod-lekeberg" "env";
         }
-        {
-          readers = ["politikerstod-orebro"];
-          path = config.my.secrets.getPath "politikerstod-orebro" "env";
-        }
+        # {
+        #   readers = ["politikerstod-orebro"];
+        #   path = config.my.secrets.getPath "politikerstod-orebro" "env";
+        # }
       ];
     };
 
@@ -236,7 +236,7 @@
 
     # Minne configuration
     minne = {
-      enable = true;
+      enable = false;
       port = 3000;
       address = "10.0.0.10";
       dataDir = "/var/lib/minne";
@@ -413,7 +413,7 @@
         };
 
         orebro = {
-          enable = true;
+          enable = false;
           port = 5151;
           host = "https://orebro.politikerstod.stark.pub";
           openFirewall = true;
