@@ -105,12 +105,15 @@
 
       xdg.configFile."niri/config.kdl".text =
         builtins.readFile ./niri-config.kdl
-        + lib.concatMapStringsSep "\n" (
-          cmd: let
-            kdlStr = s: ''"${builtins.replaceStrings ["\\" "\""] ["\\\\" "\\\""] s}"'';
-          in "spawn-at-startup ${lib.concatMapStringsSep " " kdlStr cmd}"
-        )
-        config.my.niri.extraSpawnAtStartup;
+        + lib.optionalString (config.my.niri.extraSpawnAtStartup != []) (
+          "\n"
+          + lib.concatMapStringsSep "\n" (
+            cmd: let
+              kdlStr = s: ''"${builtins.replaceStrings ["\\" "\""] ["\\\\" "\\\""] s}"'';
+            in "spawn-at-startup ${lib.concatMapStringsSep " " kdlStr cmd}"
+          )
+          config.my.niri.extraSpawnAtStartup
+        );
 
       # systemd.user.services.swaybg = {
       #   Unit = {

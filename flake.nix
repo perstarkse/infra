@@ -26,7 +26,7 @@
     };
 
     stylix = {
-      url = "github:danth/stylix/release-26.05";
+      url = "github:danth/stylix/718c14e8ecba215a65ff955c187fadb9732ddd01";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -50,12 +50,7 @@
     };
 
     private-infra = {
-      # TEMP (26.05 upgrade): point at the local checkout so infra picks up
-      # private-infra's refreshed flake.lock (new simple-nixos-mailserver rev
-      # 661ec59, which migrates to the Dovecot 2.4 settings API). Flip back to
-      # "git+ssh://git@github.com/perstarkse/private-infra.git" once the
-      # private-infra changes are pushed and infra's lock is re-resolved.
-      url = "git+file:///home/p/repos/private-infra";
+      url = "git+ssh://git@github.com/perstarkse/private-infra.git";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs."nixpkgs-stable".follows = "nixpkgs";
       inputs."simple-nixos-mailserver".inputs.nixpkgs.follows = "nixpkgs";
@@ -63,10 +58,6 @@
 
     minne = {
       url = "github:perstarkse/minne";
-      # Don't follow infra's nixpkgs: minne's build pins to onnxruntime 1.23.2
-      # via nix/versions.nix, and its own nixpkgs pin (nixos-unstable at flake
-      # lock time) is the only revision that still ships that exact version.
-      # Letting it follow 26.05 would break makemake with a version mismatch.
     };
 
     saas-minne = {
@@ -107,10 +98,6 @@
 
     politikerstod = {
       url = "git+ssh://git@github.com/perstarkse/politikerstod.git";
-      # Don't follow infra's nixpkgs: politikerstod pins its own node/pnpm
-      # toolchain and frontend build via its pinned nixpkgs. Mismatches there
-      # would surface here as `fetchPnpmDeps`/node version warnings that are
-      # not ours to fix in this repo.
     };
 
     wol-web-proxy = {
@@ -129,10 +116,7 @@
     };
 
     agent-tooling = {
-      url = "git+file:///home/p/repos/agent-tooling";
-      # Do not follow infra's nixpkgs: pi-web's vendored npmDepsHash is generated
-      # against agent-tooling's own pinned nixpkgs, and its prefetch-npm-deps
-      # cacache format must match the toolchain that produced the hash.
+      url = "git+ssh://git@github.com/perstarkse/agent-tooling.git";
     };
 
     voxtype = {
