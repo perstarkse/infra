@@ -29,6 +29,7 @@ in {
       libvirt
       fonts
       intel-gpu
+      ddcutil
       docker
       attic-cache
       steam
@@ -411,6 +412,8 @@ in {
     vpn-browser = {
       enable = true;
     };
+
+    ddcutil.enable = true;
   };
 
   # PI WEB user services should survive logout/reboot.
