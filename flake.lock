@@ -50,17 +50,17 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1783103087,
-        "narHash": "sha256-bkVTpVPOrwQLQmKDkcMMocvsn3vV/qDUHrS9rUQ3Sbw=",
+        "lastModified": 1783162202,
+        "narHash": "sha256-a1Zoe96RnTLc6sPvNH3HNTq9dG2LBC/qq4DtEqmHcp8=",
         "ref": "refs/heads/main",
-        "rev": "a67bc31cb062f346889774278b9fa673df43c1bf",
-        "revCount": 41,
+        "rev": "f7c4d5ae03c2cf1cd3a9591f681dd445389fe411",
+        "revCount": 45,
         "type": "git",
-        "url": "file:///home/p/repos/agent-tooling"
+        "url": "ssh://git@github.com/perstarkse/agent-tooling.git"
       },
       "original": {
         "type": "git",
-        "url": "file:///home/p/repos/agent-tooling"
+        "url": "ssh://git@github.com/perstarkse/agent-tooling.git"
       }
     },
     "aquamarine": {
@@ -586,6 +586,22 @@
         "type": "github"
       }
     },
+    "flake-compat_9": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767039857,
+        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": "nixpkgs-lib"
@@ -877,7 +893,29 @@
     },
     "git-hooks-nix_3": {
       "inputs": {
-        "flake-compat": "flake-compat_7",
+        "flake-compat": "flake-compat_6",
+        "nixpkgs": [
+          "private-infra",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1783008725,
+        "narHash": "sha256-jGiy6+sxjNWXSjp25uoJuNfyH9zBK1PEDY0lVoL4ibQ=",
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "rev": "bca82caa46d5ec0f5d422c61fb1e30bc51313cbe",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "type": "github"
+      }
+    },
+    "git-hooks-nix_4": {
+      "inputs": {
+        "flake-compat": "flake-compat_8",
         "gitignore": "gitignore_6",
         "nixpkgs": [
           "vars-helper",
@@ -928,7 +966,7 @@
     },
     "git-hooks_3": {
       "inputs": {
-        "flake-compat": "flake-compat_8",
+        "flake-compat": "flake-compat_9",
         "gitignore": "gitignore_7",
         "nixpkgs": [
           "wol-web-proxy",
@@ -1929,11 +1967,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1779766384,
-        "narHash": "sha256-P7Ohnlq8b8b2fU+Sgkrej7LBTM60LBTkHleLuYzmLmU=",
+        "lastModified": 1780281641,
+        "narHash": "sha256-M/+hUKoKbHXpV0xGVfELbN1Ds1aoe3pL5p5/t46YhVo=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "57800b7ab648725ccd33551d01484ee14952ad3f",
+        "rev": "30f9ae2f04174de63ba8bcf3580ca90843b28a01",
         "type": "github"
       },
       "original": {
@@ -1988,6 +2026,7 @@
     "private-infra": {
       "inputs": {
         "flake-parts": "flake-parts_6",
+        "git-hooks-nix": "git-hooks-nix_3",
         "home-manager": "home-manager_3",
         "import-tree": "import-tree_2",
         "nixpkgs": [
@@ -1998,20 +2037,21 @@
         ],
         "nixpkgs-unstable": "nixpkgs-unstable_2",
         "simple-nixos-mailserver": "simple-nixos-mailserver",
+        "treefmt-nix": "treefmt-nix_6",
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1783022486,
-        "narHash": "sha256-WnFfeXhuWDRIhdtXBUEhPnRMWXig2KV+acqTyllZSy4=",
+        "lastModified": 1783067015,
+        "narHash": "sha256-zNydvhPIdHmbsWcsUxD9GoEbjVuy9jPiRFcqrq43U2M=",
         "ref": "refs/heads/main",
-        "rev": "cf3060d7c9149f683b07d04bebede6dc8bcc0538",
-        "revCount": 71,
+        "rev": "48e7008fd105e6ba3441b9b233401386faa0b4ba",
+        "revCount": 72,
         "type": "git",
-        "url": "file:///home/p/repos/private-infra"
+        "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },
       "original": {
         "type": "git",
-        "url": "file:///home/p/repos/private-infra"
+        "url": "ssh://git@github.com/perstarkse/private-infra.git"
       }
     },
     "process-compose-flake": {
@@ -2056,7 +2096,7 @@
         "sops-nix": "sops-nix_2",
         "stylix": "stylix",
         "sway-focus-flash": "sway-focus-flash",
-        "treefmt-nix": "treefmt-nix_6",
+        "treefmt-nix": "treefmt-nix_7",
         "vars-helper": "vars-helper",
         "voxtype": "voxtype",
         "wol-web-proxy": "wol-web-proxy"
@@ -2157,7 +2197,7 @@
     "simple-nixos-mailserver": {
       "inputs": {
         "blobs": "blobs",
-        "flake-compat": "flake-compat_6",
+        "flake-compat": "flake-compat_7",
         "git-hooks": "git-hooks_2",
         "nixpkgs": [
           "nixpkgs"
@@ -2255,17 +2295,17 @@
         "tinted-zed": "tinted-zed"
       },
       "locked": {
-        "lastModified": 1782925252,
-        "narHash": "sha256-A/LK7mgBO+JwXP2464rlUnSxsgRFJTU7hkHFji0qU70=",
+        "lastModified": 1783101802,
+        "narHash": "sha256-/Ti+wDco0f3C9s94RxyBKJyc0BklwYh0a/jFWKeHNYw=",
         "owner": "danth",
         "repo": "stylix",
-        "rev": "8d56f0f6e9fd75e056a773b5ce3fc1b073c37dce",
+        "rev": "718c14e8ecba215a65ff955c187fadb9732ddd01",
         "type": "github"
       },
       "original": {
         "owner": "danth",
-        "ref": "release-26.05",
         "repo": "stylix",
+        "rev": "718c14e8ecba215a65ff955c187fadb9732ddd01",
         "type": "github"
       }
     },
@@ -2597,6 +2637,7 @@
     "treefmt-nix_6": {
       "inputs": {
         "nixpkgs": [
+          "private-infra",
           "nixpkgs"
         ]
       },
@@ -2615,6 +2656,26 @@
       }
     },
     "treefmt-nix_7": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1780220602,
+        "narHash": "sha256-eynAfOmbmxJnkp7YewvCEbShNnnYJ9gLLqkzsYtBPeM=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "db947814a175b7ca6ded66e21383d938df01c227",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "treefmt-nix_8": {
       "inputs": {
         "nixpkgs": [
           "vars-helper",
@@ -2640,11 +2701,11 @@
         "flake-parts": [
           "flake-parts"
         ],
-        "git-hooks-nix": "git-hooks-nix_3",
+        "git-hooks-nix": "git-hooks-nix_4",
         "nixpkgs": [
           "nixpkgs"
         ],
-        "treefmt-nix": "treefmt-nix_7"
+        "treefmt-nix": "treefmt-nix_8"
       },
       "locked": {
         "lastModified": 1782850074,
