@@ -413,7 +413,13 @@ in {
       enable = true;
     };
 
-    ddcutil.enable = true;
+    ddcutil = {
+      enable = true;
+      monitor = {
+        enable = true;
+        dataDir = ./monitor;
+      };
+    };
   };
 
   # PI WEB user services should survive logout/reboot.

@@ -19,6 +19,10 @@
       then lib.getExe config.programs.voxtype.package
       else lib.getExe inputs.voxtype.packages.${system}.default;
     systemctlCmd = "${pkgs.systemd}/bin/systemctl";
+    noctaliaLaunch = pkgs.writeShellScriptBin "noctalia-launch" ''
+      export PATH="${lib.makeBinPath [pkgs.ddcutil noctaliaPkg]}:$PATH"
+      exec ${lib.getExe noctaliaPkg} "$@"
+    '';
   in {
     imports = [inputs.noctalia.homeModules.default];
 
@@ -103,7 +107,7 @@
         };
       };
 
-      my.niri.extraSpawnAtStartup = [["noctalia"]];
+      my.niri.extraSpawnAtStartup = [["noctalia-launch"]];
 
       home.activation.restartNoctaliaShell = lib.hm.dag.entryAfter ["writeBoundary"] ''
         if ${pkgs.procps}/bin/pgrep -x noctalia >/dev/null; then
@@ -111,11 +115,13 @@
           $DRY_RUN_CMD ${pkgs.coreutils}/bin/sleep 0.5
         fi
         if ! ${pkgs.procps}/bin/pgrep -x noctalia >/dev/null; then
-          $DRY_RUN_CMD ${lib.getExe noctaliaPkg} >/dev/null 2>&1 &
+          $DRY_RUN_CMD ${lib.getExe noctaliaLaunch} >/dev/null 2>&1 &
         fi
       '';
 
       home.packages = with pkgs; [
+        ddcutil
+        noctaliaLaunch
         libsForQt5.qt5.qtwayland
         qt6.qtwayland
       ];

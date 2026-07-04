@@ -1,0 +1,76 @@
+# Acer Predator X34 GS — DDC/CI reference (charon, DP-2)
+# monitor-profile standard | action | hdr | list
+
+monitor:
+  manufacturer: Acer
+  model: X34 GS
+  mccs_model: ACER XR34GS
+  connector: DP-2
+  drm_connector: card0-DP-2
+  i2c_bus: /dev/i2c-10
+  ddcutil_display: 1
+  serial: "0x10606449"
+  mccs_version: "2.2"
+  controller: RealTek
+
+features:
+  "0x10":
+    name: brightness
+    range: [0, 100]
+  "0x12":
+    name: contrast
+    range: [0, 100]
+  "0x14":
+    name: color_preset
+    values:
+      "0x05": "6500K"
+      "0x06": "7500K"
+      "0x08": "9300K"
+      "0x0b": "User 1"
+  "0x60":
+    name: input_source
+    values:
+      "0x0f": "DisplayPort-1"
+      "0x10": "DisplayPort-2"
+      "0x11": "HDMI-1"
+      "0x12": "HDMI-2"
+  "0x62":
+    name: speaker_volume
+    range: [0, 100]
+
+not_ddc_controllable:
+  - usb_upstream_kvm
+  - refresh_rate
+  - overdrive
+  - crosshair
+  - pip_pbp
+
+picture_modes:
+  user:
+    e2: 0x00
+    confirmed: true
+  standard:
+    e2: 0x01
+    confirmed: true
+  eco:
+    e2: 0x02
+    confirmed: true
+  graphics:
+    e2: 0x03
+    confirmed: true
+  action:
+    e2: 0x05
+    confirmed: true
+  racing:
+    e2: 0x06
+    confirmed: true
+  sports:
+    e2: 0x07
+    confirmed: true
+  hdr:
+    e2: 0x0b
+    confirmed: true
+
+notes:
+  - "Blind setvcp sweeps on E2 cycle modes rapidly."
+  - "Brightness controllable via Noctalia (enable_ddcutil + noctalia-launch)."
