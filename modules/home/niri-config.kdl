@@ -22,8 +22,8 @@ input {
   workspace-auto-back-and-forth
 }
 
-output "DP-3" {
-  mode "3440x1440@143.855"
+output "DP-2" {
+  mode "3440x1440@179.999"
   scale 1.0
   // variable-refresh-rate
   backdrop-color "#1e1e2e"
