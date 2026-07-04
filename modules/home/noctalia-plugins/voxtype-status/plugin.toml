@@ -1,0 +1,22 @@
+id = "infra/voxtype-status"
+name = "Voxtype Status"
+version = "1.0.0"
+min_noctalia = "5.0.0"
+author = "infra"
+license = "MIT"
+dependencies = ["voxtype"]
+description = "Shows voxtype recording status in the Noctalia bar."
+
+[[widget]]
+id = "status"
+entry = "status.luau"
+
+  [[widget.setting]]
+  key = "voxtype_cmd"
+  type = "string"
+  default = "voxtype"
+
+  [[widget.setting]]
+  key = "systemctl_cmd"
+  type = "string"
+  default = "systemctl"

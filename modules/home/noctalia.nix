@@ -8,6 +8,17 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     cfg = config.my.noctalia;
     noctaliaPkg = inputs.noctalia.packages.${system}.default;
+    voxtypePluginsRoot = pkgs.runCommand "noctalia-voxtype-plugins" {} ''
+      mkdir -p $out/voxtype-status
+      cp ${./noctalia-plugins/voxtype-status/plugin.toml} $out/voxtype-status/plugin.toml
+      cp ${./noctalia-plugins/voxtype-status/status.luau} $out/voxtype-status/status.luau
+    '';
+    voxtypePluginId = "infra/voxtype-status";
+    voxtypeCmd =
+      if lib.hasAttrByPath ["programs" "voxtype" "package"] config
+      then lib.getExe config.programs.voxtype.package
+      else lib.getExe inputs.voxtype.packages.${system}.default;
+    systemctlCmd = "${pkgs.systemd}/bin/systemctl";
   in {
     imports = [inputs.noctalia.homeModules.default];
 
@@ -39,6 +50,11 @@
           weather.enabled = true;
           location.auto_locate = true;
 
+          brightness = {
+            enable_ddcutil = true;
+            monitor."DP-2".backend = "ddcutil";
+          };
+
           bar.main = {
             radius = 0;
             margin_edge = 0;
@@ -51,13 +67,29 @@
             widget_spacing = 4;
             start = ["sysmon" "active_window" "media"];
             center = ["workspaces"];
-            end = ["tray" "notifications" "battery" "volume" "control-center" "clock"];
+            end = ["tray" "notifications" "battery" "volume" "brightness" "control-center" "voxtype-status" "clock"];
+          };
+
+          plugins = {
+            enabled = [voxtypePluginId];
+            source = [
+              {
+                name = "voxtype";
+                kind = "path";
+                location = toString voxtypePluginsRoot;
+              }
+            ];
           };
 
           widget = {
             media.album_art_only = true;
             workspaces.display = "none";
             battery.show_label = false;
+            voxtype-status = {
+              type = "${voxtypePluginId}:status";
+              voxtype_cmd = voxtypeCmd;
+              systemctl_cmd = systemctlCmd;
+            };
           };
 
           control_center.shortcuts = [
