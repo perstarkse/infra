@@ -177,6 +177,17 @@
           default = "/storage/attic/storage";
           description = "Directory used for Attic chunk and NAR storage.";
         };
+
+        retentionPeriod = mkOption {
+          type = types.nullOr types.str;
+          default = "6 months";
+          description = ''
+            Default retention period for unaccessed cache objects, as a humantime
+            duration (e.g. "6 months"). Objects whose created_at and
+            last_accessed_at are both older than this are eligible for garbage
+            collection. null disables time-based GC.
+          '';
+        };
       };
 
       client = {
@@ -326,6 +337,9 @@
               type = "local";
               path = cfg.server.storageDir;
             };
+            garbage-collection = mkIf (cfg.server.retentionPeriod != null) {
+              default-retention-period = cfg.server.retentionPeriod;
+            };
           };
         };
 
@@ -372,13 +386,9 @@
         users.groups.atticd = {};
 
         systemd.services.atticd-gc = let
-          gcConfig = pkgs.writeText "atticd-gc.toml" ''
-            [database]
-            url = "sqlite://${cfg.server.stateDir}/server.db?mode=rwc"
-            [storage]
-            type = "local"
-            path = "${cfg.server.storageDir}"
-          '';
+          # Reuse the live server settings so the GC config stays in sync
+          # (database, storage, and retention) without a parallel hand-maintained toml.
+          gcConfig = (pkgs.formats.toml {}).generate "atticd-gc.toml" config.services.atticd.settings;
         in {
           description = "Attic cache garbage collection";
           after = ["atticd.service"];
@@ -387,14 +397,15 @@
             Type = "oneshot";
             User = "atticd";
             Group = "atticd";
-            ExecStart = "${pkgs.attic-server}/bin/atticd -f ${gcConfig} garbage-collect";
+            EnvironmentFile = serverEnvFile;
+            ExecStart = "${pkgs.attic-server}/bin/atticd -f ${gcConfig} --mode garbage-collector-once";
           };
         };
 
         systemd.timers.atticd-gc = {
           wantedBy = ["timers.target"];
           timerConfig = {
-            OnCalendar = "monthly";
+            OnCalendar = "daily";
             Persistent = true;
             RandomizedDelaySec = "4h";
           };

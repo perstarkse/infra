@@ -101,8 +101,6 @@
         ${setupWorkspaces}/bin/niri-setup-workspaces || true
       '';
 
-      stylix.targets.niri.enable = lib.mkDefault true;
-
       xdg.configFile."niri/config.kdl".text =
         builtins.readFile ./niri-config.kdl
         + lib.optionalString (config.my.niri.extraSpawnAtStartup != []) (

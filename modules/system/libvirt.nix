@@ -106,19 +106,6 @@
         description = "List of libvirt networks to create declaratively";
       };
 
-      importedDomains = lib.mkOption {
-        type = lib.types.attrsOf lib.types.path;
-        default = {};
-        description = ''
-          Raw libvirt domain XML files to define on activation.
-          Use /run/libvirt/nix-ovmf/ paths for OVMF firmware so nixpkgs updates
-          do not stale-pin /nix/store paths inside virt-manager exports.
-        '';
-        example = {
-          win11-gaming = ./win11-gaming.xml;
-        };
-      };
-
       # Domain configuration options
       domains = lib.mkOption {
         type = lib.types.listOf (lib.types.submodule {
@@ -231,6 +218,60 @@
         });
         default = [];
         description = "List of libvirt domains to create declaratively";
+      };
+
+      pools = lib.mkOption {
+        type = lib.types.listOf (lib.types.submodule {
+          options = {
+            name = lib.mkOption {
+              type = lib.types.str;
+              description = "Name of the libvirt storage pool";
+            };
+            uuid = lib.mkOption {
+              type = lib.types.str;
+              description = "UUID for the libvirt storage pool";
+            };
+            path = lib.mkOption {
+              type = lib.types.path;
+              description = "Host directory backing the dir-type pool";
+            };
+            volumes = lib.mkOption {
+              type = lib.types.listOf (lib.types.submodule {
+                options = {
+                  name = lib.mkOption {
+                    type = lib.types.str;
+                    description = "Volume name (filename within the pool directory)";
+                  };
+                  capacity = lib.mkOption {
+                    type = lib.types.submodule {
+                      options = {
+                        count = lib.mkOption {
+                          type = lib.types.int;
+                          description = "Volume capacity amount";
+                        };
+                        unit = lib.mkOption {
+                          type = lib.types.str;
+                          default = "GiB";
+                          description = "Volume capacity unit";
+                        };
+                      };
+                    };
+                    description = "Volume capacity";
+                  };
+                  format = lib.mkOption {
+                    type = lib.types.str;
+                    default = "qcow2";
+                    description = "Volume format (qcow2, raw, ...)";
+                  };
+                };
+              });
+              default = [];
+              description = "Volumes to create in the pool if missing";
+            };
+          };
+        });
+        default = [];
+        description = "Dir-backed libvirt storage pools and their volumes, managed via NixVirt";
       };
     };
 
@@ -393,6 +434,27 @@
             })
             cfg.domains
           );
+
+          pools = lib.mkIf (cfg.pools != []) (
+            map (pool: {
+              definition = inputs.NixVirt.lib.pool.writeXML {
+                type = "dir";
+                inherit (pool) name uuid;
+                target = {path = toString pool.path;};
+              };
+              volumes =
+                map (volume: {
+                  present = true;
+                  definition = inputs.NixVirt.lib.volume.writeXML {
+                    inherit (volume) name;
+                    inherit (volume) capacity;
+                    target = {format = {type = volume.format;};};
+                  };
+                })
+                pool.volumes;
+            })
+            cfg.pools
+          );
         };
 
         # Allow bridges for qemu-bridge-helper
@@ -415,28 +477,6 @@
       environment.systemPackages = with pkgs; [
         dnsmasq
       ];
-
-      systemd.services.libvirt-import-domains = lib.mkIf (cfg.importedDomains != {}) {
-        description = "Import libvirt domain definitions from XML";
-        wantedBy = ["multi-user.target"];
-        after = ["libvirtd.service"];
-        requires = ["libvirtd.service"];
-        path = [pkgs.libvirt];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-        };
-        script = lib.concatMapStringsSep "\n" (
-          name: ''
-            if ${pkgs.libvirt}/bin/virsh dominfo ${lib.escapeShellArg name} >/dev/null 2>&1; then
-              echo "Updating libvirt domain ${name}"
-            else
-              echo "Defining libvirt domain ${name}"
-            fi
-            ${pkgs.libvirt}/bin/virsh define ${cfg.importedDomains.${name}}
-          ''
-        ) (lib.attrNames cfg.importedDomains);
-      };
 
       # systemd service for VM shutdown on suspend
       systemd.services."libvirt-shutdown-vms-on-suspend" = lib.mkIf cfg.shutdownOnSuspend.enable {

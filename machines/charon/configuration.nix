@@ -288,12 +288,50 @@ in {
 
       shutdownOnSuspend = {
         enable = true;
-        vms = ["win11-gaming"];
+        vms = ["new"];
       };
 
-      importedDomains = {
-        win11-gaming = ./libvirt/win11-gaming.xml;
-      };
+      # Dir-backed pool so NixVirt creates win11-new.qcow2 on activation if missing.
+      pools = [
+        {
+          name = "vm-disks";
+          uuid = "b1a7e4d2-9f33-4c71-8e2a-6d5b0c9f1a47";
+          path = "/mnt/sdb/disks";
+          volumes = [
+            {
+              name = "win11-new.qcow2";
+              capacity = {
+                count = 80;
+                unit = "GiB";
+              };
+              format = "qcow2";
+            }
+          ];
+        }
+      ];
+
+      # General Windows 11 VM declared via NixVirt.
+      # Fresh install: attach the Win11 ISO; the disk is created by the pool above.
+      domains = [
+        {
+          name = "new";
+          uuid = "8c4d2bf3-3e6e-4c9b-a012-4b7c1e6f8d02";
+          template = "windows";
+          memory = {
+            count = 8;
+            unit = "GiB";
+          };
+          storageVol = "/mnt/sdb/disks/win11-new.qcow2";
+          installVol = "/mnt/sdb/iso/win11.iso";
+          networkName = "vm-nat";
+          macAddress = "52:54:00:8e:11:02";
+          nvramPath = "/var/lib/libvirt/qemu/nvram/win11-new_VARS.fd";
+          virtioNet = true;
+          virtioDrive = true;
+          virtioVideo = true;
+          installVirtio = true;
+        }
+      ];
 
       networks = [
         {
@@ -437,14 +475,6 @@ in {
 
   # Battlemage + xe is currently stable on 6.12.74 here; newer 6.12.x regressed GPU init.
   boot.kernelPackages = pinnedKernelPkgs.linuxPackages;
-  # .extend (self: super: {
-  # kernel = super.kernel.override {
-  #   extraConfig = ''
-  #     CONFIG_BT_ISO m
-  #   '';
-  # };
-  # });
-  boot.kernelModules = ["bt_iso"];
 
   boot.kernelParams = [
     "usbcore.autosuspend=-1"
@@ -511,6 +541,7 @@ in {
     settings = {
       General = {
         Experimental = true;
+        KernelExperimental = true;
         FastConnectable = true;
       };
       Policy = {
