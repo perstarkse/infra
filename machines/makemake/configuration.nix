@@ -44,6 +44,7 @@
       stateDir = "/var/lib/atticd";
       storageDir = "/storage/attic/storage";
       cacheName = "heliosphere";
+      retentionPeriod = "1 months";
     };
 
     mainUser = {
