@@ -15,6 +15,12 @@
         default = 300;
         description = "Seconds of inactivity before marking session as idle";
       };
+
+      lockOnSuspend = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Lock the graphical session via loginctl before system sleep.";
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -22,7 +28,7 @@
         enable = true;
         # Home Manager 26.05 changed the events shape from a list to an
         # attrset keyed by event name.
-        events = {
+        events = lib.optionalAttrs cfg.lockOnSuspend {
           "before-sleep" = "${pkgs.systemd}/bin/loginctl lock-session";
         };
         timeouts = [

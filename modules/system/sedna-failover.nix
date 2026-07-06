@@ -9,6 +9,14 @@ _: {
 
     tokenFile = cfg.dnsFailover.cloudflareApiTokenFile;
     apiBaseUrl = cfg.dnsFailover.cloudflareApiBaseUrl;
+    tlsTokenFile = cfg.tls.cloudflareApiTokenFile;
+    allDomains = lib.concatLists (map (zone: zone.domains) cfg.dnsFailover.zones);
+    uniqueZones = lib.unique (map (zone: zone.zone) cfg.dnsFailover.zones);
+    domainZoneMap = lib.flatten (map (zone: map (domain: {
+      inherit domain;
+      zone = zone.zone;
+    }) zone.domains)
+      cfg.dnsFailover.zones);
 
     # Derive a maintenance page from the branded HTML asset
     maintenancePage = pkgs.writeText "maintenance.html" ''
@@ -162,6 +170,18 @@ _: {
       </body>
       </html>
     '';
+
+    maintenanceRoot = pkgs.runCommand "maintenance-page-root" {} ''
+      mkdir -p "$out"
+      cp ${maintenancePage} "$out/index.html"
+    '';
+    maintenanceLocation = {
+      root = maintenanceRoot;
+      tryFiles = "$uri /index.html";
+      extraConfig = ''
+        add_header Cache-Control "public, max-age=60";
+      '';
+    };
 
     # Cloudflare DNS update script (failover: point domains → Sedna)
     dnsFailoverScript = pkgs.writeShellScript "cloudflare-dns-failover" ''
@@ -320,17 +340,6 @@ _: {
         '')
         cfg.dnsFailover.zones}
 
-      if [ "${
-        if cfg.dnsFailover.skipDnsRevert
-        then "true"
-        else "false"
-      }" = "true" ]; then
-        echo "skipDnsRevert enabled: clearing state file, letting ddclient on IO handle DNS restore."
-        rm -f "$STATE_FILE"
-        echo "=== Revert skipped (ddclient will update DNS) ==="
-        exit 0
-      fi
-
       # Clear state file after successful revert
       rm -f "$STATE_FILE"
       echo "=== Revert complete ==="
@@ -359,8 +368,17 @@ _: {
         if [ "$ELAPSED" -lt "$HEARTBEAT_TIMEOUT_SECONDS" ]; then
           echo "IO is healthy."
           if [ "$IN_FAILOVER" = "true" ]; then
-            echo "Reverting DNS to original IPs..."
-            exec ${dnsRevertScript}
+            ${
+              if cfg.dnsFailover.skipDnsRevert
+              then ''
+                echo "skipDnsRevert enabled: clearing failover state, letting ddclient on IO restore DNS."
+                rm -f "$STATE_FILE"
+              ''
+              else ''
+                echo "Reverting DNS to original IPs..."
+                exec ${dnsRevertScript}
+              ''
+            }
           else
             echo "DNS is normal. Nothing to do."
           fi
@@ -471,8 +489,8 @@ _: {
 
         heartbeatTimeoutMinutes = lib.mkOption {
           type = lib.types.int;
-          default = 20;
-          description = "Minutes without a heartbeat before triggering failover. Should be > Gatus deadman interval (default 15m).";
+          default = 5;
+          description = "Minutes without a heartbeat before triggering failover.";
         };
 
         checkInterval = lib.mkOption {
@@ -520,32 +538,74 @@ _: {
           description = "Cloudflare zones and domains to manage during failover.";
         };
       };
+
+      tls = {
+        enable = lib.mkEnableOption "HTTPS for failover domains via DNS-01 wildcard certificates";
+
+        acmeEmail = lib.mkOption {
+          type = lib.types.str;
+          default = "services@stark.pub";
+          description = "Contact email for ACME certificate registration.";
+        };
+
+        cloudflareApiTokenFile = lib.mkOption {
+          type = lib.types.path;
+          default = "/run/secrets/vars/api-key-cloudflare-dns/api-token";
+          description = "Cloudflare API token file for DNS-01 ACME challenges. Must be readable by the nginx group.";
+        };
+      };
     };
 
     config = lib.mkIf cfg.enable (lib.mkMerge [
       {
         services.nginx = {
           enable = true;
-          virtualHosts."_" = {
-            default = true;
-            locations."/" = {
-              root = pkgs.runCommand "maintenance-page-root" {} ''
-                mkdir -p "$out"
-                cp ${maintenancePage} "$out/index.html"
-              '';
-              tryFiles = "$uri /index.html";
-              extraConfig = ''
-                add_header Cache-Control "public, max-age=60";
-              '';
+          recommendedTlsSettings = lib.mkIf cfg.tls.enable true;
+          virtualHosts =
+            if cfg.tls.enable && allDomains != []
+            then lib.listToAttrs (map ({
+                domain,
+                zone,
+              }: lib.nameValuePair domain {
+                useACMEHost = zone;
+                enableACME = false;
+                forceSSL = true;
+                locations."/" = maintenanceLocation;
+                extraConfig = ''
+                  add_header Access-Control-Allow-Origin "*" always;
+                '';
+              })
+              domainZoneMap)
+            else {
+              "_" = {
+                default = true;
+                locations."/" = maintenanceLocation;
+                extraConfig = ''
+                  add_header Access-Control-Allow-Origin "*" always;
+                '';
+              };
             };
-            extraConfig = ''
-              add_header Access-Control-Allow-Origin "*" always;
-            '';
-          };
         };
 
-        networking.firewall.allowedTCPPorts = [80];
+        networking.firewall.allowedTCPPorts =
+          [80]
+          ++ lib.optionals cfg.tls.enable [443];
       }
+
+      (lib.mkIf cfg.tls.enable {
+        security.acme = {
+          acceptTerms = true;
+          defaults.email = cfg.tls.acmeEmail;
+        };
+
+        security.acme.certs = lib.listToAttrs (map (zone: lib.nameValuePair zone {
+          dnsProvider = "cloudflare";
+          group = "nginx";
+          environmentFile = tlsTokenFile;
+          extraDomainNames = ["*.${zone}"];
+        })
+          uniqueZones);
+      })
 
       (lib.mkIf cfg.dnsFailover.enable {
         users.users.failover-check = {

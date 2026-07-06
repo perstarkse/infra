@@ -87,6 +87,7 @@
     };
 
     services.avahi.enable = true;
+    services.fstrim.enable = true;
     users = {
       mutableUsers = false;
       defaultUserShell = pkgs.fish;

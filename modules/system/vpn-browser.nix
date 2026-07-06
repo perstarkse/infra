@@ -122,10 +122,10 @@
       # and ensures the tunnel is up before the browser tries to use it.
       systemd.services."vpn-browser-${cfg.namespaceName}" = {
         description = "WireGuard tunnel for ${cfg.desktopName}";
-        after = ["network-online.target"];
-        wants = ["network-online.target"];
+        after = ["network-online.target" "systemd-resolved.service"];
+        wants = ["network-online.target" "systemd-resolved.service"];
         wantedBy = ["multi-user.target"];
-        path = [pkgs.wireguard-tools pkgs.iproute2 pkgs.iptables];
+        path = [pkgs.wireguard-tools pkgs.iproute2 pkgs.iptables pkgs.gnused pkgs.coreutils];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
@@ -179,6 +179,22 @@
           mkdir -p "/etc/netns/$NS"
           if [ ! -f "/etc/netns/$NS/resolv.conf" ]; then
             cp /etc/resolv.conf "/etc/netns/$NS/resolv.conf"
+          fi
+
+          # Boot can satisfy network-online before resolved can answer external DNS.
+          ENDPOINT_HOST=$(
+            ${pkgs.gnused}/bin/sed -n 's/^[Ee]ndpoint[[:space:]]*=[[:space:]]*//p' "$WG_CONF" \
+              | ${pkgs.coreutils}/bin/head -n1 \
+              | ${pkgs.gnused}/bin/sed -E 's/[[:space:]]*#.*$//; s/^[[:space:]]+//; s/[[:space:]]+$//; s/:.*$//'
+          )
+          if [ -n "$ENDPOINT_HOST" ]; then
+            echo "Waiting for WireGuard endpoint DNS: $ENDPOINT_HOST"
+            for _ in $(seq 1 60); do
+              if ${pkgs.glibc}/bin/getent ahosts "$ENDPOINT_HOST" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 1
+            done
           fi
 
           # Bring up WireGuard inside the namespace.

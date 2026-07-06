@@ -1,5 +1,6 @@
 # Acer Predator X34 GS — DDC/CI reference (charon, DP-2)
 # monitor-profile standard | action | hdr | list
+# monitor-power off | on
 
 monitor:
   manufacturer: Acer
@@ -37,6 +38,13 @@ features:
   "0x62":
     name: speaker_volume
     range: [0, 100]
+  "0xd6":
+    name: power_mode
+    set:
+      "0x01": on
+      "0x05": off
+    notes:
+      - "getvcp D6 unreliable on this panel; use as write-only control"
 
 not_ddc_controllable:
   - usb_upstream_kvm

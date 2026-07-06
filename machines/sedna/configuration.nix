@@ -47,6 +47,10 @@
           readers = ["failover-check"];
           path = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
         }
+        {
+          readers = ["nginx"];
+          path = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+        }
       ];
     };
 
@@ -73,7 +77,7 @@
       dnsFailover = {
         enable = true;
         sednaPublicIp = "130.61.55.4";
-        heartbeatTimeoutMinutes = 20;
+        heartbeatTimeoutMinutes = 5;
         skipDnsRevert = true;
         cloudflareApiTokenFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
 
@@ -97,6 +101,11 @@
             domains = ["nous.fyi"];
           }
         ];
+      };
+
+      tls = {
+        enable = true;
+        cloudflareApiTokenFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
       };
     };
 
@@ -259,6 +268,7 @@
 
   networking.firewall.allowedTCPPorts = [
     80
+    443
     2222
   ];
 
