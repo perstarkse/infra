@@ -106,6 +106,19 @@
         description = "List of libvirt networks to create declaratively";
       };
 
+      importedDomains = lib.mkOption {
+        type = lib.types.attrsOf lib.types.path;
+        default = {};
+        description = ''
+          Raw libvirt domain XML files to define on activation.
+          Use /run/libvirt/nix-ovmf/ paths for OVMF firmware so nixpkgs updates
+          do not stale-pin /nix/store paths inside virt-manager exports.
+        '';
+        example = {
+          win11-gaming = ./win11-gaming.xml;
+        };
+      };
+
       # Domain configuration options
       domains = lib.mkOption {
         type = lib.types.listOf (lib.types.submodule {
@@ -402,6 +415,28 @@
       environment.systemPackages = with pkgs; [
         dnsmasq
       ];
+
+      systemd.services.libvirt-import-domains = lib.mkIf (cfg.importedDomains != {}) {
+        description = "Import libvirt domain definitions from XML";
+        wantedBy = ["multi-user.target"];
+        after = ["libvirtd.service"];
+        requires = ["libvirtd.service"];
+        path = [pkgs.libvirt];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = lib.concatMapStringsSep "\n" (
+          name: ''
+            if ${pkgs.libvirt}/bin/virsh dominfo ${lib.escapeShellArg name} >/dev/null 2>&1; then
+              echo "Updating libvirt domain ${name}"
+            else
+              echo "Defining libvirt domain ${name}"
+            fi
+            ${pkgs.libvirt}/bin/virsh define ${cfg.importedDomains.${name}}
+          ''
+        ) (lib.attrNames cfg.importedDomains);
+      };
 
       # systemd service for VM shutdown on suspend
       systemd.services."libvirt-shutdown-vms-on-suspend" = lib.mkIf cfg.shutdownOnSuspend.enable {

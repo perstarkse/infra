@@ -78,6 +78,8 @@
     my.sedna-failover = {
       enable = true;
 
+      tls.enable = false;
+
       maintenancePage = {
         title = "stark.pub — Test Offline";
         heading = "Test heading";

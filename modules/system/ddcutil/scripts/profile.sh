@@ -35,5 +35,5 @@ if [[ "$confirmed" != "true" || -z "$e2" || "$e2" == "null" ]]; then
   exit 1
 fi
 
-ddcutil -d "$DISPLAY_NUM" setvcp --noverify E2 "$e2"
+@DDCUTIL@ -d "$DISPLAY_NUM" setvcp --noverify E2 "$e2"
 echo "Set profile $MODE (E2=$e2)"

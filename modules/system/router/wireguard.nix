@@ -238,8 +238,8 @@
               ListenPort = listenPort;
               RouteTable = "main";
             }
-            // lib.optionalAttrs (wg.privateKeyFile != null) { PrivateKeyFile = privateKeyPath; }
-            // lib.optionalAttrs (wg.privateKeyFile == null) { PrivateKey = "@${privateKeyCred}"; };
+            // lib.optionalAttrs (wg.privateKeyFile != null) {PrivateKeyFile = privateKeyPath;}
+            // lib.optionalAttrs (wg.privateKeyFile == null) {PrivateKey = "@${privateKeyCred}";};
           wireguardPeers = map mkPeer staticPeers;
         };
 

@@ -8,10 +8,20 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     cfg = config.my.noctalia;
     noctaliaPkg = inputs.noctalia.packages.${system}.default;
-    voxtypePluginsRoot = pkgs.runCommand "noctalia-voxtype-plugins" {} ''
-      mkdir -p $out/voxtype-status
-      cp ${./noctalia-plugins/voxtype-status/plugin.toml} $out/voxtype-status/plugin.toml
-      cp ${./noctalia-plugins/voxtype-status/status.luau} $out/voxtype-status/status.luau
+    officialPluginsSrc = pkgs.fetchFromGitHub {
+      owner = "noctalia-dev";
+      repo = "official-plugins";
+      rev = "ba82d1fa1fe50214dcaefdaba39c70be2ae1bc4e";
+      hash = "sha256-z4KncWK7XcrvLEcitNP+MAEVoaud9fumaZROnzYyTy0=";
+    };
+    officialPluginsRoot = pkgs.runCommand "noctalia-official-plugins" {} ''
+      mkdir -p $out
+      cp -r ${officialPluginsSrc}/screen_recorder $out/
+      cp -r ${officialPluginsSrc}/kaomoji $out/
+    '';
+    infraPluginsRoot = pkgs.runCommand "noctalia-infra-plugins" {} ''
+      mkdir -p $out
+      cp -r ${./plugins/voxtype-status} $out/voxtype-status
     '';
     voxtypePluginId = "infra/voxtype-status";
     voxtypeCmd =
@@ -19,8 +29,11 @@
       then lib.getExe config.programs.voxtype.package
       else lib.getExe inputs.voxtype.packages.${system}.default;
     systemctlCmd = "${pkgs.systemd}/bin/systemctl";
+    screenRecorderPluginId = "noctalia/screen_recorder";
+    kaomojiPluginId = "noctalia/kaomoji";
+
     noctaliaLaunch = pkgs.writeShellScriptBin "noctalia-launch" ''
-      export PATH="${lib.makeBinPath [pkgs.ddcutil noctaliaPkg]}:$PATH"
+      export PATH="${lib.makeBinPath [pkgs.ddcutil pkgs.gpu-screen-recorder noctaliaPkg]}:$PATH"
       exec ${lib.getExe noctaliaPkg} "$@"
     '';
   in {
@@ -71,24 +84,53 @@
             widget_spacing = 4;
             start = ["sysmon" "active_window" "media"];
             center = ["workspaces"];
-            end = ["tray" "notifications" "battery" "volume" "brightness" "control-center" "voxtype-status" "clock"];
+            end = [
+              "tray"
+              "notifications"
+              "battery"
+              "volume"
+              "brightness"
+              "control-center"
+              "screen-recorder"
+              "voxtype-status"
+              "clock"
+            ];
           };
 
           plugins = {
-            enabled = [voxtypePluginId];
+            enabled = [
+              screenRecorderPluginId
+              kaomojiPluginId
+              voxtypePluginId
+            ];
             source = [
               {
-                name = "voxtype";
+                name = "official";
                 kind = "path";
-                location = toString voxtypePluginsRoot;
+                location = toString officialPluginsRoot;
+              }
+              {
+                name = "infra-plugins";
+                kind = "path";
+                location = toString infraPluginsRoot;
               }
             ];
+          };
+
+          plugin_settings = {
+            "${screenRecorderPluginId}" = {
+              replay_enabled = false;
+              hide_inactive = true;
+            };
           };
 
           widget = {
             media.album_art_only = true;
             workspaces.display = "none";
             battery.show_label = false;
+            screen-recorder = {
+              type = "${screenRecorderPluginId}:recorder";
+            };
             voxtype-status = {
               type = "${voxtypePluginId}:status";
               voxtype_cmd = voxtypeCmd;
@@ -107,7 +149,9 @@
         };
       };
 
-      my.niri.extraSpawnAtStartup = [["noctalia-launch"]];
+      my.niri.extraSpawnAtStartup = [
+        ["noctalia-launch"]
+      ];
 
       home.activation.restartNoctaliaShell = lib.hm.dag.entryAfter ["writeBoundary"] ''
         if ${pkgs.procps}/bin/pgrep -x noctalia >/dev/null; then
@@ -121,6 +165,7 @@
 
       home.packages = with pkgs; [
         ddcutil
+        gpu-screen-recorder
         noctaliaLaunch
         libsForQt5.qt5.qtwayland
         qt6.qtwayland

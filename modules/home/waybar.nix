@@ -19,6 +19,7 @@
       "8:vm" = "";
       "9:misc" = "";
       "10:scratch" = "";
+      "11:helix" = "hx";
     };
     generatedWorkspaceIcons =
       lib.listToAttrs

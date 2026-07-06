@@ -30,6 +30,7 @@ in {
       fonts
       intel-gpu
       ddcutil
+      bluetooth-resume
       docker
       attic-cache
       steam
@@ -167,6 +168,7 @@ in {
     my.swayidle = {
       enable = true;
       idleSeconds = 300; # 5 min no input -> mark session idle
+      lockOnSuspend = false;
     };
   };
 
@@ -287,6 +289,10 @@ in {
       shutdownOnSuspend = {
         enable = true;
         vms = ["win11-gaming"];
+      };
+
+      importedDomains = {
+        win11-gaming = ./libvirt/win11-gaming.xml;
       };
 
       networks = [
@@ -420,6 +426,10 @@ in {
         dataDir = ./monitor;
       };
     };
+
+    bluetoothResume = {
+      enable = true;
+    };
   };
 
   # PI WEB user services should survive logout/reboot.
@@ -427,6 +437,20 @@ in {
 
   # Battlemage + xe is currently stable on 6.12.74 here; newer 6.12.x regressed GPU init.
   boot.kernelPackages = pinnedKernelPkgs.linuxPackages;
+  # .extend (self: super: {
+  # kernel = super.kernel.override {
+  #   extraConfig = ''
+  #     CONFIG_BT_ISO m
+  #   '';
+  # };
+  # });
+  boot.kernelModules = ["bt_iso"];
+
+  boot.kernelParams = [
+    "usbcore.autosuspend=-1"
+  ];
+
+  zramSwap.enable = true;
 
   time.timeZone = "Europe/Stockholm";
 
@@ -452,8 +476,19 @@ in {
     };
   };
 
+  services.avahi.enable = lib.mkForce false;
+  services.resolved = {
+    enable = true;
+    settings.Resolve.MulticastDNS = "yes";
+  };
+
+  systemd.network.links."40-enp4s0" = {
+    matchConfig.OriginalName = "enp4s0";
+    linkConfig.WakeOnLan = "magic";
+  };
+
   networking = {
-    interfaces.enp4s0.wakeOnLan.enable = true;
+    interfaces.enp4s0.wakeOnLan.enable = lib.mkForce false;
     firewall.allowPing = true;
     # Allow localsend receive port
     # Allow 3000/1 and 5000/1 for dev server and tooling
@@ -481,21 +516,6 @@ in {
       Policy = {
         AutoEnable = true;
       };
-    };
-  };
-
-  systemd.services.bluetooth-resume-recover = {
-    description = "Recover Bluetooth after resume";
-    wantedBy = ["suspend.target" "hibernate.target" "hybrid-sleep.target" "suspend-then-hibernate.target"];
-    after = ["suspend.target" "hibernate.target" "hybrid-sleep.target" "suspend-then-hibernate.target"];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "bluetooth-resume-recover" ''
-        set -euo pipefail
-        ${pkgs.coreutils}/bin/sleep 3
-        ${pkgs.systemd}/bin/systemctl try-restart bluetooth.service
-        ${pkgs.bluez}/bin/bluetoothctl power on >/dev/null 2>&1 || true
-      '';
     };
   };
 

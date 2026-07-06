@@ -9,6 +9,14 @@
 
     enabledInstances = lib.filterAttrs (_: i: i.enable) config.my.politikerstod-remote-worker.instances;
 
+    wireguardTunnelUnits =
+      if config.my.wireguardTunnels.enable or false
+      then
+        lib.map (name: "wg-tunnel-${name}.service") (
+          lib.attrNames (lib.filterAttrs (_: t: t.enable) (config.my.wireguardTunnels.tunnels or {}))
+        )
+      else [];
+
     mkWorkerEnv = name: instance: let
       escapeForSystemd = s: builtins.replaceStrings ["\\" "$" "\""] ["\\\\" "$$" "\\\""] s;
       domains = instance.settings.authAllowedEmailDomains or [];
@@ -193,8 +201,8 @@
               lib.nameValuePair serviceName {
                 description = "Politikerstöd Remote Worker (${name}) — OCR + Embeddings";
                 wantedBy = ["multi-user.target"];
-                after = ["network-online.target"];
-                wants = ["network-online.target"];
+                after = ["network-online.target" "systemd-resolved.service"] ++ wireguardTunnelUnits;
+                wants = ["network-online.target" "systemd-resolved.service"] ++ wireguardTunnelUnits;
 
                 serviceConfig = {
                   Type = "simple";
