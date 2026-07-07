@@ -50,11 +50,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1783162202,
-        "narHash": "sha256-a1Zoe96RnTLc6sPvNH3HNTq9dG2LBC/qq4DtEqmHcp8=",
+        "lastModified": 1783450016,
+        "narHash": "sha256-onrNlTh2bP1Jqs0yKfWzJbvkFQUdUDFHZfbWIoYpQCw=",
         "ref": "refs/heads/main",
-        "rev": "f7c4d5ae03c2cf1cd3a9591f681dd445389fe411",
-        "revCount": 45,
+        "rev": "4cf07855a91c01a77f1c4f7c3192feb20b11c04f",
+        "revCount": 48,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/agent-tooling.git"
       },
@@ -2041,11 +2041,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1783067015,
-        "narHash": "sha256-zNydvhPIdHmbsWcsUxD9GoEbjVuy9jPiRFcqrq43U2M=",
+        "lastModified": 1783434658,
+        "narHash": "sha256-zQRz/w34zhFFmvG2XN/1hUlIxE2GofGoCyYXhgzMNtQ=",
         "ref": "refs/heads/main",
-        "rev": "48e7008fd105e6ba3441b9b233401386faa0b4ba",
-        "revCount": 72,
+        "rev": "e99ff9db33b2d18da14b78acd927dbd2e467f13e",
+        "revCount": 75,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },
