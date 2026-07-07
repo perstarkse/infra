@@ -63,7 +63,7 @@
       options = [
         "cache.files=partial"
         "dropcacheonclose=true"
-        "category.create=mfs"
+        "category.create=epmfs"
         "use_ino"
         "allow_other"
         "cache.readdir=true"
@@ -71,19 +71,6 @@
       ];
     };
 
-    "/data/media" = {
-      device = "/storage/media/library";
-      fsType = "none";
-      options = ["bind"];
-      depends = ["/storage"];
-    };
-
-    "/data/torrents" = {
-      device = "/storage/torrents";
-      fsType = "none";
-      options = ["bind"];
-      depends = ["/storage"];
-    };
   };
 
   swapDevices = [
