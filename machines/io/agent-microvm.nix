@@ -1,22 +1,12 @@
-# io wiring for agent-microvm (microvm.nix replacement for the libvirt oumu).
+# io wiring for agent-microvm (microvm.nix replacement for the libvirt VM).
 #
-# Disabled by default — the libvirt oumu (my.libvirtd) stays the live path.
-# Flip `enable = true` and uncomment the vms.oumu block to cut over. Doing so
-# also requires adding an `oumu-vm` flake input and exposing it as
-# `ctx.inputs.oumuVm` in flake/parts/clan.nix.
+# Disabled by default — the libvirt VM (my.libvirtd) stays the live path.
+# Flip `enable = true` and add a guest flake input to cut over.
 _: {
   agent-microvm.host = {
     enable = false;
     # io keeps VM state on the SSD, not the default /var/lib/agent-microvms.
-    # The oumu guest must set agent-microvm.guest.storageRoot to match.
+    # A guest flake must set agent-microvm.guest.storageRoot to match.
     storageRoot = "/storage/microvms";
-
-    # vms.oumu = {
-    #   enable = true;
-    #   autostart = false;
-    #   flake = ctx.inputs.oumuVm;
-    #   updateFlake = "git+https://github.com/perstarkse/oumu";
-    #   deployKeyFile = config.my.secrets.getPath "openclawd-deploy-key" "private_key";
-    # };
   };
 }

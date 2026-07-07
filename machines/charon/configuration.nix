@@ -123,6 +123,44 @@ in {
         pi-agent = {
           enable = true;
           shellAlias = "PI_FFF_MODE=override command pi";
+          subagentOverrides = {
+            scout = {
+              model = "deepseek/deepseek-v4-flash";
+              defaultContext = "fresh";
+              systemPromptMode = "append";
+              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
+            };
+            context-builder = {
+              model = "deepseek/deepseek-v4-flash";
+              defaultContext = "fresh";
+              systemPromptMode = "append";
+              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
+            };
+            planner = {
+              model = "deepseek/deepseek-v4-flash";
+              defaultContext = "fresh";
+              systemPromptMode = "append";
+              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
+            };
+            researcher = {
+              model = "deepseek/deepseek-v4-flash";
+              defaultContext = "fresh";
+              systemPromptMode = "append";
+              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
+            };
+            reviewer = {
+              model = "deepseek/deepseek-v4-flash";
+              defaultContext = "fresh";
+              systemPromptMode = "append";
+              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
+            };
+            delegate = {
+              model = "deepseek/deepseek-v4-flash";
+              defaultContext = "fresh";
+              systemPromptMode = "append";
+              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
+            };
+          };
         };
         pi-web = {
           enable = true;
