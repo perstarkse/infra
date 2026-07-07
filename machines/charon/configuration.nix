@@ -125,37 +125,43 @@ in {
           shellAlias = "PI_FFF_MODE=override command pi";
           subagentOverrides = {
             scout = {
-              model = "deepseek/deepseek-v4-flash";
+              model = "opencode/deepseek-v4-flash-free";
+              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             context-builder = {
-              model = "deepseek/deepseek-v4-flash";
+              model = "opencode/deepseek-v4-flash-free";
+              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             planner = {
-              model = "deepseek/deepseek-v4-flash";
+              model = "opencode/deepseek-v4-flash-free";
+              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             researcher = {
-              model = "deepseek/deepseek-v4-flash";
+              model = "opencode/deepseek-v4-flash-free";
+              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             reviewer = {
-              model = "deepseek/deepseek-v4-flash";
+              model = "opencode/deepseek-v4-flash-free";
+              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             delegate = {
-              model = "deepseek/deepseek-v4-flash";
+              model = "opencode/deepseek-v4-flash-free";
+              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
@@ -348,11 +354,9 @@ in {
         }
       ];
 
-      # General Windows 11 VM declared via NixVirt.
-      # Fresh install: attach the Win11 ISO; the disk is created by the pool above.
       domains = [
         {
-          name = "new";
+          name = "win11";
           uuid = "8c4d2bf3-3e6e-4c9b-a012-4b7c1e6f8d02";
           template = "windows";
           memory = {
