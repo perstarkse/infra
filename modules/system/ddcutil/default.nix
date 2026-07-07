@@ -84,7 +84,7 @@
               default = 20;
               description = ''
                 Resume attempts for monitor-power on after system sleep.
-                Each attempt uses ddcutil --maxtries 1 for a fast probe.
+                Each attempt uses ddcutil --maxtries 1,1,1 for a fast probe.
               '';
             };
 
