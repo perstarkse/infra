@@ -2041,11 +2041,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1783434658,
-        "narHash": "sha256-zQRz/w34zhFFmvG2XN/1hUlIxE2GofGoCyYXhgzMNtQ=",
+        "lastModified": 1783790096,
+        "narHash": "sha256-eNb9WirDGU2raSW/XW4l1Ll1hRdrGP6GhPDVeVTko8E=",
         "ref": "refs/heads/main",
-        "rev": "e99ff9db33b2d18da14b78acd927dbd2e467f13e",
-        "revCount": 75,
+        "rev": "6db47e6cf84b09e8d46499a4be4fbd70852ecde9",
+        "revCount": 76,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },

@@ -289,6 +289,11 @@
                     default = null;
                     description = "Router-local Basic Auth override for imported vhosts.";
                   };
+                  acmeDns01 = mkOption {
+                    type = types.nullOr acmeDns01Submodule;
+                    default = null;
+                    description = "Router-local DNS-01 ACME override for imported vhosts.";
+                  };
                 };
               });
               default = {};

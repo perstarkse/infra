@@ -8,6 +8,15 @@
     cfg = config.my.ddcutil;
     monitorCfg = cfg.monitor;
 
+    # systemd-sleep hooks run with a minimal environment: no PATH (uname -m fails)
+    # and no HOME/XDG_CACHE_HOME (dynamic sleep cache path cannot be resolved).
+    ddcutilWrapper = pkgs.writeShellScriptBin "ddcutil" ''
+      export PATH="${lib.makeBinPath [pkgs.coreutils pkgs.ddcutil]}:$PATH"
+      export XDG_CACHE_HOME="''${XDG_CACHE_HOME:-/var/cache/ddcutil}"
+      export HOME="''${HOME:-/root}"
+      exec ${pkgs.ddcutil}/bin/ddcutil "$@"
+    '';
+
     monitorDataPackage =
       if monitorCfg.enable
       then
@@ -37,7 +46,7 @@
       "${monitorDataPackage}"
       (toString monitorCfg.display)
       "${pkgs.yq-go}/bin/yq"
-      "${pkgs.ddcutil}/bin/ddcutil"
+      "${ddcutilWrapper}/bin/ddcutil"
       "${pkgs.coreutils}/bin/sleep"
       "${pkgs.util-linux}/bin/logger"
       "${pkgs.coreutils}/bin/seq"
@@ -137,8 +146,12 @@
         users.users.${config.my.mainUser.name}.extraGroups = ["i2c"];
 
         environment.systemPackages =
-          [pkgs.ddcutil]
+          [ddcutilWrapper]
           ++ lib.optional cfg.ddcui pkgs.ddcui;
+
+        systemd.tmpfiles.rules = [
+          "d /var/cache/ddcutil 0755 root root -"
+        ];
       }
       (lib.mkIf monitorCfg.enable {
         assertions = [
@@ -163,9 +176,19 @@
           source = pkgs.writeShellScript "monitor-power-resume" ''
             case "$1" in
               pre)
-                ${pkgs.systemd}/bin/journalctl -k -b --show-cursor -n 1 --output=short-unix 2>/dev/null \
+                ${pkgs.systemd}/bin/journalctl -k -b --show-cursor -n 0 --output=short-unix 2>/dev/null \
                   | ${pkgs.gawk}/bin/awk -F';' '/^-- cursor:/ { print $2; exit }' \
                   > /run/monitor-power-suspend-cursor || true
+                ${
+                  if monitorCfg.wakeInterface != null
+                  then ''
+                    WAKE_COUNT="/sys/class/net/${monitorCfg.wakeInterface}/device/power/wakeup_count"
+                    if [[ -r "$WAKE_COUNT" ]]; then
+                      cat "$WAKE_COUNT" > /run/monitor-power-suspend-nic-wakeup-count || true
+                    fi
+                  ''
+                  else ""
+                }
                 ;;
               post)
                 exec ${monitorResume}/bin/monitor-resume

@@ -11,6 +11,18 @@ SUSPEND_CURSOR_FILE="/run/monitor-power-suspend-cursor"
 network_wake_since_suspend() {
 	[[ -n "$WAKE_INTERFACE" ]] || return 1
 
+	local wakeup_count_path="/sys/class/net/${WAKE_INTERFACE}/device/power/wakeup_count"
+	local saved_count_file="/run/monitor-power-suspend-nic-wakeup-count"
+	if [[ -r "$wakeup_count_path" && -s "$saved_count_file" ]]; then
+		local before after
+		before=$(<"$saved_count_file")
+		after=$(<"$wakeup_count_path")
+		if [[ "$after" -gt "$before" ]]; then
+			return 0
+		fi
+		return 1
+	fi
+
 	local journal_args=(-b -k --no-pager)
 	if [[ -s "$SUSPEND_CURSOR_FILE" ]]; then
 		journal_args+=(--after-cursor="$(<"$SUSPEND_CURSOR_FILE")")
