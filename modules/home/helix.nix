@@ -129,6 +129,20 @@
         ];
         language-server.jinjalsp.command = "${pkgs.jinja-lsp}/bin/jinja-lsp";
       };
+      json = {
+        packages = [pkgs.vscode-json-languageserver];
+        language = [
+          {
+            name = "json";
+            language-servers = ["vscode-json-language-server"];
+            auto-format = true;
+          }
+        ];
+        language-server.vscode-json-language-server = {
+          command = "${pkgs.vscode-json-languageserver}/bin/vscode-json-language-server";
+          args = ["--stdio"];
+        };
+      };
       fish = {
         packages = [pkgs.fish-lsp];
         language = [
@@ -140,20 +154,24 @@
         language-server.fish-lsp.command = "${pkgs.fish-lsp}/bin/fish-lsp";
       };
     };
-    enabledDefs = lib.attrsets.filterAttrs (name: _: lib.lists.elem name config.my.programs.helix.languages) langDefs;
+    enabledDefs = lib.attrsets.filterAttrs (name: _: lib.lists.elem name config.my.helix.languages) langDefs;
     allPackages = lib.flatten (lib.mapAttrsToList (_: def: def.packages or []) enabledDefs);
     allLanguages = lib.flatten (lib.mapAttrsToList (_: def: def.language or []) enabledDefs);
     allLanguageServers = lib.foldl' lib.recursiveUpdate {} (lib.mapAttrsToList (_: def: def.language-server or {}) enabledDefs);
-    rustLanguageEnabled = lib.lists.elem "rust" config.my.programs.helix.languages;
+    rustLanguageEnabled = lib.lists.elem "rust" config.my.helix.languages;
   in {
-    options.my.programs.helix.languages = lib.mkOption {
-      type = with lib.types; listOf (enum (builtins.attrNames langDefs));
-      default = [];
-      example = ["nix" "web" "python"];
-      description = "List of languages/language groups to enable for Helix.";
+    options.my.helix = {
+      enable = lib.mkEnableOption "Helix editor with language support";
+
+      languages = lib.mkOption {
+        type = with lib.types; listOf (enum (builtins.attrNames langDefs));
+        default = [];
+        example = ["nix" "web" "python"];
+        description = "List of languages/language groups to enable for Helix.";
+      };
     };
 
-    config = {
+    config = lib.mkIf config.my.helix.enable {
       home.packages = [pkgs.lazygit] ++ allPackages;
       home.activation.ensureRustAnalyzerTargetDir = lib.mkIf rustLanguageEnabled (lib.hm.dag.entryAfter ["writeBoundary"] ''
         mkdir -p ${lib.escapeShellArg rustAnalyzerTargetDir}
@@ -166,7 +184,7 @@
             space = {
               c = ":clipboard-yank";
               l = [":new" ":insert-output lazygit" ":buffer-close!" ":redraw"];
-              W = lib.mkIf (lib.lists.elem "typst" config.my.programs.helix.languages) ''
+              W = lib.mkIf (lib.lists.elem "typst" config.my.helix.languages) ''
                 :sh mkdir -p build \
                 && ${pkgs.typst}/bin/typst compile %{buffer_name} build/%sh{basename %{buffer_name} .typ}.pdf \
                 && ${pkgs.zathura}/bin/zathura build/%sh{basename %{buffer_name} .typ}.pdf >/dev/null 2>&1 & \

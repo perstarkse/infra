@@ -1,6 +1,14 @@
 {
-  config.flake.homeModules.xdg-userdirs = {config, ...}: {
-    config = {
+  config.flake.homeModules.xdg-userdirs = {
+    lib,
+    config,
+    ...
+  }: let
+    cfg = config.my.xdg-userdirs;
+  in {
+    options.my.xdg-userdirs.enable = lib.mkEnableOption "xdg user directories";
+
+    config = lib.mkIf cfg.enable {
       xdg.userDirs = {
         enable = true;
         # Home Manager 26.05 flipped the default from true to false; keep the

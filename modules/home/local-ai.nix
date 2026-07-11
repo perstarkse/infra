@@ -1,5 +1,11 @@
 {
-  config.flake.homeModules.local-ai = {pkgs, ...}: let
+  config.flake.homeModules.local-ai = {
+    pkgs,
+    lib,
+    config,
+    ...
+  }: let
+    cfg = config.my.local-ai;
     vllm-manager = pkgs.writeScriptBin "vllm-manager" ''
       #!/usr/bin/env bash
       set -e
@@ -104,7 +110,7 @@
             $quant_arg \
             --enforce-eager \
             --tensor-parallel-size 1 \
-            --gpu-memory-util 0.8 \
+            --gpu-memory-utilization 0.8 \
             --port ''${PORT} \
             --trust-remote-code \
             --max-model-len ''${CONTEXT[$model_key]} \
@@ -145,42 +151,46 @@
       exec ${pkgs.mods}/bin/mods --api vllm --topp 0.9 --role "$active_model" "$@"
     '';
   in {
-    home.packages = with pkgs; [
-      aichat
-      vllm-manager
-      lmods
-      mods # Ensure base mods is available
-    ];
+    options.my.local-ai.enable = lib.mkEnableOption "local AI tooling (vllm-manager, aichat, mods)";
 
-    xdg.configFile."aichat/config.yaml".text = ''
-      model: local
-      clients:
-        - type: openai
-          name: local
-          api_base: http://localhost:8009/v1
-          api_key: empty
-          models:
-            - name: local-model
-    '';
+    config = lib.mkIf cfg.enable {
+      home.packages = with pkgs; [
+        aichat
+        vllm-manager
+        lmods
+        mods # Ensure base mods is available
+      ];
 
-    xdg.configFile."mods/mods.yml".text = ''
-      default-model: local-model
-      apis:
-        vllm:
-          base-url: http://localhost:8009/v1
-          api-key: empty
-          models:
-            local-model:
-              aliases: ["local"]
-              max-input-chars: 65536
-              top-p: 0.9
-              roles:
-                r1: "You are DeepSeek R1, a helpful and reasoning AI assistant."
-                r1-awq: "You are DeepSeek R1, a helpful and reasoning AI assistant."
-                r1-8b-awq: "You are DeepSeek R1, a helpful and reasoning AI assistant."
-                olmo: "You are AllenAI Olmo, a thinking model engaging in deep reasoning."
-                tiny: "You are a concise test assistant."
-                default: "You are a helpful assistant."
-    '';
+      xdg.configFile."aichat/config.yaml".text = ''
+        model: local
+        clients:
+          - type: openai
+            name: local
+            api_base: http://localhost:8009/v1
+            api_key: empty
+            models:
+              - name: local-model
+      '';
+
+      xdg.configFile."mods/mods.yml".text = ''
+        default-model: local-model
+        apis:
+          vllm:
+            base-url: http://localhost:8009/v1
+            api-key: empty
+            models:
+              local-model:
+                aliases: ["local"]
+                max-input-chars: 65536
+                top-p: 0.9
+                roles:
+                  r1: "You are DeepSeek R1, a helpful and reasoning AI assistant."
+                  r1-awq: "You are DeepSeek R1, a helpful and reasoning AI assistant."
+                  r1-8b-awq: "You are DeepSeek R1, a helpful and reasoning AI assistant."
+                  olmo: "You are AllenAI Olmo, a thinking model engaging in deep reasoning."
+                  tiny: "You are a concise test assistant."
+                  default: "You are a helpful assistant."
+      '';
+    };
   };
 }

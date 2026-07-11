@@ -1,6 +1,14 @@
 {
   config.flake.homeModules.dunst = {
-    config = {
+    lib,
+    config,
+    ...
+  }: let
+    cfg = config.my.dunst;
+  in {
+    options.my.dunst.enable = lib.mkEnableOption "dunst notification daemon";
+
+    config = lib.mkIf cfg.enable {
       services.dunst = {
         enable = true;
         settings = {

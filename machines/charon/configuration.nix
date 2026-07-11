@@ -20,7 +20,7 @@ in {
       shared
       interception-tools
       blinkstick
-      system-stylix
+      stylix
       niri
       terminal
       greetd
@@ -74,7 +74,7 @@ in {
         looking-glass-client
         bitwarden-client
         blinkstick
-        mail-clients-setup
+        mail
         ssh
         xdg-mimeapps
         xdg-userdirs
@@ -101,18 +101,48 @@ in {
       ]);
     my = {
       programs = {
-        mail = {
-          clients = ["aerc" "thunderbird"];
-        };
         rbw = {
           pinentrySource = "gui";
         };
-        rofi = {
-          withRbw = true;
+        mail = {
+          enable = true;
+          clients = ["aerc" "thunderbird"];
         };
-        helix = {
-          languages = ["nix" "typst" "markdown" "rust" "jinja" "spellchecking" "fish"];
-        };
+      };
+
+      qutebrowser = {
+        enable = true;
+      };
+
+      bitwarden-client.enable = true;
+      blinkstick.enable = true;
+      chromium.enable = true;
+      direnv.enable = true;
+      firefox.enable = true;
+      fish.enable = true;
+      git.enable = true;
+      local-ai.enable = true;
+      looking-glass-client.enable = true;
+      ncspot.enable = true;
+      nix-scaffold.enable = true;
+      node.enable = true;
+      sccache.enable = true;
+      ssh.enable = true;
+      starship.enable = true;
+      voxtype.enable = true;
+      xdg-mimeapps.enable = true;
+      xdg-userdirs.enable = true;
+      zellij.enable = true;
+      zoxide.enable = true;
+
+      rofi = {
+        enable = true;
+        withRbw = true;
+      };
+
+      helix = {
+        enable = true;
+        languages = ["nix" "typst" "markdown" "rust" "jinja" "json" "spellchecking" "fish"];
       };
 
       noctalia = {
@@ -123,45 +153,47 @@ in {
         pi-agent = {
           enable = true;
           shellAlias = "PI_FFF_MODE=override command pi";
+          defaultProvider = "cursor";
+          defaultModel = "composer-2:slow";
           subagentOverrides = {
             scout = {
               model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
+              fallbackModels = ["deepseek/deepseek-v4-flash"];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             context-builder = {
               model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
+              fallbackModels = ["deepseek/deepseek-v4-flash"];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             planner = {
               model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
+              fallbackModels = ["deepseek/deepseek-v4-flash"];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             researcher = {
               model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
+              fallbackModels = ["deepseek/deepseek-v4-flash"];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             reviewer = {
               model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
+              fallbackModels = ["deepseek/deepseek-v4-flash"];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
             delegate = {
               model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = [ "deepseek/deepseek-v4-flash" ];
+              fallbackModels = ["deepseek/deepseek-v4-flash"];
               defaultContext = "fresh";
               systemPromptMode = "append";
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
@@ -184,29 +216,29 @@ in {
     };
 
     programs = {
-      wtp = {
-        enable = true;
-        enableFishIntegration = true;
-        enableFishCdWrapper = true;
-      };
-
       voxtype = {
         enable = true;
         model.name = "large-v3-turbo";
         service.enable = true;
         package = ctx.inputs.voxtype.packages.${pkgs.stdenv.hostPlatform.system}.vulkan;
       };
+    };
 
-      llm-agents = {
-        enable = true;
-        packages = [
-          "opencode"
-          "codex"
-          "claude-code"
-          "amp"
-          "agent-browser"
-        ];
-      };
+    my.wtp = {
+      enable = true;
+      enableFishIntegration = true;
+      enableFishCdWrapper = true;
+    };
+
+    my.llm-agents-cli = {
+      enable = true;
+      packages = [
+        "opencode"
+        "codex"
+        "claude-code"
+        "amp"
+        "agent-browser"
+      ];
     };
 
     my.swayidle = {
@@ -218,6 +250,17 @@ in {
 
   my = {
     listenNetworkAddress = "10.0.0.15";
+
+    stylix.enable = true;
+
+    docker.enable = true;
+    interception-tools.enable = true;
+    fonts.enable = true;
+    intel-gpu.enable = true;
+    sound.enable = true;
+    steam.enable = true;
+    sunshine.enable = true;
+    ledger.enable = true;
 
     attic-cache.client = {
       enable = true;
@@ -326,7 +369,7 @@ in {
 
     mainUser.name = "p";
 
-    libvirtd = {
+    libvirt = {
       enable = true;
       spiceUSBRedirection = true;
 
@@ -447,7 +490,7 @@ in {
     };
 
     # Auto-suspend when system is idle (load < threshold + no user input)
-    autoSuspend = {
+    auto-suspend = {
       enable = true;
       checkIntervalMinutes = 6;
       requiredIdleChecks = 3;
@@ -483,7 +526,7 @@ in {
       };
     };
 
-    wireguardTunnels = {
+    wireguard-tunnels = {
       enable = true;
       tunnels = {
         genome-worktree-zenith = {
@@ -504,10 +547,11 @@ in {
       monitor = {
         enable = true;
         dataDir = ./monitor;
+        wakeInterface = "enp4s0";
       };
     };
 
-    bluetoothResume = {
+    bluetooth-resume = {
       enable = true;
     };
   };

@@ -12,11 +12,13 @@ _: {
     tlsTokenFile = cfg.tls.cloudflareApiTokenFile;
     allDomains = lib.concatLists (map (zone: zone.domains) cfg.dnsFailover.zones);
     uniqueZones = lib.unique (map (zone: zone.zone) cfg.dnsFailover.zones);
-    domainZoneMap = lib.flatten (map (zone: map (domain: {
-      inherit domain;
-      zone = zone.zone;
-    }) zone.domains)
-      cfg.dnsFailover.zones);
+    domainZoneMap = lib.flatten (map (zone:
+      map (domain: {
+        inherit domain;
+        inherit (zone) zone;
+      })
+      zone.domains)
+    cfg.dnsFailover.zones);
 
     # Derive a maintenance page from the branded HTML asset
     maintenancePage = pkgs.writeText "maintenance.html" ''
@@ -369,16 +371,16 @@ _: {
           echo "IO is healthy."
           if [ "$IN_FAILOVER" = "true" ]; then
             ${
-              if cfg.dnsFailover.skipDnsRevert
-              then ''
-                echo "skipDnsRevert enabled: clearing failover state, letting ddclient on IO restore DNS."
-                rm -f "$STATE_FILE"
-              ''
-              else ''
-                echo "Reverting DNS to original IPs..."
-                exec ${dnsRevertScript}
-              ''
-            }
+        if cfg.dnsFailover.skipDnsRevert
+        then ''
+          echo "skipDnsRevert enabled: clearing failover state, letting ddclient on IO restore DNS."
+          rm -f "$STATE_FILE"
+        ''
+        else ''
+          echo "Reverting DNS to original IPs..."
+          exec ${dnsRevertScript}
+        ''
+      }
           else
             echo "DNS is normal. Nothing to do."
           fi
@@ -563,18 +565,20 @@ _: {
           recommendedTlsSettings = lib.mkIf cfg.tls.enable true;
           virtualHosts =
             if cfg.tls.enable && allDomains != []
-            then lib.listToAttrs (map ({
+            then
+              lib.listToAttrs (map ({
                 domain,
                 zone,
-              }: lib.nameValuePair domain {
-                useACMEHost = zone;
-                enableACME = false;
-                forceSSL = true;
-                locations."/" = maintenanceLocation;
-                extraConfig = ''
-                  add_header Access-Control-Allow-Origin "*" always;
-                '';
-              })
+              }:
+                lib.nameValuePair domain {
+                  useACMEHost = zone;
+                  enableACME = false;
+                  forceSSL = true;
+                  locations."/" = maintenanceLocation;
+                  extraConfig = ''
+                    add_header Access-Control-Allow-Origin "*" always;
+                  '';
+                })
               domainZoneMap)
             else {
               "_" = {
@@ -598,13 +602,14 @@ _: {
           defaults.email = cfg.tls.acmeEmail;
         };
 
-        security.acme.certs = lib.listToAttrs (map (zone: lib.nameValuePair zone {
-          dnsProvider = "cloudflare";
-          group = "nginx";
-          environmentFile = tlsTokenFile;
-          extraDomainNames = ["*.${zone}"];
-        })
-          uniqueZones);
+        security.acme.certs = lib.listToAttrs (map (zone:
+          lib.nameValuePair zone {
+            dnsProvider = "cloudflare";
+            group = "nginx";
+            environmentFile = tlsTokenFile;
+            extraDomainNames = ["*.${zone}"];
+          })
+        uniqueZones);
       })
 
       (lib.mkIf cfg.dnsFailover.enable {

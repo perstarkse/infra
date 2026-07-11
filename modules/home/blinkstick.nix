@@ -2,8 +2,10 @@
   config.flake.homeModules.blinkstick = {
     pkgs,
     lib,
+    config,
     ...
   }: let
+    cfg = config.my.blinkstick;
     blinkStickPkg = pkgs.python3Packages.buildPythonPackage {
       pname = "blinkstick";
       version = "1.2";
@@ -59,7 +61,11 @@
           print("No BlinkSticks found...")
     '';
   in {
-    home.packages = [blinkstickScripts];
+    options.my.blinkstick.enable = lib.mkEnableOption "blinkstick-scripts for USB LED control";
+
+    config = lib.mkIf cfg.enable {
+      home.packages = [blinkstickScripts];
+    };
   };
 
   config.flake.nixosModules.blinkstick = {lib, ...}: {

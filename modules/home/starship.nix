@@ -1,40 +1,50 @@
 {
   config.flake.homeModules.starship = {
-    programs.starship = {
-      enable = true;
-      enableFishIntegration = true;
-      settings = {
-        add_newline = false;
+    lib,
+    config,
+    ...
+  }: let
+    cfg = config.my.starship;
+  in {
+    options.my.starship.enable = lib.mkEnableOption "starship prompt with fish integration";
 
-        character = {
-          success_symbol = "[➜](bold green)";
-          error_symbol = "[✗](bold red)";
-        };
+    config = lib.mkIf cfg.enable {
+      programs.starship = {
+        enable = true;
+        enableFishIntegration = true;
+        settings = {
+          add_newline = false;
 
-        cmd_duration = {
-          min_time = 500;
-          format = "took [$duration]($style)";
-        };
-        directory = {
-          truncation_length = 3;
-          truncate_to_repo = false;
-        };
-        hostname = {
-          ssh_only = true;
-          format = "at [$hostname]($style) ";
-        };
-        username = {
-          format = "[$user]($style) ";
-          show_always = false;
-        };
+          character = {
+            success_symbol = "[➜](bold green)";
+            error_symbol = "[✗](bold red)";
+          };
 
-        git_branch = {
-          format = "[$symbol$branch]($style) ";
-        };
+          cmd_duration = {
+            min_time = 500;
+            format = "took [$duration]($style)";
+          };
+          directory = {
+            truncation_length = 3;
+            truncate_to_repo = false;
+          };
+          hostname = {
+            ssh_only = true;
+            format = "at [$hostname]($style) ";
+          };
+          username = {
+            format = "[$user]($style) ";
+            show_always = false;
+          };
 
-        nix_shell = {
-          disabled = false;
-          format = "via [☃️ $state( \\($name\\))](bold blue) ";
+          git_branch = {
+            format = "[$symbol$branch]($style) ";
+          };
+
+          nix_shell = {
+            disabled = false;
+            format = "via [☃️ $state( \\($name\\))](bold blue) ";
+          };
         };
       };
     };

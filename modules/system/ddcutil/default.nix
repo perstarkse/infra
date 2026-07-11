@@ -27,6 +27,10 @@
       "@SEQ@"
       "@MAX_ATTEMPTS@"
       "@RETRY_INTERVAL@"
+      "@WAKE_INTERFACE@"
+      "@RESUME_ON_LOCAL_WAKE_ONLY@"
+      "@JOURNALCTL@"
+      "@GREP@"
     ];
 
     scriptReplacements = [
@@ -39,6 +43,14 @@
       "${pkgs.coreutils}/bin/seq"
       (toString monitorCfg.resumeMaxAttempts)
       (toString monitorCfg.resumeRetrySeconds)
+      (monitorCfg.wakeInterface or "")
+      (
+        if monitorCfg.resumeOnLocalWakeOnly
+        then "true"
+        else "false"
+      )
+      "${pkgs.systemd}/bin/journalctl"
+      "${pkgs.gnugrep}/bin/grep"
     ];
 
     substituteScript = name: scriptPath:
@@ -93,6 +105,25 @@
               default = 0.25;
               description = "Seconds between resume attempts when I2C is not ready yet.";
             };
+
+            wakeInterface = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              example = "enp4s0";
+              description = ''
+                Network interface used for wake-on-LAN. When set with resumeOnLocalWakeOnly,
+                monitor resume is skipped after a network-triggered wake.
+              '';
+            };
+
+            resumeOnLocalWakeOnly = lib.mkOption {
+              type = lib.types.bool;
+              default = true;
+              description = ''
+                Turn the monitor on after resume only for local wakes (keyboard, power button).
+                Requires wakeInterface when enabled.
+              '';
+            };
           };
         };
         default = {};
@@ -115,6 +146,10 @@
             assertion = monitorCfg.dataDir != null;
             message = "my.ddcutil.monitor.dataDir must be set when monitor scripts are enabled.";
           }
+          {
+            assertion = !monitorCfg.resumeOnLocalWakeOnly || monitorCfg.wakeInterface != null;
+            message = "my.ddcutil.monitor.wakeInterface must be set when resumeOnLocalWakeOnly is enabled.";
+          }
         ];
 
         environment.systemPackages = [
@@ -127,6 +162,11 @@
         environment.etc."systemd/system-sleep/monitor-power" = {
           source = pkgs.writeShellScript "monitor-power-resume" ''
             case "$1" in
+              pre)
+                ${pkgs.systemd}/bin/journalctl -k -b --show-cursor -n 1 --output=short-unix 2>/dev/null \
+                  | ${pkgs.gawk}/bin/awk -F';' '/^-- cursor:/ { print $2; exit }' \
+                  > /run/monitor-power-suspend-cursor || true
+                ;;
               post)
                 exec ${monitorResume}/bin/monitor-resume
                 ;;

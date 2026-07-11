@@ -1,10 +1,15 @@
 {
   config.flake.homeModules.node = {
     pkgs,
+    lib,
     config,
     ...
-  }: {
-    config = {
+  }: let
+    cfg = config.my.node;
+  in {
+    options.my.node.enable = lib.mkEnableOption "nodejs with global npm prefix";
+
+    config = lib.mkIf cfg.enable {
       home = {
         packages = with pkgs; [nodejs];
         sessionVariables = {

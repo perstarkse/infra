@@ -5,13 +5,18 @@
     pkgs,
     mkStandardExposureOptions,
     ...
-  }: {
-    options.my.home-assistant.exposure = mkStandardExposureOptions {
-      subject = "Home Assistant";
-      visibility = "internal";
+  }: let
+    cfg = config.my.home-assistant;
+  in {
+    options.my.home-assistant = {
+      enable = lib.mkEnableOption "Home Assistant container";
+      exposure = mkStandardExposureOptions {
+        subject = "Home Assistant";
+        visibility = "internal";
+      };
     };
 
-    config = {
+    config = lib.mkIf cfg.enable {
       systemd = {
         tmpfiles.rules = [
           "d /data/.state/home-assistant 0755 root root - -"

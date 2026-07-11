@@ -4,10 +4,12 @@
     config,
     ...
   }: let
+    cfg = config.my.ledger;
     ledgerGroup = "ledger";
     mainUser = config.my.mainUser.name;
   in {
-    config = {
+    options.my.ledger.enable = lib.mkEnableOption "Ledger hardware wallet udev/system support";
+    config = lib.mkIf cfg.enable {
       hardware.ledger.enable = true;
 
       users.groups.${ledgerGroup} = {};

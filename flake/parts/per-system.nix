@@ -116,7 +116,7 @@
     localCheckTargets = {
       exposure-manifest-check = exposureManifestCheck;
       router-checks = mkCheckBundle "router-checks" routerChecks;
-      predeploy-check = ioPredeployChecks.io-predeploy;
+      predeploy-check = mkCheckBundle "predeploy-check" ioPredeployChecks;
       final-checks = mkCheckBundle "final-checks" (routerChecks // ioPredeployChecks);
       garage-checks = mkCheckBundle "garage-checks" garageChecks;
       politikerstod-checks = mkCheckBundle "politikerstod-checks" politikerstodDistributedChecks;
@@ -179,7 +179,7 @@
           profile = "check-profile-io-final"
           profiles_mandatory.append(profile)
           profile_reasons.setdefault(profile, []).append(
-              "Mandatory io safety gate (router + io-predeploy)"
+              "Mandatory io safety gate (router + io predeploy tests)"
           )
 
       if old_lock_path:
@@ -250,7 +250,7 @@
           "checksResolved": checks_resolved,
           "reasons": reasons,
           "forceAllowed": machine != "io",
-          "forceBlockReason": "io deployments always require final-checks (router + io-predeploy)" if machine == "io" else None,
+          "forceBlockReason": "io deployments always require final-checks (router + io predeploy tests)" if machine == "io" else None,
           "warnings": warnings,
       }
 

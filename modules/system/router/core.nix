@@ -240,6 +240,11 @@
             default = [];
             description = "Additional router UDP ports reachable from this segment in addition to the ports granted by routerAccessLevel.";
           };
+          tcpMssClamp = mkOption {
+            type = types.nullOr types.int;
+            default = null;
+            description = "Optional TCP maximum segment size applied to forwarded SYN packets from this segment.";
+          };
           canReach = mkOption {
             type = types.listOf (types.oneOf [types.str reachRuleSubmodule]);
             default = [];
@@ -938,6 +943,19 @@
         allReservationMacs =
           (map (m: m.mac) cfg.machines)
           ++ concatMap (name: map (r: r.mac) cfg.segments.${name}.dhcp.reservations) segmentNames;
+        wireguardPeers = cfg.wireguard.peers;
+        wireguardPeerNames = map (peer: peer.name) wireguardPeers;
+        wireguardPeerIps = map (peer: peer.ip) wireguardPeers;
+        wireguardMaxHost =
+          {
+            "24" = 254;
+            "25" = 126;
+            "26" = 62;
+            "27" = 30;
+            "28" = 14;
+            "29" = 6;
+            "30" = 2;
+          }."${toString cfg.wireguard.cidrPrefix}" or 0;
       in [
         {
           assertion = cfg.ports != {};
@@ -962,6 +980,30 @@
         {
           assertion = all (port: port >= 1 && port <= 65535) cfg.wan.allowedUdpPorts;
           message = "my.router.wan.allowedUdpPorts must only contain ports in range 1..65535";
+        }
+        {
+          assertion = !cfg.wireguard.enable || (cfg.wireguard.listenPort >= 1 && cfg.wireguard.listenPort <= 65535);
+          message = "my.router.wireguard.listenPort must be in range 1..65535";
+        }
+        {
+          assertion = !cfg.wireguard.enable || isIPv4Base cfg.wireguard.subnet;
+          message = "my.router.wireguard.subnet must be an IPv4 base like 10.6.0";
+        }
+        {
+          assertion = !cfg.wireguard.enable || (cfg.wireguard.cidrPrefix >= 24 && cfg.wireguard.cidrPrefix <= 30);
+          message = "my.router.wireguard.cidrPrefix must be in range 24..30";
+        }
+        {
+          assertion = !cfg.wireguard.enable || (lib.length wireguardPeerNames == lib.length (unique wireguardPeerNames));
+          message = "my.router.wireguard.peers names must be unique";
+        }
+        {
+          assertion = !cfg.wireguard.enable || (lib.length wireguardPeerIps == lib.length (unique wireguardPeerIps));
+          message = "my.router.wireguard.peers IPs must be unique";
+        }
+        {
+          assertion = !cfg.wireguard.enable || all (peer: peer.name != "" && peer.ip >= 2 && peer.ip <= wireguardMaxHost) wireguardPeers;
+          message = "my.router.wireguard.peers must have non-empty names and IPs within the configured subnet";
         }
         {
           assertion = (lib.length segmentNames) == (lib.length (unique (map (name: cfg.segments.${name}.vlan.id) segmentNames)));
@@ -1084,6 +1126,17 @@
           message = "my.router.segments.*.policy.routerAllowed{Tcp,Udp}Ports must be within 1..65535";
         }
         {
+          assertion =
+            all (
+              name: let
+                clamp = cfg.segments.${name}.policy.tcpMssClamp;
+              in
+                clamp == null || (clamp >= 536 && clamp <= 65535)
+            )
+            segmentNames;
+          message = "my.router.segments.*.policy.tcpMssClamp must be null or in range 536..65535";
+        }
+        {
           assertion = lib.hasAttr "default" cfg.dns.profiles;
           message = "my.router.dns.profiles must define a default profile";
         }
@@ -1190,6 +1243,7 @@
           interface = "vlan${toString segment.vlan.id}";
           inherit (segment.policy) internet;
           inherit (segment.policy) isolateClients;
+          inherit (segment.policy) tcpMssClamp;
           inherit routerAccessLevel;
           routerAllowedTcpPorts = unique segment.policy.routerAllowedTcpPorts;
           routerAllowedUdpPorts = unique segment.policy.routerAllowedUdpPorts;

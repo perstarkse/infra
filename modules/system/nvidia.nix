@@ -5,7 +5,8 @@
     config,
     ...
   }: let
-    cfg = config.my.gui;
+    cfg = config.my.nvidia;
+    guiCfg = config.my.gui;
     bufferProfileName = "Limit Free Buffer Pool On Wayland Compositors";
     bufferRules = [
       # {
@@ -35,7 +36,8 @@
       }
     ];
   in {
-    config = {
+    options.my.nvidia.enable = lib.mkEnableOption "NVIDIA driver + modesetting";
+    config = lib.mkIf cfg.enable {
       hardware.graphics = {
         enable = true;
         enable32Bit = true;
@@ -57,7 +59,7 @@
       environment = {
         systemPackages = [pkgs.nvidia-vaapi-driver];
 
-        sessionVariables = lib.mkIf cfg.enable (
+        sessionVariables = lib.mkIf guiCfg.enable (
           {
             GBM_BACKEND = "nvidia-drm";
             __GLX_VENDOR_LIBRARY_NAME = "nvidia";
@@ -70,7 +72,7 @@
           }
         );
 
-        etc = lib.mkIf cfg.enable {
+        etc = lib.mkIf guiCfg.enable {
           "nvidia/nvidia-application-profiles-rc.d/50-limit-free-buffer-pool.json".text = builtins.toJSON {
             rules = bufferRules;
             profiles = bufferProfiles;

@@ -680,6 +680,9 @@ in {
       iotClient.succeed("dig +short @8.8.8.8 dns.google A | grep -x '0.0.0.0'")
       iotClient.succeed("dig +short @8.8.8.8 router.lan.test A | grep -x '10.0.0.1'")
       iotClient.fail("nc -vz -w2 1.1.1.1 853")
+      router.succeed("nft list table ip6 natV6 | grep -Eq 'iifname \"vlan20\".*dport 53.*redirect'")
+      router.succeed("nft list table ip6 filterV6 | grep -Eq 'iifname \"vlan20\".*oifname \"eth1\".*tcp dport 853.*reject'")
+      router.succeed("nft list table ip6 filterV6 | grep -Fq 'tcp flags syn tcp option maxseg size set rt mtu'")
     '';
   };
 
@@ -749,6 +752,7 @@ in {
       lanClient.succeed("curl --fail -sS -H 'Host: status.lan.test' http://10.0.0.1/ | grep -q '^ok$'")
       journalSender.succeed("nc -vz -w2 10.0.0.1 19532")
 
+      router.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '192\\.168\\.100\\.'", timeout=60)
       router_wan_ip = router.succeed("ip -4 -o addr show dev eth1 | awk '{print $4}' | cut -d/ -f1").strip()
 
       wan_status = wan.succeed(

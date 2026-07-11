@@ -1,5 +1,5 @@
 {
-  config.flake.homeModules.mail-clients-setup = {
+  config.flake.homeModules.mail = {
     config,
     lib,
     pkgs,
@@ -9,14 +9,18 @@
     enableThunderbird = lib.elem "thunderbird" cfg.clients;
     enableAerc = lib.elem "aerc" cfg.clients;
   in {
-    options.my.programs.mail.clients = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [];
-      example = ["aerc" "thunderbird"];
-      description = "List of mail clients to enable.";
+    options.my.programs.mail = {
+      enable = lib.mkEnableOption "mail clients";
+
+      clients = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = ["aerc" "thunderbird"];
+        description = "List of mail clients to enable.";
+      };
     };
 
-    config = {
+    config = lib.mkIf cfg.enable {
       programs.thunderbird = lib.mkIf enableThunderbird {
         enable = true;
         profiles."default".isDefault = true;

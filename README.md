@@ -78,8 +78,8 @@ Each machine imports shared modules via flake-parts, follows consistent patterns
 Recommended commands:
 
 - `nix build path:.#router-checks` — router integration suite (`router-smoke`, `router-vlan-regression`, `router-services`, `router-port-forward`, `router-wireguard`).
-- `nix build path:.#predeploy-check` — `io-predeploy` only (real `machines/io/configuration.nix` with test overrides/stubs).
-- `nix build path:.#final-checks` — router suite + `io-predeploy`.
+- `nix build path:.#predeploy-check` — `io-predeploy` and `io-wireguard` using the real `machines/io/configuration.nix` with test overrides/stubs.
+- `nix build path:.#final-checks` — router suite + io predeploy tests.
 - `nix flake check path:.` — all configured checks in this flake.
 
 Useful targeted checks:
@@ -87,6 +87,7 @@ Useful targeted checks:
 - `nix build path:.#checks.x86_64-linux.router-services` for nginx/domain routing changes.
 - `nix build path:.#checks.x86_64-linux.router-port-forward` for NAT/port-forward changes.
 - `nix build path:.#checks.x86_64-linux.io-predeploy` for full `io` predeploy coverage only.
+- `nix build path:.#checks.x86_64-linux.io-wireguard` for WireGuard access through the real `io` configuration.
 
 Notes:
 
@@ -164,7 +165,7 @@ machine-update-plan io --json
 Notes:
 
 - `io` is configured with `clan.core.deployment.requireExplicitUpdate = true`, so broad updates do not include it by accident.
-- `io` always gets mandatory `check-profile-io-final` (router + io-predeploy) regardless of inventory tags.
+- `io` always gets mandatory `check-profile-io-final` (router + io predeploy tests) regardless of inventory tags.
 - `--force` is blocked for `io` to prevent bypassing critical safety checks.
 - In multi-machine mode, `--force` must be allowed for every selected machine.
 - `machine-update` validates machine names before running checks; unknown names fail fast.

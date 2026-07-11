@@ -12,7 +12,7 @@
     # same store nix flake check reads.
     sccacheDir = "/var/cache/sccache-daemon";
 
-    cfg = config.my.sandboxedHomeBinaries or [];
+    cfg = config.my.sandboxed-binaries or [];
 
     mkSandboxWrapper = entry: let
       inherit (entry) name;
@@ -93,7 +93,7 @@
         } "$@"
       '';
   in {
-    options.my.sandboxedHomeBinaries = mkOption {
+    options.my.sandboxed-binaries = mkOption {
       type = types.listOf (types.submodule {
         options = {
           name = mkOption {

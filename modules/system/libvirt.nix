@@ -5,12 +5,12 @@
     pkgs,
     ...
   }: let
-    cfg = config.my.libvirtd;
+    cfg = config.my.libvirt;
   in {
     imports = [
       inputs.NixVirt.nixosModules.default
     ];
-    options.my.libvirtd = {
+    options.my.libvirt = {
       enable = lib.mkOption {
         type = lib.types.bool;
         default = false;

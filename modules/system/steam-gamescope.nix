@@ -5,9 +5,9 @@
     lib,
     ...
   }: let
-    cfg = config.my.steamGamescope;
+    cfg = config.my.steam-gamescope;
   in {
-    options.my.steamGamescope = {
+    options.my.steam-gamescope = {
       enable = lib.mkEnableOption "Steam in a gamescope session";
 
       width = lib.mkOption {

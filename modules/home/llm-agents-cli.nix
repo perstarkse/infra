@@ -5,9 +5,9 @@ _: {
     config,
     ...
   }: let
-    cfg = config.programs.llm-agents;
+    cfg = config.my.llm-agents-cli;
   in {
-    options.programs.llm-agents = {
+    options.my.llm-agents-cli = {
       enable = lib.mkEnableOption ''
         llm-agents CLI tools into the user profile via pkgs.llm-agents.
       '';

@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: let
-    cfg = config.my.bluetoothResume;
+    cfg = config.my.bluetooth-resume;
 
     scriptSubstitutions = [
       "@BLUETOOTHCTL@"
@@ -40,7 +40,7 @@
       "suspend-then-hibernate.target"
     ];
   in {
-    options.my.bluetoothResume = {
+    options.my.bluetooth-resume = {
       enable = lib.mkEnableOption "Fast Bluetooth recovery after system sleep";
 
       maxAttempts = lib.mkOption {

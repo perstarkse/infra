@@ -88,7 +88,6 @@
             domains = [
               "minne.stark.pub"
               "minne-demo.stark.pub"
-              "vault.stark.pub"
               "request.stark.pub"
               "politikerstod.stark.pub"
               "orebro.politikerstod.stark.pub"

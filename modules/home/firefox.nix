@@ -1,6 +1,14 @@
 {
   config.flake.homeModules.firefox = {
-    config = {
+    lib,
+    config,
+    ...
+  }: let
+    cfg = config.my.firefox;
+  in {
+    options.my.firefox.enable = lib.mkEnableOption "firefox with custom profile";
+
+    config = lib.mkIf cfg.enable {
       stylix.targets.firefox.profileNames = ["default"];
       programs.firefox = {
         enable = true;

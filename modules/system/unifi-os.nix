@@ -16,7 +16,7 @@ _: {
       types
       ;
 
-    cfg = config.services.unifi-os-server;
+    cfg = config.my.unifi-os;
     inherit (cfg) package;
     routerHelpers = config.routerHelpers or {};
     networkCfg = cfg.network;
@@ -332,7 +332,7 @@ _: {
       "${discoveryTargetBridgeUnitName}.service"
     ];
   in {
-    options.services.unifi-os-server = {
+    options.my.unifi-os = {
       enable = mkEnableOption "UniFi OS Server installer runtime";
 
       package = mkOption {
@@ -523,19 +523,19 @@ _: {
       assertions = [
         {
           assertion = networkCfg.parentInterface != null;
-          message = "services.unifi-os-server.network.parentInterface must be set";
+          message = "my.unifi-os.network.parentInterface must be set";
         }
         {
           assertion = networkCfg.subnet != null;
-          message = "services.unifi-os-server.network.subnet must be set";
+          message = "my.unifi-os.network.subnet must be set";
         }
         {
           assertion = networkCfg.gateway != null;
-          message = "services.unifi-os-server.network.gateway must be set";
+          message = "my.unifi-os.network.gateway must be set";
         }
         {
           assertion = !(hostAccessEnabled && networkCfg.hostAccess.address == null);
-          message = "services.unifi-os-server.network.hostAccess.address must be set when hostAccess is enabled";
+          message = "my.unifi-os.network.hostAccess.address must be set when hostAccess is enabled";
         }
       ];
 
