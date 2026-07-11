@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: let
-    cfg = config.my.wireguardTunnels;
+    cfg = config.my.wireguard-tunnels;
 
     enabledTunnels = lib.filterAttrs (_: t: t.enable) cfg.tunnels;
 
@@ -81,7 +81,7 @@
         meta.description = "WireGuard tunnel config for ${name}";
       };
   in {
-    options.my.wireguardTunnels = {
+    options.my.wireguard-tunnels = {
       enable = lib.mkEnableOption "WireGuard VPN tunnels";
 
       tunnels = lib.mkOption {

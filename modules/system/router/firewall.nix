@@ -5,7 +5,7 @@
     ...
   }: let
     cfg = config.my.router;
-    unifiOsCfg = config.services.unifi-os-server or null;
+    unifiOsCfg = config.my.unifi-os or null;
     helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     zones = helpers.zones or [];
     internalZones = lib.filter (zone: zone.kind != "wan") zones;
@@ -14,7 +14,6 @@
     primarySegment = helpers.primarySegment or null;
     primaryZoneInterface = helpers.primaryInterface;
     wanZone = lib.findFirst (zone: zone.kind == "wan") null zones;
-    workSegment = lib.findFirst (segment: segment.name == "work") null (helpers.segments or []);
     wan =
       if wanZone != null
       then wanZone.interface
@@ -58,6 +57,9 @@
 
     wgEnabled = cfg.wireguard.enable or false;
     wgPort = toString (cfg.wireguard.listenPort or 51820);
+    wgLanInputRule = lib.optionalString (wgEnabled && (cfg.wireguard.routeToLan or true)) ''
+      iifname "${primaryZoneInterface}" udp dport ${wgPort} accept
+    '';
     dnsFrontendPort = 53;
     internalServicePorts = config.my.router.internalServicePorts or [];
     wanAllowedTcpRules = lib.concatStringsSep "\n" (map (port: "iifname \"${wan}\" tcp dport ${toString port} accept") (lib.unique cfg.wan.allowedTcpPorts));
@@ -284,6 +286,11 @@
         pair: (mkReachRule pair.source pair.rule).v6
       )
       allReachPairs);
+    segmentMssClampRules = lib.concatStringsSep "\n" (map (
+        segment:
+          lib.optionalString (segment.tcpMssClamp != null) ''iifname "${segment.interface}" tcp flags syn tcp option maxseg size set ${toString segment.tcpMssClamp}''
+      )
+      (helpers.segments or []));
 
     bridgeLanInputCompatRule =
       if primaryZoneInterface != null && primaryZoneInterface != helpers.lanBridge
@@ -327,8 +334,8 @@
 
     forwardCommonRulesV4 = ''
       ct state established,related accept
-      ${lib.optionalString (workSegment != null) ''iifname "${workSegment.interface}" tcp flags syn tcp option maxseg size set 1280''}
       tcp flags syn tcp option maxseg size set rt mtu
+      ${segmentMssClampRules}
       ${forwardSameZoneRules}
       ${dohTransportBlockRules}
       ${castingRulesCommon}
@@ -341,7 +348,11 @@
 
     forwardCommonRulesV6 = ''
       ct state established,related accept
+      tcp flags syn tcp option maxseg size set rt mtu
+      ${segmentMssClampRules}
       ${forwardSameZoneRules}
+      ${dohTransportBlockRules}
+      ${castingRulesCommon}
       ${forwardWanEgressRules}
       ${forwardWanReturnRules}
       ${bridgeLanForwardCompatRulesV6}
@@ -364,6 +375,7 @@
                 ${bridgeLanInputCompatRule}
                 ${unifiDiscoveryInputRule}
                 ${inputInternalRulesV4}
+                ${wgLanInputRule}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" ip protocol icmp accept
                 ${wanServiceTcpRules}
@@ -393,6 +405,15 @@
               }
             '';
           };
+          natV6 = {
+            family = "ip6";
+            content = ''
+              chain prerouting {
+                type nat hook prerouting priority -100;
+                ${dnsRedirectPreroutingRules}
+              }
+            '';
+          };
           filterV6 = {
             family = "ip6";
             content = ''
@@ -403,6 +424,7 @@
                 ${bridgeLanInputCompatRule}
                 ${unifiDiscoveryInputRule}
                 ${inputInternalRulesV6}
+                ${wgLanInputRule}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" icmpv6 type {
                   destination-unreachable, packet-too-big, time-exceeded,

@@ -5,6 +5,7 @@
     mkStandardExposureOptions,
     ...
   }: let
+    cfg = config.my.frigate;
     frigateConfigYAML = builtins.toFile "frigate-config.yml" ''
       mqtt:
         enabled: false
@@ -53,12 +54,15 @@
               days: 0
     '';
   in {
-    options.my.frigate.exposure = mkStandardExposureOptions {
-      subject = "Frigate";
-      visibility = "internal";
+    options.my.frigate = {
+      enable = lib.mkEnableOption "Frigate NVR";
+      exposure = mkStandardExposureOptions {
+        subject = "Frigate";
+        visibility = "internal";
+      };
     };
 
-    config = {
+    config = lib.mkIf cfg.enable {
       # GPU access for container user
       users = {
         groups = {

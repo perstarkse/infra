@@ -1,6 +1,14 @@
 {
-  config.flake.nixosModules.intel-gpu = {pkgs, ...}: {
-    config = {
+  config.flake.nixosModules.intel-gpu = {
+    lib,
+    pkgs,
+    config,
+    ...
+  }: let
+    cfg = config.my.intel-gpu;
+  in {
+    options.my.intel-gpu.enable = lib.mkEnableOption "Intel GPU (xe/iHD) drivers and media runtime";
+    config = lib.mkIf cfg.enable {
       hardware.graphics = {
         enable = true;
         enable32Bit = true;

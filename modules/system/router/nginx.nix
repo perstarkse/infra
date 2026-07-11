@@ -279,6 +279,11 @@
             allVirtualHosts);
       };
 
+      # Emit DNS-01 certs for every vhost that declares acmeDns01, including
+      # exposure vhosts. Must iterate allVirtualHosts (router + exposure), not
+      # nginxCfg.virtualHosts alone — otherwise an exposure vhost with acmeDns01
+      # gets enableACME=true (HTTP-01) from the rendering loop but no matching
+      # security.acme.certs entry, silently downgrading DNS-01 to HTTP-01.
       security.acme.certs = lib.mkMerge (
         (map (
             vhost: let
@@ -296,7 +301,7 @@
                   };
               }
           )
-          nginxCfg.virtualHosts)
+          allVirtualHosts)
         ++ (map (wc: {
             "${wc.baseDomain}" =
               {

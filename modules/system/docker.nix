@@ -1,6 +1,13 @@
 {
-  config.flake.nixosModules.docker = {config, ...}: {
-    config = {
+  config.flake.nixosModules.docker = {
+    lib,
+    config,
+    ...
+  }: let
+    cfg = config.my.docker;
+  in {
+    options.my.docker.enable = lib.mkEnableOption "Docker daemon";
+    config = lib.mkIf cfg.enable {
       virtualisation.docker = {
         enable = true;
         rootless.enable = false;

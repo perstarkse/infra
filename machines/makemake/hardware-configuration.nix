@@ -70,7 +70,6 @@
         "minfreespace=10G"
       ];
     };
-
   };
 
   swapDevices = [

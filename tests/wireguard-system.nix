@@ -40,7 +40,7 @@
       networkConfig.ConfigureWithoutCarrier = true;
     };
 
-    my.wireguardTunnels = {
+    my.wireguard-tunnels = {
       enable = true;
       tunnels.genome-worktree-zenith = {
         enable = true;

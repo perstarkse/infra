@@ -61,7 +61,7 @@
         };
     };
 
-    config = {
+    config = lib.mkIf cfg.enable {
       services.vaultwarden = {
         inherit (cfg) enable;
         inherit (cfg) backupDir;

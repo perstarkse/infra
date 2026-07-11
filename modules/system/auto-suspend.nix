@@ -5,7 +5,24 @@
     pkgs,
     ...
   }: let
-    cfg = config.my.autoSuspend;
+    cfg = config.my.auto-suspend;
+    useSystemSuspend =
+      cfg.useSystemSuspend
+      && config.my.ddcutil.enable
+      && config.my.ddcutil.monitor.enable;
+
+    suspendCommand =
+      if useSystemSuspend
+      then ''
+        if command -v system-suspend >/dev/null 2>&1; then
+          system-suspend
+        else
+          ${pkgs.systemd}/bin/systemctl suspend
+        fi
+      ''
+      else ''
+        ${pkgs.systemd}/bin/systemctl suspend
+      '';
 
     autoSuspendScript = pkgs.writeShellScript "auto-suspend-check" ''
       set -euo pipefail
@@ -83,7 +100,7 @@
         if [ "$new" -ge "$REQUIRED_CHECKS" ]; then
           echo "$(date): SUSPENDING after $new consecutive idle checks" >> /var/log/auto-suspend.log
           echo "0" > "$IDLE_FILE"
-          ${pkgs.systemd}/bin/systemctl suspend
+          ${suspendCommand}
         fi
       else
         echo "$(date): ACTIVE (reset from $current/$REQUIRED_CHECKS) —$status" >> /var/log/auto-suspend.log
@@ -91,7 +108,7 @@
       fi
     '';
   in {
-    options.my.autoSuspend = {
+    options.my.auto-suspend = {
       enable = lib.mkEnableOption "automatic suspend on idle";
 
       checkIntervalMinutes = lib.mkOption {
@@ -129,6 +146,15 @@
         default = [];
         example = [9898 22];
         description = "Treat system as active when established TCP connections exist on these local ports (useful for remote dev sessions).";
+      };
+
+      useSystemSuspend = lib.mkOption {
+        type = lib.types.bool;
+        default = config.my.ddcutil.monitor.enable;
+        description = ''
+          Suspend via system-suspend when available so DDC monitor power-off runs first.
+          Requires my.ddcutil.monitor to be enabled.
+        '';
       };
     };
 

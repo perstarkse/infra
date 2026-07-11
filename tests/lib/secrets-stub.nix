@@ -49,4 +49,20 @@
         };
       };
     });
+
+  # NixOS-level `sops` option space. In production these options are provided
+  # by the vars-helper NixOS module (sops-nix itself is imported only as a
+  # home-manager module in this repo, so it does not declare NixOS-level
+  # `options.sops`). Tests stub vars-helper via this module, so declare the
+  # `sops` options consumed by system modules here — currently only
+  # router/wireguard's `sops.secrets.<name>.restartUnits`.
+  options.sops.secrets = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options.restartUnits = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+      };
+    });
+    default = {};
+  };
 }

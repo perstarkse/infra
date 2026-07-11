@@ -11,7 +11,7 @@
       options
       shared
       interception-tools
-      system-stylix
+      stylix
       docker
       attic-cache
       vaultwarden
@@ -50,6 +50,11 @@
     mainUser = {
       name = "p";
     };
+
+    stylix.enable = true;
+
+    docker.enable = true;
+    interception-tools.enable = true;
 
     listenNetworkAddress = "10.0.0.10";
 
@@ -197,12 +202,9 @@
       address = "10.0.0.10";
       exposure = {
         enable = true;
-        domain = "vault.stark.pub";
+        domain = "vault.lan.stark.pub";
+        useWildcard = "lanstark";
         lanOnly = true;
-        acmeDns01 = {
-          dnsProvider = "cloudflare";
-          environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
-        };
         router = {
           enable = true;
           targets = ["io"];
@@ -517,7 +519,7 @@
       };
     };
 
-    wireguardTunnels = {
+    wireguard-tunnels = {
       enable = true;
       tunnels = {
         genome-worktree-zenith = {

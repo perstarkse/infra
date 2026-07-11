@@ -1,288 +1,299 @@
 {
-  config.flake.homeModules.fish = {pkgs, ...}: {
-    programs.fish = {
-      enable = true;
-      interactiveShellInit = ''
-        set fish_greeting
-      '';
-      shellAliases = {
-        "ls" = "${pkgs.eza}/bin/eza";
-        "ll" = "${pkgs.eza}/bin/eza -l --icons=auto --git";
-        "la" = "${pkgs.eza}/bin/eza -la --icons=auto --git";
-        "ls-latest" = "${pkgs.eza}/bin/eza --icons=auto -l --sort=modified --reverse --git";
-        "ls-perms" = "${pkgs.eza}/bin/eza --icons=auto -l --octal-permissions --git";
-        "ls-all" = "${pkgs.eza}/bin/eza --icons=auto -la --git";
-        "ls-size" = "${pkgs.eza}/bin/eza --icons=auto -l --sort=size --reverse --git";
-        "ls-tree" = "${pkgs.eza}/bin/eza --tree --level=2 --icons=auto";
-        "ls-dirs" = "${pkgs.eza}/bin/eza -D --icons=auto";
-        "ls-files" = "${pkgs.eza}/bin/eza -f --icons=auto";
-        "wlc" = "${pkgs.wl-clipboard}/bin/wl-copy";
-        "sccache-stats" = "${pkgs.sccache}/bin/sccache --show-stats";
-        "pi" = "PI_FFF_MODE=override command pi";
-        "ocs" = "oc-attach";
-        "ocmo" = "oc-omo-attach";
-      };
-      functions = {
-        sccache-flush = ''
-          set -l dir $SCCACHE_DIR
-          if test -z "$dir"
-            echo "sccache-flush: SCCACHE_DIR is not set" >&2
-            return 1
-          end
+  config.flake.homeModules.fish = {
+    pkgs,
+    lib,
+    config,
+    ...
+  }: let
+    cfg = config.my.fish;
+  in {
+    options.my.fish.enable = lib.mkEnableOption "fish shell with aliases and functions";
 
-          read -P "Clear sccache directory at $dir? [y/N] " confirmation
-          if not test (string lower -- $confirmation) = "y"
-            echo "sccache-flush: aborted"
-            return 1
-          end
-
-          ${pkgs.sccache}/bin/sccache --stop-server >/dev/null 2>&1
-          if test -d "$dir"
-            command find $dir -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-          end
-          echo "sccache-flush: cleared $dir"
+    config = lib.mkIf cfg.enable {
+      programs.fish = {
+        enable = true;
+        interactiveShellInit = ''
+          set fish_greeting
         '';
-        watch-sccache = ''
-          if not type -q watch
-            echo "watch-sccache: the 'watch' command is unavailable" >&2
-            return 1
-          end
-          watch -n 2 ${pkgs.sccache}/bin/sccache --show-stats
-        '';
-        cargo = {
-          wraps = "cargo";
-          description = "Run cargo with reduced CPU/IO priority.";
-          body = ''
-            set -l cargo_path (command --search cargo)
-            or begin
-              echo "cargo function: cargo executable not found" >&2
-              return 127
-            end
-
-            if type -q ionice
-              nice -n 5 ionice -c2 -n7 $cargo_path $argv
-            else
-              nice -n 5 $cargo_path $argv
-            end
-          '';
+        shellAliases = {
+          "ls" = "${pkgs.eza}/bin/eza";
+          "ll" = "${pkgs.eza}/bin/eza -l --icons=auto --git";
+          "la" = "${pkgs.eza}/bin/eza -la --icons=auto --git";
+          "ls-latest" = "${pkgs.eza}/bin/eza --icons=auto -l --sort=modified --reverse --git";
+          "ls-perms" = "${pkgs.eza}/bin/eza --icons=auto -l --octal-permissions --git";
+          "ls-all" = "${pkgs.eza}/bin/eza --icons=auto -la --git";
+          "ls-size" = "${pkgs.eza}/bin/eza --icons=auto -l --sort=size --reverse --git";
+          "ls-tree" = "${pkgs.eza}/bin/eza --tree --level=2 --icons=auto";
+          "ls-dirs" = "${pkgs.eza}/bin/eza -D --icons=auto";
+          "ls-files" = "${pkgs.eza}/bin/eza -f --icons=auto";
+          "wlc" = "${pkgs.wl-clipboard}/bin/wl-copy";
+          "sccache-stats" = "${pkgs.sccache}/bin/sccache --show-stats";
+          "pi" = "PI_FFF_MODE=override command pi";
+          "ocs" = "oc-attach";
+          "ocmo" = "oc-omo-attach";
         };
-        ctllm = ''
-          # Usage: ctllm LOCATION [FILETYPE]
-          if test (count $argv) -lt 1
-            echo "Usage: ctllm LOCATION [FILETYPE]"
-            echo "Examples:"
-            echo "  ctllm .          # all files (auto-detect language)"
-            echo "  ctllm ./src nix  # only .nix files in ./src"
-            return 1
-          end
-
-          set location $argv[1]
-          if test (count $argv) -ge 2
-            set filetype $argv[2]
-          else
-            set filetype "*"
-          end
-
-          if test "$filetype" = "*"
-            set find_pattern '*'
-            set auto_detect 1
-          else
-            set find_pattern "*.$filetype"
-            set auto_detect 0
-            set fence_lang $filetype
-          end
-
-          function detect_lang
-            set fname (basename $argv[1])
-            set ext (string split -r -m1 . $fname)[-1]
-            switch $ext
-              case nix;   echo nix
-              case py;    echo python
-              case js;    echo javascript
-              case ts;    echo typescript
-              case json;  echo json
-              case yaml yml; echo yaml
-              case sh bash zsh fish; echo shell
-              case md;    echo markdown
-              case html;  echo html
-              case css;   echo css
-              case go;    echo go
-              case rs;    echo rust
-              case c;     echo c
-              case h;     echo c
-              case cpp cxx cc; echo cpp
-              case java;  echo java
-              case '*';   echo text
-            end
-          end
-
-          find $location -type f -name "$find_pattern" -print0 | while read -z file
-            # Skip unwanted dirs
-            if string match -q "*/.git/*" $file; or string match -q "*/node_modules/*" $file; or string match -q "*/.direnv/*" $file
-              continue
-            end
-
-            # Skip binary / big files
-            set ext (string lower (string split -r -m1 . $file)[-1])
-            switch $ext
-              case png jpg jpeg gif webp pdf
-                continue
-            end
-
-            if test (stat -c%s $file) -gt 1048576
-              continue
-            end
-
-            if test $auto_detect -eq 1
-              set fence_lang (detect_lang $file)
-            end
-
-            printf '\n# %s\n\n```%s\n' $file $fence_lang
-            cat -- $file
-            printf '\n```\n'
-          end
-        '';
-        gui = ''
-          if test (count $argv) -gt 0
-            if type -q niri
-              niri msg action spawn -- $argv
-            else if type -q swaymsg
-              swaymsg exec -- $argv
-            else if type -q hyprctl
-              hyprctl dispatch exec $argv
-            else
-              echo "No supported compositor control command found."
+        functions = {
+          sccache-flush = ''
+            set -l dir $SCCACHE_DIR
+            if test -z "$dir"
+              echo "sccache-flush: SCCACHE_DIR is not set" >&2
               return 1
             end
-          else
-            echo "Usage: gui <command>"
-            return 1
-          end
-          complete -c gui -w command
-        '';
-        oc-attach = ''
-                    set -l server_url http://127.0.0.1:4096
-                    if set -q OPENCODE_SHARED_URL
-                      set server_url $OPENCODE_SHARED_URL
-                    end
 
-                    set -l directory (pwd -P)
+            read -P "Clear sccache directory at $dir? [y/N] " confirmation
+            if not test (string lower -- $confirmation) = "y"
+              echo "sccache-flush: aborted"
+              return 1
+            end
 
-                    if not type -q node
-                      echo "oc-attach: node is required" >&2
-                      return 127
-                    end
+            ${pkgs.sccache}/bin/sccache --stop-server >/dev/null 2>&1
+            if test -d "$dir"
+              command find $dir -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+            end
+            echo "sccache-flush: cleared $dir"
+          '';
+          watch-sccache = ''
+            if not type -q watch
+              echo "watch-sccache: the 'watch' command is unavailable" >&2
+              return 1
+            end
+            watch -n 2 ${pkgs.sccache}/bin/sccache --show-stats
+          '';
+          cargo = {
+            wraps = "cargo";
+            description = "Run cargo with reduced CPU/IO priority.";
+            body = ''
+              set -l cargo_path (command --search cargo)
+              or begin
+                echo "cargo function: cargo executable not found" >&2
+                return 127
+              end
 
-                    set -l session_id (
-                      node -e '
-          const http = require("http")
-          const { URL } = require("url")
-          const [serverUrl, directory] = process.argv.slice(1)
-          const target = new URL("/session", serverUrl)
-          target.searchParams.set("directory", directory)
-          http.get(target, (res) => {
-            let data = ""
-            res.on("data", (chunk) => data += chunk)
-            res.on("end", () => {
-              if (res.statusCode !== 200) {
-                process.exit(0)
-                return
-              }
-              let payload
-              try {
-                payload = JSON.parse(data)
-              } catch {
-                process.exit(0)
-                return
-              }
-              if (!Array.isArray(payload) || payload.length === 0) {
-                process.exit(0)
-                return
-              }
-              payload.sort((left, right) => {
-                const leftTime = left?.time?.updated ?? left?.time?.created ?? 0
-                const rightTime = right?.time?.updated ?? right?.time?.created ?? 0
-                return rightTime - leftTime
+              if type -q ionice
+                nice -n 5 ionice -c2 -n7 $cargo_path $argv
+              else
+                nice -n 5 $cargo_path $argv
+              end
+            '';
+          };
+          ctllm = ''
+            # Usage: ctllm LOCATION [FILETYPE]
+            if test (count $argv) -lt 1
+              echo "Usage: ctllm LOCATION [FILETYPE]"
+              echo "Examples:"
+              echo "  ctllm .          # all files (auto-detect language)"
+              echo "  ctllm ./src nix  # only .nix files in ./src"
+              return 1
+            end
+
+            set location $argv[1]
+            if test (count $argv) -ge 2
+              set filetype $argv[2]
+            else
+              set filetype "*"
+            end
+
+            if test "$filetype" = "*"
+              set find_pattern '*'
+              set auto_detect 1
+            else
+              set find_pattern "*.$filetype"
+              set auto_detect 0
+              set fence_lang $filetype
+            end
+
+            function detect_lang
+              set fname (basename $argv[1])
+              set ext (string split -r -m1 . $fname)[-1]
+              switch $ext
+                case nix;   echo nix
+                case py;    echo python
+                case js;    echo javascript
+                case ts;    echo typescript
+                case json;  echo json
+                case yaml yml; echo yaml
+                case sh bash zsh fish; echo shell
+                case md;    echo markdown
+                case html;  echo html
+                case css;   echo css
+                case go;    echo go
+                case rs;    echo rust
+                case c;     echo c
+                case h;     echo c
+                case cpp cxx cc; echo cpp
+                case java;  echo java
+                case '*';   echo text
+              end
+            end
+
+            find $location -type f -name "$find_pattern" -print0 | while read -z file
+              # Skip unwanted dirs
+              if string match -q "*/.git/*" $file; or string match -q "*/node_modules/*" $file; or string match -q "*/.direnv/*" $file
+                continue
+              end
+
+              # Skip binary / big files
+              set ext (string lower (string split -r -m1 . $file)[-1])
+              switch $ext
+                case png jpg jpeg gif webp pdf
+                  continue
+              end
+
+              if test (stat -c%s $file) -gt 1048576
+                continue
+              end
+
+              if test $auto_detect -eq 1
+                set fence_lang (detect_lang $file)
+              end
+
+              printf '\n# %s\n\n```%s\n' $file $fence_lang
+              cat -- $file
+              printf '\n```\n'
+            end
+          '';
+          gui = ''
+            if test (count $argv) -gt 0
+              if type -q niri
+                niri msg action spawn -- $argv
+              else if type -q swaymsg
+                swaymsg exec -- $argv
+              else if type -q hyprctl
+                hyprctl dispatch exec $argv
+              else
+                echo "No supported compositor control command found."
+                return 1
+              end
+            else
+              echo "Usage: gui <command>"
+              return 1
+            end
+            complete -c gui -w command
+          '';
+          oc-attach = ''
+                      set -l server_url http://127.0.0.1:4096
+                      if set -q OPENCODE_SHARED_URL
+                        set server_url $OPENCODE_SHARED_URL
+                      end
+
+                      set -l directory (pwd -P)
+
+                      if not type -q node
+                        echo "oc-attach: node is required" >&2
+                        return 127
+                      end
+
+                      set -l session_id (
+                        node -e '
+            const http = require("http")
+            const { URL } = require("url")
+            const [serverUrl, directory] = process.argv.slice(1)
+            const target = new URL("/session", serverUrl)
+            target.searchParams.set("directory", directory)
+            http.get(target, (res) => {
+              let data = ""
+              res.on("data", (chunk) => data += chunk)
+              res.on("end", () => {
+                if (res.statusCode !== 200) {
+                  process.exit(0)
+                  return
+                }
+                let payload
+                try {
+                  payload = JSON.parse(data)
+                } catch {
+                  process.exit(0)
+                  return
+                }
+                if (!Array.isArray(payload) || payload.length === 0) {
+                  process.exit(0)
+                  return
+                }
+                payload.sort((left, right) => {
+                  const leftTime = left?.time?.updated ?? left?.time?.created ?? 0
+                  const rightTime = right?.time?.updated ?? right?.time?.created ?? 0
+                  return rightTime - leftTime
+                })
+                const sessionId = payload[0]?.id
+                if (typeof sessionId === "string" && sessionId.length > 0) {
+                  process.stdout.write(sessionId)
+                }
               })
-              const sessionId = payload[0]?.id
-              if (typeof sessionId === "string" && sessionId.length > 0) {
-                process.stdout.write(sessionId)
-              }
-            })
-          }).on("error", () => process.exit(0))
-          ' $server_url $directory
-                    )
+            }).on("error", () => process.exit(0))
+            ' $server_url $directory
+                      )
 
-                    if test -n "$session_id"
-                      command opencode attach $server_url --dir $directory --session $session_id $argv
-                    else
-                      command opencode attach $server_url --dir $directory $argv
-                    end
-        '';
-        oc-omo-attach = ''
-                    set -l server_url http://127.0.0.1:4097
-                    if set -q OPENCODE_OMO_URL
-                      set server_url $OPENCODE_OMO_URL
-                    end
+                      if test -n "$session_id"
+                        command opencode attach $server_url --dir $directory --session $session_id $argv
+                      else
+                        command opencode attach $server_url --dir $directory $argv
+                      end
+          '';
+          oc-omo-attach = ''
+                      set -l server_url http://127.0.0.1:4097
+                      if set -q OPENCODE_OMO_URL
+                        set server_url $OPENCODE_OMO_URL
+                      end
 
-                    set -l directory (pwd -P)
+                      set -l directory (pwd -P)
 
-                    if not type -q node
-                      echo "oc-omo-attach: node is required" >&2
-                      return 127
-                    end
+                      if not type -q node
+                        echo "oc-omo-attach: node is required" >&2
+                        return 127
+                      end
 
-                    if not type -q opencode-omo
-                      echo "oc-omo-attach: opencode-omo is required" >&2
-                      return 127
-                    end
+                      if not type -q opencode-omo
+                        echo "oc-omo-attach: opencode-omo is required" >&2
+                        return 127
+                      end
 
-                    set -l session_id (
-                      node -e '
-          const http = require("http")
-          const { URL } = require("url")
-          const [serverUrl, directory] = process.argv.slice(1)
-          const target = new URL("/session", serverUrl)
-          target.searchParams.set("directory", directory)
-          http.get(target, (res) => {
-            let data = ""
-            res.on("data", (chunk) => data += chunk)
-            res.on("end", () => {
-              if (res.statusCode !== 200) {
-                process.exit(0)
-                return
-              }
-              let payload
-              try {
-                payload = JSON.parse(data)
-              } catch {
-                process.exit(0)
-                return
-              }
-              if (!Array.isArray(payload) || payload.length === 0) {
-                process.exit(0)
-                return
-              }
-              payload.sort((left, right) => {
-                const leftTime = left?.time?.updated ?? left?.time?.created ?? 0
-                const rightTime = right?.time?.updated ?? right?.time?.created ?? 0
-                return rightTime - leftTime
+                      set -l session_id (
+                        node -e '
+            const http = require("http")
+            const { URL } = require("url")
+            const [serverUrl, directory] = process.argv.slice(1)
+            const target = new URL("/session", serverUrl)
+            target.searchParams.set("directory", directory)
+            http.get(target, (res) => {
+              let data = ""
+              res.on("data", (chunk) => data += chunk)
+              res.on("end", () => {
+                if (res.statusCode !== 200) {
+                  process.exit(0)
+                  return
+                }
+                let payload
+                try {
+                  payload = JSON.parse(data)
+                } catch {
+                  process.exit(0)
+                  return
+                }
+                if (!Array.isArray(payload) || payload.length === 0) {
+                  process.exit(0)
+                  return
+                }
+                payload.sort((left, right) => {
+                  const leftTime = left?.time?.updated ?? left?.time?.created ?? 0
+                  const rightTime = right?.time?.updated ?? right?.time?.created ?? 0
+                  return rightTime - leftTime
+                })
+                const sessionId = payload[0]?.id
+                if (typeof sessionId === "string" && sessionId.length > 0) {
+                  process.stdout.write(sessionId)
+                }
               })
-              const sessionId = payload[0]?.id
-              if (typeof sessionId === "string" && sessionId.length > 0) {
-                process.stdout.write(sessionId)
-              }
-            })
-          }).on("error", () => process.exit(0))
-          ' $server_url $directory
-                    )
+            }).on("error", () => process.exit(0))
+            ' $server_url $directory
+                      )
 
-                    if test -n "$session_id"
-                      command opencode-omo attach $server_url --dir $directory --session $session_id $argv
-                    else
-                      command opencode-omo attach $server_url --dir $directory $argv
-                    end
-        '';
+                      if test -n "$session_id"
+                        command opencode-omo attach $server_url --dir $directory --session $session_id $argv
+                      else
+                        command opencode-omo attach $server_url --dir $directory $argv
+                      end
+          '';
+        };
       };
     };
   };

@@ -12,7 +12,7 @@
       options
       shared
       interception-tools
-      system-stylix
+      stylix
       atuin
       greetd
       nvidia
@@ -42,7 +42,7 @@
         starship
         qutebrowser
         bitwarden-client
-        mail-clients-setup
+        mail
         ssh
         niri
         xdg-mimeapps
@@ -57,21 +57,47 @@
       ]);
     my = {
       programs = {
-        mail = {
-          clients = ["aerc"];
-        };
         rbw = {
           pinentrySource = "gui";
         };
-        rofi = {
-          withRbw = true;
-        };
-        helix = {
-          languages = ["nix" "markdown" "spellchecking"];
+        mail = {
+          enable = true;
+          clients = ["aerc"];
         };
       };
 
+      qutebrowser = {
+        enable = true;
+      };
+
+      # Home module enables (converted from always-on to my.<x>.enable)
+      bitwarden-client.enable = true;
+      direnv.enable = true;
+      dunst.enable = true;
+      firefox.enable = true;
+      fish.enable = true;
+      git.enable = true;
+      ncspot.enable = true;
+      nix-scaffold.enable = true;
+      node.enable = true;
+      ssh.enable = true;
+      starship.enable = true;
+      xdg-mimeapps.enable = true;
+      zellij.enable = true;
+      zoxide.enable = true;
+
+      rofi = {
+        enable = true;
+        withRbw = true;
+      };
+
+      helix = {
+        enable = true;
+        languages = ["nix" "markdown" "spellchecking"];
+      };
+
       waybar = {
+        enable = true;
         windowManager = "niri";
       };
     };
@@ -96,7 +122,7 @@
       }
     ];
 
-    programs.llm-agents = {
+    my.llm-agents-cli = {
       enable = true;
       packages = ["claude-code"];
     };
@@ -132,6 +158,12 @@
   security.polkit.enable = true;
   my = {
     atuin.enable = true;
+
+    stylix.enable = true;
+    interception-tools.enable = true;
+    fonts.enable = true;
+    nvidia.enable = true;
+    sound.enable = true;
     secrets = {
       discover = {
         enable = true;

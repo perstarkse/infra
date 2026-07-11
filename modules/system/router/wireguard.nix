@@ -25,14 +25,24 @@
     staticPeers = lib.filter (p: !(p.autoGenerate or false)) (wg.peers or []);
 
     peerAddress = peer: "${subnetBase}.${toString peer.ip}/32";
+    peerPublicKeyCred = peer: "wireguard-${interfaceName}-peer-${peer.name}-public-key";
+    peerPublicKeyPath = peer: config.my.secrets.getPath "wireguard-peer-${peer.name}" "public-key";
     mkPeer = peer:
       {
-        PublicKey = peer.publicKey;
+        PublicKey =
+          if peer.autoGenerate
+          then "@${peerPublicKeyCred peer}"
+          else peer.publicKey;
         AllowedIPs = [(peerAddress peer)];
       }
       // (lib.optionalAttrs (peer.persistentKeepalive != null) {
         PersistentKeepalive = peer.persistentKeepalive;
       });
+    networkdCredentials =
+      lib.optionals (wg.privateKeyFile == null) [
+        "${privateKeyCred}:${privateKeyPath}"
+      ]
+      ++ map (peer: "${peerPublicKeyCred peer}:${peerPublicKeyPath peer}") generatedPeers;
 
     routerIp =
       if config ? routerHelpers
@@ -140,36 +150,6 @@
       meta.tags = ["wireguard" "router"];
       meta.description = "Peer ${peer.name} WireGuard bundle";
     });
-
-    mkPeerService = peer: let
-      peerName = "wireguard-peer-${peer.name}";
-      allowed = peerAddress peer;
-      keepAlive = toString (peer.persistentKeepalive or 25);
-    in {
-      description = "Apply WireGuard peer ${peer.name}";
-      after = ["network-online.target"];
-      wants = ["network-online.target"];
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = pkgs.writeShellScript "wg-add-${peer.name}" ''
-          set -euo pipefail
-          iface=${interfaceName}
-          pubkey=$(cat ${config.my.secrets.getPath peerName "public-key"})
-
-          for i in $(seq 1 15); do
-            if ${pkgs.iproute2}/bin/ip link show "$iface" >/dev/null 2>&1; then
-              ${pkgs.wireguard-tools}/bin/wg set "$iface" peer "$pubkey" allowed-ips "${allowed}" persistent-keepalive "${keepAlive}"
-              exit 0
-            fi
-            sleep 1
-          done
-
-          echo "Interface $iface not up; could not apply peer ${peer.name}" >&2
-          exit 1
-        '';
-      };
-      wantedBy = ["multi-user.target"];
-    };
   in {
     config = lib.mkIf enabled {
       assertions =
@@ -223,9 +203,17 @@
         ]
         ++ map mkPeerSecret generatedPeers;
 
-      sops.secrets."vars/wireguard-server/private-key".restartUnits = lib.mkAfter [
-        "systemd-networkd.service"
-      ];
+      sops.secrets =
+        {
+          "vars/wireguard-server/private-key".restartUnits = lib.mkAfter [
+            "systemd-networkd.service"
+          ];
+        }
+        // lib.listToAttrs (map (peer: {
+            name = "vars/wireguard-peer-${peer.name}/public-key";
+            value.restartUnits = lib.mkAfter ["systemd-networkd.service"];
+          })
+          generatedPeers);
 
       systemd = {
         network.netdevs."30-${interfaceName}" = {
@@ -240,7 +228,7 @@
             }
             // lib.optionalAttrs (wg.privateKeyFile != null) {PrivateKeyFile = privateKeyPath;}
             // lib.optionalAttrs (wg.privateKeyFile == null) {PrivateKey = "@${privateKeyCred}";};
-          wireguardPeers = map mkPeer staticPeers;
+          wireguardPeers = map mkPeer (wg.peers or []);
         };
 
         network.networks."30-${interfaceName}" = {
@@ -254,17 +242,9 @@
           linkConfig.MTUBytes = "1420";
         };
 
-        services =
-          lib.listToAttrs (map (peer: {
-              name = "wireguard-apply-${peer.name}";
-              value = mkPeerService peer;
-            })
-            generatedPeers)
-          // lib.optionalAttrs (wg.privateKeyFile == null) {
-            systemd-networkd.serviceConfig.LoadCredential = [
-              "${privateKeyCred}:${privateKeyPath}"
-            ];
-          };
+        services = lib.optionalAttrs (networkdCredentials != []) {
+          systemd-networkd.serviceConfig.LoadCredential = networkdCredentials;
+        };
       };
     };
   };

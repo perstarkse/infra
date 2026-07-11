@@ -413,6 +413,8 @@
   in {
     options = {
       my.waybar = {
+        enable = lib.mkEnableOption "waybar status bar";
+
         windowManager = lib.mkOption {
           type = lib.types.enum ["hyprland" "sway" "niri"];
           default = "hyprland";
@@ -421,7 +423,7 @@
       };
     };
 
-    config = {
+    config = lib.mkIf cfg.enable {
       home.packages = [pkgs.ncdu];
 
       # Fix for multiple Waybar instances after monitor sleep

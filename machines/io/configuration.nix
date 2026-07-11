@@ -31,7 +31,7 @@ in {
       ./boot.nix
       ./agent-microvm.nix
       interception-tools
-      system-stylix
+      stylix
       shared
       options
       attic-cache
@@ -113,6 +113,12 @@ in {
     mainUser = {
       name = "p";
     };
+
+    stylix.enable = true;
+
+    interception-tools.enable = true;
+    frigate.enable = true;
+    home-assistant.enable = true;
 
     # Garage S3-compatible storage (clustered with makemake)
     garage = {
@@ -284,6 +290,7 @@ in {
           policy = {
             internet = true;
             isolateClients = false;
+            tcpMssClamp = 1280;
           };
         };
 
@@ -366,7 +373,7 @@ in {
             ip = 2;
             autoGenerate = true;
             persistentKeepalive = 25;
-            clientAllowedIPs = ["10.0.0.0/16"];
+            clientAllowedIPs = ["10.0.0.0/24"];
           }
           {
             name = "bro";
@@ -500,7 +507,6 @@ in {
               domains = [
                 "chat.stark.pub"
                 "minne.stark.pub"
-                "vault.stark.pub"
                 "request.stark.pub"
                 "encke.stark.pub"
                 "minne-demo.stark.pub"
@@ -605,12 +611,12 @@ in {
       };
     };
 
-    libvirtd = {
+    libvirt = {
       enable = true;
     };
   };
 
-  services.unifi-os-server = {
+  my.unifi-os = {
     enable = true;
     advertisedAddress = "10.0.0.21";
     network = {

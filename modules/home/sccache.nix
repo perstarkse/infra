@@ -5,11 +5,14 @@
     config,
     ...
   }: let
+    cfg = config.my.sccache;
     # Shared with modules/system/sccache-daemon.nix so devshell cargo builds,
     # the bubblewrap codex sandbox, and nix flake check all hit one cache.
     sccacheDir = "/var/cache/sccache-daemon";
   in {
-    config = {
+    options.my.sccache.enable = lib.mkEnableOption "sccache wrapper for rust dev";
+
+    config = lib.mkIf cfg.enable {
       home = {
         packages = [pkgs.sccache];
         sessionVariables = {
