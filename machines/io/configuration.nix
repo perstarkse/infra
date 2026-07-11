@@ -171,6 +171,12 @@ in {
     exposure.routerImports = {
       machines = ["makemake"];
       routerName = "io";
+      vhostOverrides."makemake.nous" = {
+        acmeDns01 = {
+          dnsProvider = "cloudflare";
+          environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+        };
+      };
     };
 
     exposure.services =
