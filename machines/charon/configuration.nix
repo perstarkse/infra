@@ -155,6 +155,24 @@ in {
           shellAlias = "PI_FFF_MODE=override command pi";
           defaultProvider = "cursor";
           defaultModel = "composer-2:slow";
+          extraPackages = ["/home/p/repos/pi-cline-provider"];
+          models = {
+            providers.openrouter.models = [
+              {
+                id = "tencent/hy3:free";
+                name = "Tencent Hy3 (Free)";
+                reasoning = true;
+                input = ["text"];
+                cost = {input = 0; output = 0; cacheRead = 0; cacheWrite = 0;};
+                contextWindow = 262144;
+                maxTokens = 262144;
+                compat = {
+                  thinkingFormat = "openrouter";
+                  supportsDeveloperRole = false;
+                };
+              }
+            ];
+          };
           subagentOverrides = {
             scout = {
               model = "opencode/deepseek-v4-flash-free";
