@@ -26,48 +26,72 @@
         ''
       else null;
 
-    scriptSubstitutions = [
+    commonScriptSubstitutions = [
       "@MONITOR_DIR@"
       "@DISPLAY_NUM@"
       "@YQ@"
       "@DDCUTIL@"
-      "@SLEEP@"
-      "@LOGGER@"
-      "@SEQ@"
-      "@MAX_ATTEMPTS@"
-      "@RETRY_INTERVAL@"
-      "@WAKE_INTERFACE@"
-      "@RESUME_ON_LOCAL_WAKE_ONLY@"
-      "@JOURNALCTL@"
-      "@GREP@"
     ];
 
-    scriptReplacements = [
+    commonScriptReplacements = [
       "${monitorDataPackage}"
       (toString monitorCfg.display)
       "${pkgs.yq-go}/bin/yq"
       "${ddcutilWrapper}/bin/ddcutil"
-      "${pkgs.coreutils}/bin/sleep"
-      "${pkgs.util-linux}/bin/logger"
-      "${pkgs.coreutils}/bin/seq"
+    ];
+
+    resumeScriptSubstitutions = [
+      "@DISPLAY_NUM@"
+      "@MAX_ATTEMPTS@"
+      "@RETRY_INTERVAL@"
+      "@RESUME_ON_LOCAL_WAKE_ONLY@"
+      "@RESUME_WAIT_SECONDS@"
+      "@REMOTE_WAKE_USER@"
+      "@LOGINCTL@"
+      "@AWK@"
+      "@JOURNALCTL@"
+      "@GREP@"
+      "@TIMEOUT@"
+      "@DD@"
+      "@SLEEP@"
+      "@LOGGER@"
+      "@SEQ@"
+      "@DDCUTIL@"
+    ];
+
+    resumeScriptReplacements = [
+      (toString monitorCfg.display)
       (toString monitorCfg.resumeMaxAttempts)
       (toString monitorCfg.resumeRetrySeconds)
-      (monitorCfg.wakeInterface or "")
       (
         if monitorCfg.resumeOnLocalWakeOnly
         then "true"
         else "false"
       )
+      (toString monitorCfg.resumeRemoteWakeWaitSeconds)
+      (monitorCfg.remoteWakeUser or "")
+      "${pkgs.systemd}/bin/loginctl"
+      "${pkgs.gawk}/bin/awk"
       "${pkgs.systemd}/bin/journalctl"
       "${pkgs.gnugrep}/bin/grep"
+      "${pkgs.coreutils}/bin/timeout"
+      "${pkgs.coreutils}/bin/dd"
+      "${pkgs.coreutils}/bin/sleep"
+      "${pkgs.util-linux}/bin/logger"
+      "${pkgs.coreutils}/bin/seq"
+      "${ddcutilWrapper}/bin/ddcutil"
     ];
 
     substituteScript = name: scriptPath:
       pkgs.writeShellScriptBin name
-      (lib.replaceStrings scriptSubstitutions scriptReplacements (builtins.readFile scriptPath));
+      (lib.replaceStrings commonScriptSubstitutions commonScriptReplacements (builtins.readFile scriptPath));
+
+    substituteResumeScript =
+      pkgs.writeShellScriptBin "monitor-resume"
+      (lib.replaceStrings resumeScriptSubstitutions resumeScriptReplacements (builtins.readFile ./scripts/resume.sh));
 
     monitorPower = substituteScript "monitor-power" ./scripts/power.sh;
-    monitorResume = substituteScript "monitor-resume" ./scripts/resume.sh;
+    monitorResume = substituteResumeScript;
 
     systemSuspend =
       pkgs.writeShellScriptBin "system-suspend" (builtins.readFile ./scripts/suspend.sh);
@@ -115,22 +139,31 @@
               description = "Seconds between resume attempts when I2C is not ready yet.";
             };
 
-            wakeInterface = lib.mkOption {
-              type = lib.types.nullOr lib.types.str;
-              default = null;
-              example = "enp4s0";
-              description = ''
-                Network interface used for wake-on-LAN. When set with resumeOnLocalWakeOnly,
-                monitor resume is skipped after a network-triggered wake.
-              '';
-            };
-
             resumeOnLocalWakeOnly = lib.mkOption {
               type = lib.types.bool;
               default = true;
               description = ''
                 Turn the monitor on after resume only for local wakes (keyboard, power button).
-                Requires wakeInterface when enabled.
+                Remote wakes (for example wake-proxy keep-awake SSH) skip monitor power-on.
+              '';
+            };
+
+            resumeRemoteWakeWaitSeconds = lib.mkOption {
+              type = lib.types.float;
+              default = 5.0;
+              description = ''
+                Seconds to wait after resume for remote wake signals before skipping monitor
+                power-on. Keyboard and power-button wakes are detected sooner when possible.
+              '';
+            };
+
+            remoteWakeUser = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = "wakeproxy-keep-awake";
+              example = "wakeproxy-keep-awake";
+              description = ''
+                Login user that indicates a remote wake-proxy keep-awake session.
+                Set to null to disable this signal.
               '';
             };
           };
@@ -159,10 +192,6 @@
             assertion = monitorCfg.dataDir != null;
             message = "my.ddcutil.monitor.dataDir must be set when monitor scripts are enabled.";
           }
-          {
-            assertion = !monitorCfg.resumeOnLocalWakeOnly || monitorCfg.wakeInterface != null;
-            message = "my.ddcutil.monitor.wakeInterface must be set when resumeOnLocalWakeOnly is enabled.";
-          }
         ];
 
         environment.systemPackages = [
@@ -176,19 +205,18 @@
           source = pkgs.writeShellScript "monitor-power-resume" ''
             case "$1" in
               pre)
-                ${pkgs.systemd}/bin/journalctl -k -b --show-cursor -n 0 --output=short-unix 2>/dev/null \
-                  | ${pkgs.gawk}/bin/awk -F';' '/^-- cursor:/ { print $2; exit }' \
-                  > /run/monitor-power-suspend-cursor || true
-                ${
-                  if monitorCfg.wakeInterface != null
-                  then ''
-                    WAKE_COUNT="/sys/class/net/${monitorCfg.wakeInterface}/device/power/wakeup_count"
-                    if [[ -r "$WAKE_COUNT" ]]; then
-                      cat "$WAKE_COUNT" > /run/monitor-power-suspend-nic-wakeup-count || true
-                    fi
-                  ''
-                  else ""
-                }
+                ${pkgs.coreutils}/bin/date -Iseconds > /run/monitor-power-suspend-since || true
+                idle_hint=yes
+                for session in $(${pkgs.systemd}/bin/loginctl list-sessions --no-legend | ${pkgs.gawk}/bin/awk '{print $1}'); do
+                  session_type=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Type --value 2>/dev/null || true)
+                  session_class=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Class --value 2>/dev/null || true)
+                  if { [ "$session_type" = "wayland" ] || [ "$session_type" = "x11" ]; } \
+                    && [ "$session_class" = "user" ]; then
+                    idle_hint=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleHint --value 2>/dev/null || echo "yes")
+                    break
+                  fi
+                done
+                echo "$idle_hint" > /run/monitor-power-suspend-idle-hint || true
                 ;;
               post)
                 exec ${monitorResume}/bin/monitor-resume

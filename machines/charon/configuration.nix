@@ -547,7 +547,6 @@ in {
       monitor = {
         enable = true;
         dataDir = ./monitor;
-        wakeInterface = "enp4s0";
       };
     };
 
