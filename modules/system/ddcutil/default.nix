@@ -44,15 +44,13 @@
       "@DISPLAY_NUM@"
       "@MAX_ATTEMPTS@"
       "@RETRY_INTERVAL@"
+      "@WAKE_INTERFACE@"
       "@RESUME_ON_LOCAL_WAKE_ONLY@"
-      "@RESUME_WAIT_SECONDS@"
       "@REMOTE_WAKE_USER@"
       "@LOGINCTL@"
       "@AWK@"
       "@JOURNALCTL@"
       "@GREP@"
-      "@TIMEOUT@"
-      "@DD@"
       "@SLEEP@"
       "@LOGGER@"
       "@SEQ@"
@@ -63,19 +61,17 @@
       (toString monitorCfg.display)
       (toString monitorCfg.resumeMaxAttempts)
       (toString monitorCfg.resumeRetrySeconds)
+      (monitorCfg.wakeInterface or "")
       (
         if monitorCfg.resumeOnLocalWakeOnly
         then "true"
         else "false"
       )
-      (toString monitorCfg.resumeRemoteWakeWaitSeconds)
       (monitorCfg.remoteWakeUser or "")
       "${pkgs.systemd}/bin/loginctl"
       "${pkgs.gawk}/bin/awk"
       "${pkgs.systemd}/bin/journalctl"
       "${pkgs.gnugrep}/bin/grep"
-      "${pkgs.coreutils}/bin/timeout"
-      "${pkgs.coreutils}/bin/dd"
       "${pkgs.coreutils}/bin/sleep"
       "${pkgs.util-linux}/bin/logger"
       "${pkgs.coreutils}/bin/seq"
@@ -139,21 +135,23 @@
               description = "Seconds between resume attempts when I2C is not ready yet.";
             };
 
+            wakeInterface = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              example = "enp4s0";
+              description = ''
+                Network interface used for wake-on-LAN. When set with resumeOnLocalWakeOnly,
+                monitor resume is skipped after a network-triggered wake (sysfs wakeup_count,
+                with kernel journal as fallback).
+              '';
+            };
+
             resumeOnLocalWakeOnly = lib.mkOption {
               type = lib.types.bool;
               default = true;
               description = ''
                 Turn the monitor on after resume only for local wakes (keyboard, power button).
-                Remote wakes (for example wake-proxy keep-awake SSH) skip monitor power-on.
-              '';
-            };
-
-            resumeRemoteWakeWaitSeconds = lib.mkOption {
-              type = lib.types.float;
-              default = 5.0;
-              description = ''
-                Seconds to wait after resume for remote wake signals before skipping monitor
-                power-on. Keyboard and power-button wakes are detected sooner when possible.
+                Requires wakeInterface when enabled.
               '';
             };
 
@@ -192,6 +190,10 @@
             assertion = monitorCfg.dataDir != null;
             message = "my.ddcutil.monitor.dataDir must be set when monitor scripts are enabled.";
           }
+          {
+            assertion = !monitorCfg.resumeOnLocalWakeOnly || monitorCfg.wakeInterface != null;
+            message = "my.ddcutil.monitor.wakeInterface must be set when resumeOnLocalWakeOnly is enabled.";
+          }
         ];
 
         environment.systemPackages = [
@@ -205,18 +207,19 @@
           source = pkgs.writeShellScript "monitor-power-resume" ''
             case "$1" in
               pre)
-                ${pkgs.coreutils}/bin/date -Iseconds > /run/monitor-power-suspend-since || true
-                idle_hint=yes
-                for session in $(${pkgs.systemd}/bin/loginctl list-sessions --no-legend | ${pkgs.gawk}/bin/awk '{print $1}'); do
-                  session_type=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Type --value 2>/dev/null || true)
-                  session_class=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Class --value 2>/dev/null || true)
-                  if { [ "$session_type" = "wayland" ] || [ "$session_type" = "x11" ]; } \
-                    && [ "$session_class" = "user" ]; then
-                    idle_hint=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleHint --value 2>/dev/null || echo "yes")
-                    break
-                  fi
-                done
-                echo "$idle_hint" > /run/monitor-power-suspend-idle-hint || true
+                ${pkgs.systemd}/bin/journalctl -k -b --show-cursor -n 0 --output=short-unix 2>/dev/null \
+                  | ${pkgs.gawk}/bin/awk -F';' '/^-- cursor:/ { print $2; exit }' \
+                  > /run/monitor-power-suspend-cursor || true
+                ${
+                  if monitorCfg.wakeInterface != null
+                  then ''
+                    WAKE_COUNT="/sys/class/net/${monitorCfg.wakeInterface}/device/power/wakeup_count"
+                    if [[ -r "$WAKE_COUNT" ]]; then
+                      cat "$WAKE_COUNT" > /run/monitor-power-suspend-nic-wakeup-count || true
+                    fi
+                  ''
+                  else ""
+                }
                 ;;
               post)
                 exec ${monitorResume}/bin/monitor-resume
