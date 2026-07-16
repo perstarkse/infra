@@ -42,21 +42,59 @@
       load_idle=$(${pkgs.gawk}/bin/awk -v avg="$loadavg" -v threshold="$LOAD_THRESHOLD" \
         'BEGIN { print (avg < threshold) ? "1" : "0" }')
 
-      # Check for user input activity via logind IdleHint (set by swayidle)
-      # Only treat active graphical user sessions as activity; ignore greeter and closing sessions
+      # Check for user input activity via logind IdleHint (set by swayidle).
+      # Keep every session's properties because a bare ACTIVE/idle result is
+      # not enough to diagnose a stale or incorrectly targeted IdleHint.
       user_idle=1
+      user_sessions=""
+      ignored_sessions=""
+      now_monotonic_us=$(${pkgs.gawk}/bin/awk '{printf "%.0f", $1 * 1000000}' /proc/uptime)
       for session in $(${pkgs.systemd}/bin/loginctl list-sessions --no-legend | ${pkgs.gawk}/bin/awk '{print $1}'); do
+        session_user=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Name --value 2>/dev/null || echo "")
         session_type=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Type --value 2>/dev/null || echo "")
         session_class=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Class --value 2>/dev/null || echo "")
+        session_active=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Active --value 2>/dev/null || echo "")
         session_state=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p State --value 2>/dev/null || echo "")
+        idle_hint=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleHint --value 2>/dev/null || echo "unknown")
+        idle_since_monotonic=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleSinceHintMonotonic --value 2>/dev/null || echo "")
+        idle_for="unknown"
+        idle_for_seconds=""
+        case "$idle_since_monotonic" in
+          ""|*[!0-9]*) ;;
+          *)
+            if [ "$idle_since_monotonic" -le "$now_monotonic_us" ]; then
+              idle_for_seconds="$(( (now_monotonic_us - idle_since_monotonic) / 1000000 ))"
+              idle_for="''${idle_for_seconds}s"
+            else
+              idle_for="future-timestamp"
+            fi
+            ;;
+        esac
+        session_details="$session user=$session_user type=$session_type class=$session_class active=$session_active state=$session_state idleHint=$idle_hint idleSinceMonotonic=$idle_since_monotonic idleFor=$idle_for"
         if { [ "$session_type" = "wayland" ] || [ "$session_type" = "x11" ]; } \
           && [ "$session_class" = "user" ] \
+          && [ "$session_active" = "yes" ] \
           && [ "$session_state" = "active" ]; then
-          idle_hint=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleHint --value 2>/dev/null || echo "yes")
-          if [ "$idle_hint" = "no" ]; then
-            user_idle=0
-            break
+          session_idle=0
+          if [ "$idle_hint" = "yes" ] \
+            && [ -n "$idle_for_seconds" ] \
+            && [ "$idle_for_seconds" -ge "$USER_IDLE_SECONDS" ]; then
+            session_idle=1
           fi
+          [ "$session_idle" = "1" ] && session_details="$session_details decision=idle"
+          [ "$session_idle" = "0" ] && session_details="$session_details decision=active"
+          if [ -n "$user_sessions" ]; then
+            user_sessions="$user_sessions; "
+          fi
+          user_sessions="$user_sessions$session_details"
+          if [ "$session_idle" = "0" ]; then
+            user_idle=0
+          fi
+        else
+          if [ -n "$ignored_sessions" ]; then
+            ignored_sessions="$ignored_sessions; "
+          fi
+          ignored_sessions="$ignored_sessions$session_details decision=ignored"
         fi
       done
 
@@ -83,8 +121,15 @@
       status=""
       [ "$load_idle" = "0" ] && status="$status load:ACTIVE($loadavg)"
       [ "$load_idle" = "1" ] && status="$status load:idle($loadavg)"
-      [ "$user_idle" = "0" ] && status="$status user:ACTIVE"
-      [ "$user_idle" = "1" ] && status="$status user:idle"
+      if [ "$user_idle" = "0" ]; then
+        status="$status user:ACTIVE(threshold=''${USER_IDLE_SECONDS}s; sessions=$user_sessions)"
+      elif [ -n "$user_sessions" ]; then
+        status="$status user:idle(threshold=''${USER_IDLE_SECONDS}s; sessions=$user_sessions)"
+      else
+        status="$status user:idle(no-eligible-session"
+        [ -n "$ignored_sessions" ] && status="$status; ignored=$ignored_sessions"
+        status="$status)"
+      fi
       [ "$inhibited" = "1" ] && status="$status inhibitor:BLOCKING"
       [ "$tcp_active" = "1" ] && status="$status tcp:ACTIVE"
       [ "$tcp_active" = "0" ] && [ -n "$ACTIVE_TCP_PORTS" ] && status="$status tcp:idle"

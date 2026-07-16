@@ -50,11 +50,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1783881554,
-        "narHash": "sha256-SVaHkGLZfOhrHR57VzNy5KcjsTmPQXbJH6PL+YrzcQA=",
+        "lastModified": 1784228259,
+        "narHash": "sha256-slYVBjaq3oJfucYNUJ4m8UPlMPX3K5K/eNEeuLwsfwc=",
         "ref": "refs/heads/main",
-        "rev": "2c4c2703a9620a68a4d1fdd91732c936983aa912",
-        "revCount": 52,
+        "rev": "fa2a3395bbfac3f67f5bdd49627e7bbfb852c5cb",
+        "revCount": 74,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/agent-tooling.git"
       },

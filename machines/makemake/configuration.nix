@@ -36,6 +36,15 @@
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
+
+  # The io router DNAT-hijacks outbound :53 to its own resolver, which splits
+  # mail.stark.pub -> 10.0.0.10 and caches NODATA for _acme-challenge.* per
+  # stark.pub SOA (1800s). lego's DNS-01 propagation check therefore never sees
+  # the freshly-created TXT within its 2m window and the nightly renewal fails.
+  # Skip lego's own check and rely on Let's Encrypt validating against the real
+  # authoritative NSs over the public internet.
+  security.acme.certs."mail.stark.pub".extraLegoFlags = ["--dns.propagation-wait=120s"];
+
   my = {
     attic-cache.server = {
       enable = true;

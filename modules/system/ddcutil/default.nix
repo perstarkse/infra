@@ -46,7 +46,11 @@
       "@RETRY_INTERVAL@"
       "@WAKE_INTERFACE@"
       "@RESUME_ON_LOCAL_WAKE_ONLY@"
+      "@RESUME_WAIT_SECONDS@"
       "@REMOTE_WAKE_USER@"
+      "@CAT@"
+      "@TIMEOUT@"
+      "@DD@"
       "@LOGINCTL@"
       "@AWK@"
       "@JOURNALCTL@"
@@ -67,7 +71,11 @@
         then "true"
         else "false"
       )
+      (toString monitorCfg.resumeRemoteWakeWaitSeconds)
       (monitorCfg.remoteWakeUser or "")
+      "${pkgs.coreutils}/bin/cat"
+      "${pkgs.coreutils}/bin/timeout"
+      "${pkgs.coreutils}/bin/dd"
       "${pkgs.systemd}/bin/loginctl"
       "${pkgs.gawk}/bin/awk"
       "${pkgs.systemd}/bin/journalctl"
@@ -133,6 +141,16 @@
               type = lib.types.float;
               default = 0.25;
               description = "Seconds between resume attempts when I2C is not ready yet.";
+            };
+
+            resumeRemoteWakeWaitSeconds = lib.mkOption {
+              type = lib.types.float;
+              default = 15.0;
+              description = ''
+                Seconds to poll after resume for a remote wake signal (wake-proxy
+                keep-awake SSH session) before turning the monitor on. Local wakes
+                are detected earlier via input/IdleHint and turn the monitor on promptly.
+              '';
             };
 
             wakeInterface = lib.mkOption {
@@ -211,15 +229,27 @@
                   | ${pkgs.gawk}/bin/awk -F';' '/^-- cursor:/ { print $2; exit }' \
                   > /run/monitor-power-suspend-cursor || true
                 ${
-                  if monitorCfg.wakeInterface != null
-                  then ''
-                    WAKE_COUNT="/sys/class/net/${monitorCfg.wakeInterface}/device/power/wakeup_count"
-                    if [[ -r "$WAKE_COUNT" ]]; then
-                      cat "$WAKE_COUNT" > /run/monitor-power-suspend-nic-wakeup-count || true
-                    fi
-                  ''
-                  else ""
-                }
+              if monitorCfg.wakeInterface != null
+              then ''
+                WAKE_COUNT="/sys/class/net/${monitorCfg.wakeInterface}/device/power/wakeup_count"
+                if [[ -r "$WAKE_COUNT" ]]; then
+                  ${pkgs.coreutils}/bin/cat "$WAKE_COUNT" > /run/monitor-power-suspend-nic-wakeup-count || true
+                fi
+              ''
+              else ""
+            }
+                ${pkgs.coreutils}/bin/date -Iseconds > /run/monitor-power-suspend-since || true
+                idle_hint=yes
+                for session in $(${pkgs.systemd}/bin/loginctl list-sessions --no-legend | ${pkgs.gawk}/bin/awk '{print $1}'); do
+                  session_type=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Type --value 2>/dev/null || true)
+                  session_class=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Class --value 2>/dev/null || true)
+                  if { [ "$session_type" = "wayland" ] || [ "$session_type" = "x11" ]; } \
+                    && [ "$session_class" = "user" ]; then
+                    idle_hint=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleHint --value 2>/dev/null || echo "yes")
+                    break
+                  fi
+                done
+                echo "$idle_hint" > /run/monitor-power-suspend-idle-hint || true
                 ;;
               post)
                 exec ${monitorResume}/bin/monitor-resume
