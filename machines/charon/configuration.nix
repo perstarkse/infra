@@ -163,9 +163,14 @@ in {
                 name = "Tencent Hy3 (Free)";
                 reasoning = true;
                 input = ["text"];
-                cost = {input = 0; output = 0; cacheRead = 0; cacheWrite = 0;};
-                contextWindow = 262144;
-                maxTokens = 262144;
+                cost = {
+                  input = 0;
+                  output = 0;
+                  cacheRead = 0;
+                  cacheWrite = 0;
+                };
+                contextWindow = 202144;
+                maxTokens = 202144;
                 compat = {
                   thinkingFormat = "openrouter";
                   supportsDeveloperRole = false;
