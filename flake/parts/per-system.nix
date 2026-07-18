@@ -87,6 +87,11 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    autoSuspendChecks = import ../../tests/auto-suspend.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+    };
     exposureManifestData = inputs.self.lib.exposure.mkExposureManifest systemNixosConfigs;
 
     exposureManifest = pkgs.writeText "exposure-manifest.json" (builtins.toJSON exposureManifestData);
@@ -132,6 +137,7 @@
       };
       mailserver-checks = mkCheckBundle "mailserver-checks" mailserverSystemChecks;
       sedna-failover-checks = mkCheckBundle "sedna-failover-checks" sednaFailoverChecks;
+      auto-suspend-checks = mkCheckBundle "auto-suspend-checks" autoSuspendChecks;
     };
 
     machineUpdatePlanResolverPy = pkgs.writeText "machine-update-plan-resolver.py" ''
@@ -923,6 +929,7 @@
       // paperlessSystemChecks
       // backupsSystemChecks
       // mailserverSystemChecks
-      // sednaFailoverChecks;
+      // sednaFailoverChecks
+      // autoSuspendChecks;
   };
 }
