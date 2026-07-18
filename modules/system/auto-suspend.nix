@@ -48,7 +48,7 @@
       user_idle=1
       user_sessions=""
       ignored_sessions=""
-      now_monotonic_us=$(${pkgs.gawk}/bin/awk '{printf "%.0f", $1 * 1000000}' /proc/uptime)
+      now_monotonic_us=$(${pkgs.python3}/bin/python3 -c 'import time; print(int(time.clock_gettime(time.CLOCK_MONOTONIC) * 1_000_000))')
       for session in $(${pkgs.systemd}/bin/loginctl list-sessions --no-legend | ${pkgs.gawk}/bin/awk '{print $1}'); do
         session_user=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Name --value 2>/dev/null || echo "")
         session_type=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Type --value 2>/dev/null || echo "")
@@ -57,28 +57,37 @@
         session_state=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p State --value 2>/dev/null || echo "")
         idle_hint=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleHint --value 2>/dev/null || echo "unknown")
         idle_since_monotonic=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleSinceHintMonotonic --value 2>/dev/null || echo "")
-        idle_for="unknown"
-        idle_for_seconds=""
+        # IdleSinceHintMonotonic is CLOCK_MONOTONIC usec (not /proc/uptime /
+        # CLOCK_BOOTTIME). Using uptime here inflates ages by total suspend time.
+        # IdleSinceHintMonotonic is time-of-last-IdleHint-change, not "how long
+        # idle". When IdleHint=no this is active duration; when yes, idle duration.
+        since_hint_change="unknown"
+        since_hint_change_seconds=""
         case "$idle_since_monotonic" in
           ""|*[!0-9]*) ;;
           *)
             if [ "$idle_since_monotonic" -le "$now_monotonic_us" ]; then
-              idle_for_seconds="$(( (now_monotonic_us - idle_since_monotonic) / 1000000 ))"
-              idle_for="''${idle_for_seconds}s"
+              since_hint_change_seconds="$(( (now_monotonic_us - idle_since_monotonic) / 1000000 ))"
+              since_hint_change="''${since_hint_change_seconds}s"
             else
-              idle_for="future-timestamp"
+              since_hint_change="future-timestamp"
             fi
             ;;
         esac
-        session_details="$session user=$session_user type=$session_type class=$session_class active=$session_active state=$session_state idleHint=$idle_hint idleSinceMonotonic=$idle_since_monotonic idleFor=$idle_for"
+        if [ "$idle_hint" = "yes" ]; then
+          hint_age="idleFor=$since_hint_change"
+        else
+          hint_age="activeFor=$since_hint_change"
+        fi
+        session_details="$session user=$session_user type=$session_type class=$session_class active=$session_active state=$session_state idleHint=$idle_hint idleSinceMonotonic=$idle_since_monotonic $hint_age"
         if { [ "$session_type" = "wayland" ] || [ "$session_type" = "x11" ]; } \
           && [ "$session_class" = "user" ] \
           && [ "$session_active" = "yes" ] \
           && [ "$session_state" = "active" ]; then
           session_idle=0
           if [ "$idle_hint" = "yes" ] \
-            && [ -n "$idle_for_seconds" ] \
-            && [ "$idle_for_seconds" -ge "$USER_IDLE_SECONDS" ]; then
+            && [ -n "$since_hint_change_seconds" ] \
+            && [ "$since_hint_change_seconds" -ge "$USER_IDLE_SECONDS" ]; then
             session_idle=1
           fi
           [ "$session_idle" = "1" ] && session_details="$session_details decision=idle"
