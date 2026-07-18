@@ -151,10 +151,11 @@ in {
 
       agentTooling = {
         pi-agent = {
+          permissionSystem.enable = false;
           enable = true;
           shellAlias = "PI_FFF_MODE=override command pi";
           defaultProvider = "cursor";
-          defaultModel = "composer-2:slow";
+          defaultModel = "grok-4.5:slow";
           extraPackages = ["/home/p/repos/pi-cline-provider"];
           models = {
             providers.openrouter.models = [

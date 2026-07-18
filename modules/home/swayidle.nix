@@ -31,13 +31,14 @@
         events = lib.optionalAttrs cfg.lockOnSuspend {
           "before-sleep" = "${pkgs.systemd}/bin/loginctl lock-session";
         };
-        timeouts = [
-          {
-            timeout = cfg.idleSeconds;
-            command = "${pkgs.systemd}/bin/busctl call org.freedesktop.login1 /org/freedesktop/login1/session/auto org.freedesktop.login1.Session SetIdleHint b true";
-            resumeCommand = "${pkgs.systemd}/bin/busctl call org.freedesktop.login1 /org/freedesktop/login1/session/auto org.freedesktop.login1.Session SetIdleHint b false";
-          }
-        ];
+        # Use swayidle's native idlehint instead of shelling out to busctl.
+        # idlehint clears IdleHint on start/resume/unlock and targets the
+        # session swayidle resolved from logind (more reliable than
+        # /session/auto from a transient sh -c).
+        # -w is only useful when waiting for before-sleep commands.
+        extraArgs =
+          lib.optionals cfg.lockOnSuspend ["-w"]
+          ++ ["idlehint" (toString cfg.idleSeconds)];
       };
     };
   };
