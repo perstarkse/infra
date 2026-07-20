@@ -42,7 +42,10 @@
       load_idle=$(${pkgs.gawk}/bin/awk -v avg="$loadavg" -v threshold="$LOAD_THRESHOLD" \
         'BEGIN { print (avg < threshold) ? "1" : "0" }')
 
-      # Check for user input activity via logind IdleHint (set by swayidle).
+      # Check for user input activity via logind IdleHint (set by swayidle
+      # idlehint). Wayland idle-inhibit (Electron apps, video players, etc.)
+      # prevents swayidle from flipping IdleHint to yes — logs then show a
+      # stale activeFor while the seat looks "ACTIVE".
       # Keep every session's properties because a bare ACTIVE/idle result is
       # not enough to diagnose a stale or incorrectly targeted IdleHint.
       user_idle=1
@@ -79,7 +82,15 @@
         else
           hint_age="activeFor=$since_hint_change"
         fi
-        session_details="$session user=$session_user type=$session_type class=$session_class active=$session_active state=$session_state idleHint=$idle_hint idleSinceMonotonic=$idle_since_monotonic $hint_age"
+        # IdleHint stuck at no past the idle threshold usually means continuous
+        # input OR a Wayland idle inhibitor (Electron apps, video, etc.).
+        stale_idle_hint=""
+        if [ "$idle_hint" = "no" ] \
+          && [ -n "$since_hint_change_seconds" ] \
+          && [ "$since_hint_change_seconds" -ge "$USER_IDLE_SECONDS" ]; then
+          stale_idle_hint=" staleIdleHint=yes(likely-wayland-idle-inhibit)"
+        fi
+        session_details="$session user=$session_user type=$session_type class=$session_class active=$session_active state=$session_state idleHint=$idle_hint idleSinceMonotonic=$idle_since_monotonic $hint_age$stale_idle_hint"
         if { [ "$session_type" = "wayland" ] || [ "$session_type" = "x11" ]; } \
           && [ "$session_class" = "user" ] \
           && [ "$session_active" = "yes" ] \

@@ -49,9 +49,17 @@
       then config.routerHelpers.routerIp
       else throw "routerHelpers not defined — is the router module loaded?";
 
-    mkPeerSecret = peer: (config.my.secrets.mkMachineSecret {
+    mkPeerSecret = peer: let
+      endpointDefault =
+        if peer.endpoint != null
+        then peer.endpoint
+        else if wg.defaultEndpoint != null
+        then wg.defaultEndpoint
+        else "";
+    in (config.my.secrets.mkMachineSecret {
       name = "wireguard-peer-${peer.name}";
       share = true;
+      dependencies = ["wireguard-server"];
       runtimeInputs = [pkgs.wireguard-tools pkgs.qrencode];
       files = {
         "private-key" = {mode = "0400";};
@@ -60,12 +68,8 @@
         "client.png" = {mode = "0400";};
         "client.qr" = {mode = "0400";};
       };
-      prompts = {
-        "server-public-key" = {
-          description = "WireGuard server public key (fallback if not readable from existing secret)";
-          persist = true;
-          type = "hidden";
-        };
+      # Prompt only for values not already available from Nix config / existing secrets.
+      prompts = lib.optionalAttrs (endpointDefault == "") {
         endpoint = {
           description = "WireGuard endpoint (host:port) for ${peer.name}";
           persist = true;
@@ -74,12 +78,6 @@
       };
 
       script = let
-        endpointDefault =
-          if peer.endpoint != null
-          then peer.endpoint
-          else if wg.defaultEndpoint != null
-          then wg.defaultEndpoint
-          else "";
         dnsDefault =
           if peer.dns != null
           then peer.dns
@@ -101,9 +99,11 @@
                   chmod 0444 "$out/public-key"
 
                   server_pubkey="''${WIREGUARD_SERVER_PUBKEY:-}"
-                  # Try persisted prompt, generated server secret paths, and common clan temp mounts
+                  # Clan mounts dependency outputs under $in/<generator>/<file>
+                  if [ -n "''${in:-}" ] && [ -r "$in/wireguard-server/public-key" ]; then
+                    server_pubkey=$(cat "$in/wireguard-server/public-key")
+                  fi
                   for candidate in \
-                    "$prompts/server-public-key" \
                     "${serverPublicKeyPath}" \
                     /run/secrets/vars/wireguard-server/public-key \
                     /tmp/vars-*/wireguard-server/public-key
@@ -114,12 +114,12 @@
                   done
                   server_pubkey="$(printf '%s' "$server_pubkey" | tr -d '\n')"
                   if [ -z "$server_pubkey" ]; then
-                    echo "Missing server public key. Provide WIREGUARD_SERVER_PUBKEY, a prompt value, or ensure wireguard-server/public-key is readable." >&2
+                    echo "Missing server public key. Generate wireguard-server first, or set WIREGUARD_SERVER_PUBKEY." >&2
                     exit 1
                   fi
 
                   endpoint="''${WIREGUARD_ENDPOINT:-${endpointDefault}}"
-                  if [ -z "$endpoint" ] && [ -s "$prompts/endpoint" ]; then
+                  if [ -z "$endpoint" ] && [ -n "''${prompts:-}" ] && [ -s "$prompts/endpoint" ]; then
                     endpoint=$(cat "$prompts/endpoint")
                   fi
                   if [ -z "$endpoint" ]; then

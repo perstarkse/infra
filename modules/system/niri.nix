@@ -1,4 +1,4 @@
-_: {
+{inputs, ...}: {
   config.flake.nixosModules.niri = {
     pkgs,
     lib,
@@ -10,7 +10,7 @@ _: {
     config = lib.mkIf (cfg.enable && cfg.session == "niri") {
       programs.niri = {
         enable = true;
-        package = pkgs.niri;
+        package = inputs.niri-focus-flash.packages.${pkgs.stdenv.hostPlatform.system}.niri;
       };
 
       environment.systemPackages = [

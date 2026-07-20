@@ -1682,6 +1682,24 @@
         "type": "github"
       }
     },
+    "niri-focus-flash": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_3"
+      },
+      "locked": {
+        "lastModified": 1784484180,
+        "narHash": "sha256-3ZOsVBC/s2+P3WSO6O9IeVRzlyuu1yFovmkjMFlNWm0=",
+        "owner": "perstarkse",
+        "repo": "niri-focus-flash",
+        "rev": "1278d71b9fbf71f2343d83af006473a647b00f0e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "perstarkse",
+        "repo": "niri-focus-flash",
+        "type": "github"
+      }
+    },
     "nix-darwin": {
       "inputs": {
         "nixpkgs": [
@@ -1879,6 +1897,22 @@
     },
     "nixpkgs_3": {
       "locked": {
+        "lastModified": 1781607440,
+        "narHash": "sha256-rxO+uc/KFbSJp+pgyXRuAX6QlG9hJdnt0BXpEQRXY+U=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3e41b24abd260e8f71dbe2f5737d24122f972158",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_4": {
+      "locked": {
         "lastModified": 1782847225,
         "narHash": "sha256-JC9PjqKYG9ve5U8aDOLQipp3+KLANBHUvGdLZlxzdKI=",
         "owner": "NixOS",
@@ -1893,7 +1927,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
+    "nixpkgs_5": {
       "locked": {
         "lastModified": 1769018530,
         "narHash": "sha256-MJ27Cy2NtBEV5tsK+YraYr2g851f3Fl1LpNHDzDX15c=",
@@ -1984,7 +2018,7 @@
       "inputs": {
         "crane": "crane_3",
         "flake-utils": "flake-utils_2",
-        "nixpkgs": "nixpkgs_4"
+        "nixpkgs": "nixpkgs_5"
       },
       "locked": {
         "lastModified": 1778957444,
@@ -2041,11 +2075,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1783790096,
-        "narHash": "sha256-eNb9WirDGU2raSW/XW4l1Ll1hRdrGP6GhPDVeVTko8E=",
+        "lastModified": 1784525928,
+        "narHash": "sha256-DV7n8/LxFRVhDS9wshx4SrUdsgBta8OjMYgbFJM13oo=",
         "ref": "refs/heads/main",
-        "rev": "6db47e6cf84b09e8d46499a4be4fbd70852ecde9",
-        "revCount": 76,
+        "rev": "c91684148903f79190053b09eaf0b7cb309e0fd2",
+        "revCount": 77,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },
@@ -2085,8 +2119,9 @@
         "indicator-alert-daemon": "indicator-alert-daemon",
         "llm-agents": "llm-agents",
         "minne": "minne",
+        "niri-focus-flash": "niri-focus-flash",
         "nix-minecraft": "nix-minecraft",
-        "nixpkgs": "nixpkgs_3",
+        "nixpkgs": "nixpkgs_4",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "noctalia": "noctalia",
         "nous": "nous",
