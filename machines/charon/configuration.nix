@@ -571,7 +571,6 @@ in {
       monitor = {
         enable = true;
         dataDir = ./monitor;
-        wakeInterface = "enp4s0";
       };
     };
 
@@ -694,5 +693,8 @@ in {
     IOSchedulingClass = lib.mkForce "idle";
     IOSchedulingPriority = lib.mkForce 7;
     LimitNOFILE = "infinity";
+  };
+  users.users.p = {
+    extraGroups = ["dialout"];
   };
 }

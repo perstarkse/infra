@@ -81,6 +81,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    niri-focus-flash = {
+      url = "github:perstarkse/niri-focus-flash";
+    };
+
     nix-minecraft = {
       url = "github:Infinidoge/nix-minecraft";
       inputs.nixpkgs.follows = "nixpkgs";

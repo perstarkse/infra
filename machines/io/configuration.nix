@@ -375,21 +375,8 @@ in {
         defaultEndpoint = "wg.stark.pub:51820";
         peers = [
           {
-            name = "phone";
+            name = "pfone";
             ip = 2;
-            autoGenerate = true;
-            persistentKeepalive = 25;
-            clientAllowedIPs = ["10.0.0.0/24"];
-          }
-          {
-            name = "bro";
-            ip = 3;
-            autoGenerate = true;
-            persistentKeepalive = 25;
-          }
-          {
-            name = "ariel";
-            ip = 4;
             autoGenerate = true;
             persistentKeepalive = 25;
           }
@@ -441,10 +428,10 @@ in {
       ];
 
       services = [
-        {
-          name = "wg.stark.pub";
-          target = "10.0.0.1";
-        }
+        # {
+        #   name = "wg.stark.pub";
+        #   target = "10.0.0.1";
+        # }
         {
           name = "mail.stark.pub";
           target = "10.0.0.10";

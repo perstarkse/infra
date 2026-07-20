@@ -60,6 +60,10 @@ layout {
 
 prefer-no-csd
 
+animations {
+  focus-flash {}
+}
+
 hotkey-overlay {
   skip-at-startup
 }
