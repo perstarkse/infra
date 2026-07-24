@@ -28,6 +28,12 @@
               _prompts_dir=""
             fi
 
+            # Canonical ACL:
+            # - storage-alerts: token write only; anonymous read for phone subscribers
+            # - indicator-alerts: anonymous read+write (daemon publishes without auth)
+            # - backup-alerts: anonymous read+write (backup failure notify has no token)
+            canonical_access='storage-publisher:storage-alerts:wo,*:storage-alerts:ro,*:indicator-alerts:rw,*:backup-alerts:rw'
+
             storage_token=""
             has_storage_user=""
             fallback_storage_hash='$2b$10$QqZS0iP8PwNX1ddWX7ynCeLKM72wyx1PQYUt8sOd08mXQIQwe8U9G'
@@ -83,24 +89,12 @@
                 exit 1
               fi
 
-              # Validate that indicator-alerts topic has anonymous write access
-              has_indicator_access=""
-              while IFS= read -r line; do
-                case "$line" in
-                  NTFY_AUTH_ACCESS=*)
-                    access_value="''${line#NTFY_AUTH_ACCESS=}"
-                    case "$access_value" in
-                      *indicator-alerts:wo*)
-                        has_indicator_access=1
-                        ;;
-                    esac
-                    ;;
-                esac
-              done < "$out/env"
-
-              if [ -z "$has_indicator_access" ]; then
-                printf '%s\n' 'ntfy env prompt must include *:indicator-alerts:wo in NTFY_AUTH_ACCESS' >&2
-                exit 1
+              # Always normalize ACCESS so older prompts (write-only topics) become
+              # subscribe-capable without requiring a manual re-prompt.
+              if grep -q '^NTFY_AUTH_ACCESS=' "$out/env"; then
+                sed -i "s|^NTFY_AUTH_ACCESS=.*|NTFY_AUTH_ACCESS=$canonical_access|" "$out/env"
+              else
+                printf '%s\n' "NTFY_AUTH_ACCESS=$canonical_access" >> "$out/env"
               fi
             else
               token_suffix=$(head -c 32 /dev/urandom | od -An -tx1 -v | tr -d ' \n' | cut -c1-29)
@@ -110,7 +104,7 @@
       NTFY_AUTH_FILE=/var/lib/ntfy-sh/user.db
       NTFY_AUTH_DEFAULT_ACCESS=deny-all
       NTFY_AUTH_USERS=storage-publisher:$fallback_storage_hash:user
-      NTFY_AUTH_ACCESS=storage-publisher:storage-alerts:wo,*:indicator-alerts:wo
+      NTFY_AUTH_ACCESS=$canonical_access
       NTFY_AUTH_TOKENS=storage-publisher:$storage_token:storage-alerts
       EOF
             fi

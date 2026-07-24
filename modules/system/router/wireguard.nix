@@ -56,100 +56,101 @@
         else if wg.defaultEndpoint != null
         then wg.defaultEndpoint
         else "";
-    in (config.my.secrets.mkMachineSecret {
-      name = "wireguard-peer-${peer.name}";
-      share = true;
-      dependencies = ["wireguard-server"];
-      runtimeInputs = [pkgs.wireguard-tools pkgs.qrencode];
-      files = {
-        "private-key" = {mode = "0400";};
-        "public-key" = {mode = "0444";};
-        "client.conf" = {mode = "0400";};
-        "client.png" = {mode = "0400";};
-        "client.qr" = {mode = "0400";};
-      };
-      # Prompt only for values not already available from Nix config / existing secrets.
-      prompts = lib.optionalAttrs (endpointDefault == "") {
-        endpoint = {
-          description = "WireGuard endpoint (host:port) for ${peer.name}";
-          persist = true;
-          type = "hidden";
+    in
+      config.my.secrets.mkMachineSecret {
+        name = "wireguard-peer-${peer.name}";
+        share = true;
+        dependencies = ["wireguard-server"];
+        runtimeInputs = [pkgs.wireguard-tools pkgs.qrencode];
+        files = {
+          "private-key" = {mode = "0400";};
+          "public-key" = {mode = "0444";};
+          "client.conf" = {mode = "0400";};
+          "client.png" = {mode = "0400";};
+          "client.qr" = {mode = "0400";};
         };
-      };
+        # Prompt only for values not already available from Nix config / existing secrets.
+        prompts = lib.optionalAttrs (endpointDefault == "") {
+          endpoint = {
+            description = "WireGuard endpoint (host:port) for ${peer.name}";
+            persist = true;
+            type = "hidden";
+          };
+        };
 
-      script = let
-        dnsDefault =
-          if peer.dns != null
-          then peer.dns
-          else if wg.defaultDns != null
-          then wg.defaultDns
-          else routerIp;
-        clientAllowed =
-          lib.concatStringsSep "," (peer.clientAllowedIPs or ["0.0.0.0/0"]);
-        peerAddr = peerAddress peer;
-        serverPublicKeyPath = config.my.secrets.getPath "wireguard-server" "public-key";
-      in ''
-                  set -euo pipefail
-                  umask 077
-                  mkdir -p "$out"
+        script = let
+          dnsDefault =
+            if peer.dns != null
+            then peer.dns
+            else if wg.defaultDns != null
+            then wg.defaultDns
+            else routerIp;
+          clientAllowed =
+            lib.concatStringsSep "," (peer.clientAllowedIPs or ["0.0.0.0/0"]);
+          peerAddr = peerAddress peer;
+          serverPublicKeyPath = config.my.secrets.getPath "wireguard-server" "public-key";
+        in ''
+                    set -euo pipefail
+                    umask 077
+                    mkdir -p "$out"
 
-                  wg genkey > "$out/private-key"
-                  chmod 0400 "$out/private-key"
-                  wg pubkey < "$out/private-key" > "$out/public-key"
-                  chmod 0444 "$out/public-key"
+                    wg genkey > "$out/private-key"
+                    chmod 0400 "$out/private-key"
+                    wg pubkey < "$out/private-key" > "$out/public-key"
+                    chmod 0444 "$out/public-key"
 
-                  server_pubkey="''${WIREGUARD_SERVER_PUBKEY:-}"
-                  # Clan mounts dependency outputs under $in/<generator>/<file>
-                  if [ -n "''${in:-}" ] && [ -r "$in/wireguard-server/public-key" ]; then
-                    server_pubkey=$(cat "$in/wireguard-server/public-key")
-                  fi
-                  for candidate in \
-                    "${serverPublicKeyPath}" \
-                    /run/secrets/vars/wireguard-server/public-key \
-                    /tmp/vars-*/wireguard-server/public-key
-                  do
-                    if [ -z "$server_pubkey" ] && [ -r "$candidate" ]; then
-                      server_pubkey=$(cat "$candidate")
+                    server_pubkey="''${WIREGUARD_SERVER_PUBKEY:-}"
+                    # Clan mounts dependency outputs under $in/<generator>/<file>
+                    if [ -n "''${in:-}" ] && [ -r "$in/wireguard-server/public-key" ]; then
+                      server_pubkey=$(cat "$in/wireguard-server/public-key")
                     fi
-                  done
-                  server_pubkey="$(printf '%s' "$server_pubkey" | tr -d '\n')"
-                  if [ -z "$server_pubkey" ]; then
-                    echo "Missing server public key. Generate wireguard-server first, or set WIREGUARD_SERVER_PUBKEY." >&2
-                    exit 1
-                  fi
+                    for candidate in \
+                      "${serverPublicKeyPath}" \
+                      /run/secrets/vars/wireguard-server/public-key \
+                      /tmp/vars-*/wireguard-server/public-key
+                    do
+                      if [ -z "$server_pubkey" ] && [ -r "$candidate" ]; then
+                        server_pubkey=$(cat "$candidate")
+                      fi
+                    done
+                    server_pubkey="$(printf '%s' "$server_pubkey" | tr -d '\n')"
+                    if [ -z "$server_pubkey" ]; then
+                      echo "Missing server public key. Generate wireguard-server first, or set WIREGUARD_SERVER_PUBKEY." >&2
+                      exit 1
+                    fi
 
-                  endpoint="''${WIREGUARD_ENDPOINT:-${endpointDefault}}"
-                  if [ -z "$endpoint" ] && [ -n "''${prompts:-}" ] && [ -s "$prompts/endpoint" ]; then
-                    endpoint=$(cat "$prompts/endpoint")
-                  fi
-                  if [ -z "$endpoint" ]; then
-                    echo "Missing endpoint for peer ${peer.name}. Set wireguard.defaultEndpoint, peer.endpoint, prompt, or WIREGUARD_ENDPOINT." >&2
-                    exit 1
-                  fi
+                    endpoint="''${WIREGUARD_ENDPOINT:-${endpointDefault}}"
+                    if [ -z "$endpoint" ] && [ -n "''${prompts:-}" ] && [ -s "$prompts/endpoint" ]; then
+                      endpoint=$(cat "$prompts/endpoint")
+                    fi
+                    if [ -z "$endpoint" ]; then
+                      echo "Missing endpoint for peer ${peer.name}. Set wireguard.defaultEndpoint, peer.endpoint, prompt, or WIREGUARD_ENDPOINT." >&2
+                      exit 1
+                    fi
 
-                  address="''${WIREGUARD_ADDRESS:-${peerAddr}}"
-                  dns="''${WIREGUARD_DNS:-${dnsDefault}}"
-                  keepalive="''${WIREGUARD_PERSISTENT_KEEPALIVE:-${toString (peer.persistentKeepalive or 25)}}"
+                    address="''${WIREGUARD_ADDRESS:-${peerAddr}}"
+                    dns="''${WIREGUARD_DNS:-${dnsDefault}}"
+                    keepalive="''${WIREGUARD_PERSISTENT_KEEPALIVE:-${toString (peer.persistentKeepalive or 25)}}"
 
-                  cat > "$out/client.conf" <<EOF
-        [Interface]
-        Address = ''${address}
-        PrivateKey = $(cat "$out/private-key")
-        DNS = ''${dns}
+                    cat > "$out/client.conf" <<EOF
+          [Interface]
+          Address = ''${address}
+          PrivateKey = $(cat "$out/private-key")
+          DNS = ''${dns}
 
-        [Peer]
-        PublicKey = ''${server_pubkey}
-        AllowedIPs = ${clientAllowed}
-        Endpoint = ''${endpoint}
-        PersistentKeepalive = ''${keepalive}
-        EOF
+          [Peer]
+          PublicKey = ''${server_pubkey}
+          AllowedIPs = ${clientAllowed}
+          Endpoint = ''${endpoint}
+          PersistentKeepalive = ''${keepalive}
+          EOF
 
-                  qrencode -t ansiutf8 < "$out/client.conf" > "$out/client.qr"
-                  qrencode -t png -o "$out/client.png" < "$out/client.conf"
-      '';
-      meta.tags = ["wireguard" "router"];
-      meta.description = "Peer ${peer.name} WireGuard bundle";
-    });
+                    qrencode -t ansiutf8 < "$out/client.conf" > "$out/client.qr"
+                    qrencode -t png -o "$out/client.png" < "$out/client.conf"
+        '';
+        meta.tags = ["wireguard" "router"];
+        meta.description = "Peer ${peer.name} WireGuard bundle";
+      };
   in {
     config = lib.mkIf enabled {
       assertions =

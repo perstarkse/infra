@@ -110,7 +110,7 @@
     };
 
     indicator-alert-daemon = {
-      url = "github:perstarkse/symbol-alert-notifier";
+      url = "github:perstarkse/indicator-alert-daemon";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

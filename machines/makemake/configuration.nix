@@ -69,7 +69,7 @@
 
     backupFailureNtfy = {
       enable = true;
-      url = "http://10.0.0.1:2586/backup-alerts";
+      url = "https://ntfy.lan.stark.pub/backup-alerts";
     };
 
     privateInfra.overseerr.exposure = {
@@ -92,7 +92,7 @@
       ];
       mdadm.enable = true;
       ntfy = {
-        serverUrl = "http://10.0.0.1:2586";
+        serverUrl = "https://ntfy.lan.stark.pub";
         topic = "storage-alerts";
         tokenFile = config.my.secrets.getPath "ntfy" "storage-token";
         tags = ["warning" "floppy_disk" "makemake"];
@@ -149,39 +149,16 @@
       minne-saas = mkB2 config.my.minne-saas.dataDir;
       vaultwarden = mkB2 config.my.vaultwarden.backupDir;
 
-      surrealdb =
-        (mkB2 config.my.surrealdb.dataDir)
-        // {
-          backupPrepareCommand = ''
-            ${pkgs.surrealdb}/bin/surreal export \
-              --endpoint ws://127.0.0.1:8220 \
-              --ns minne_ns --db minne_db \
-              ${config.my.surrealdb.dataDir}/dump-export.surql
-          '';
-          backupCleanupCommand = ''
-            rm -f ${config.my.surrealdb.dataDir}/dump-export.surql
-          '';
-        };
-
-      surrealdb-saas =
-        (mkB2 config.my.minne-saas.surrealdb.dataDir)
-        // {
-          backupPrepareCommand = ''
-            ${pkgs.surrealdb}/bin/surreal export \
-              --endpoint ws://127.0.0.1:8221 \
-              --ns minne_ns --db minne_db \
-              ${config.my.minne-saas.surrealdb.dataDir}/dump-export.surql
-          '';
-          backupCleanupCommand = ''
-            rm -f ${config.my.minne-saas.surrealdb.dataDir}/dump-export.surql
-          '';
-        };
+      # RocksDB file-level backup: surreal export over ws is unsupported on this arch.
+      surrealdb = mkB2 config.my.surrealdb.dataDir;
+      surrealdb-saas = mkB2 config.my.minne-saas.surrealdb.dataDir;
 
       nous =
         (mkB2 config.my.nous.dataDir)
         // {
           backupPrepareCommand = ''
-            ${pkgs.postgresql}/bin/pg_dump -Fc -f ${config.my.nous.dataDir}/nous_prod.dump nous_prod
+            ${pkgs.sudo}/bin/sudo -u nous \
+              ${pkgs.postgresql}/bin/pg_dump -Fc -f ${config.my.nous.dataDir}/nous_prod.dump nous_prod
           '';
           backupCleanupCommand = ''
             rm -f ${config.my.nous.dataDir}/nous_prod.dump
@@ -612,6 +589,12 @@
             threshold = 30.0;
             period = 14;
           }
+          {
+            type = "rsi";
+            threshold = 70.0;
+            period = 14;
+            direction = "above";
+          }
         ];
       }
       {
@@ -621,6 +604,12 @@
             type = "rsi";
             threshold = 30.0;
             period = 14;
+          }
+          {
+            type = "rsi";
+            threshold = 70.0;
+            period = 14;
+            direction = "above";
           }
         ];
       }
@@ -632,6 +621,12 @@
             threshold = 30.0;
             period = 14;
           }
+          {
+            type = "rsi";
+            threshold = 70.0;
+            period = 14;
+            direction = "above";
+          }
         ];
       }
       {
@@ -641,6 +636,12 @@
             type = "rsi";
             threshold = 30.0;
             period = 14;
+          }
+          {
+            type = "rsi";
+            threshold = 70.0;
+            period = 14;
+            direction = "above";
           }
         ];
       }

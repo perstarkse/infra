@@ -244,7 +244,7 @@ _: {
       ntfy = {
         serverUrl = lib.mkOption {
           type = lib.types.str;
-          default = "http://10.0.0.1:2586";
+          default = "https://ntfy.lan.stark.pub";
           description = "Base ntfy server URL used for publishing alerts.";
         };
 

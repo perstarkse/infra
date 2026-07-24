@@ -115,7 +115,7 @@
       enable = mkEnableOption "Send ntfy notification on backup failure";
       url = mkOption {
         type = types.str;
-        default = "http://10.0.0.1:2586/backup-alerts";
+        default = "https://ntfy.lan.stark.pub/backup-alerts";
         description = "ntfy topic URL for backup failure notifications.";
       };
     };
@@ -361,14 +361,20 @@
                         if bkCfg.bucket != null
                         then bkCfg.bucket
                         else mkBucketName jobName;
-                      endpoint = getEndpoint bkCfg;
                       region = getRegion bkCfg;
                     in {
                       "restic-bootstrap-${jobName}-${bkName}" = {
                         description = "Create backend bucket for restic ${jobName}/${bkName}";
                         wantedBy = ["multi-user.target"];
-                        after = ["network-online.target"];
+                        after =
+                          ["network-online.target"]
+                          ++ lib.optionals (bkCfg.type == "garage-s3" && config.services.garage.enable) ["garage.service"];
                         wants = ["network-online.target"];
+                        path = lib.optionals (bkCfg.type == "garage-s3" && config.services.garage.enable) [pkgs.garage];
+                        environment = lib.optionalAttrs (bkCfg.type == "garage-s3" && config.services.garage.enable) {
+                          GARAGE_RPC_SECRET_FILE = config.my.secrets.getPath "garage" "rpc_secret";
+                          GARAGE_ADMIN_ADDR = "127.0.0.1:3903";
+                        };
                         serviceConfig = {
                           Type = "oneshot";
                           EnvironmentFile = config.my.secrets.getPath secretName "env";
@@ -395,11 +401,24 @@
                               ${lib.optionalString (region != null) "--region ${region}"} \
                               || true
                           '';
-                          garageS3Script = ''
-                            ${pkgs.awscli2}/bin/aws --endpoint-url ${endpoint} s3api create-bucket --bucket "${bucketName}" \
-                              ${lib.optionalString (region != null) "--region ${region}"} \
-                              || true
-                          '';
+                          # Garage S3 keys typically cannot CreateBucket. On Garage nodes, provision
+                          # via admin CLI (same pattern as politikerstod). Elsewhere, skip — bucket
+                          # must already exist with RW for AWS_ACCESS_KEY_ID.
+                          garageS3Script =
+                            if config.services.garage.enable
+                            then ''
+                              create_out="$(${pkgs.garage}/bin/garage bucket create "${bucketName}" 2>&1 || true)"
+                              if echo "$create_out" | ${pkgs.gnugrep}/bin/grep -qiE 'was created|already exists|Bucket already'; then
+                                :
+                              elif [ -n "$create_out" ]; then
+                                echo "$create_out" >&2
+                                exit 1
+                              fi
+                              ${pkgs.garage}/bin/garage bucket allow --read --write "${bucketName}" --key "$AWS_ACCESS_KEY_ID"
+                            ''
+                            else ''
+                              echo "restic garage-s3 bootstrap: no local Garage admin; ensure bucket ${bucketName} exists with RW for $AWS_ACCESS_KEY_ID" >&2
+                            '';
                         in ''
                           set -euo pipefail
                           ${

@@ -88,6 +88,7 @@ in {
         sandboxed-binaries
         local-ai
         swayidle
+        wow-launcher
       ]
       ++ (with ctx.inputs.varsHelper.homeModules; [default])
       ++ (with ctx.inputs.privateInfra.homeModules; [
@@ -134,6 +135,7 @@ in {
       xdg-userdirs.enable = true;
       zellij.enable = true;
       zoxide.enable = true;
+      wow-launcher.enable = true;
 
       rofi = {
         enable = true;
