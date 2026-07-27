@@ -67,9 +67,9 @@ my.secrets.allowReadAccess = [
 ## Machines
 
 - `machines/io`: Router (LAN bridge, DHCP, DNS, WireGuard, nginx, monitoring)
-- `machines/makemake`: Server (Vaultwarden, OpenWebUI, SurrealDB, Minne)
+- `machines/makemake`: Server (Vaultwarden, OpenWebUI, SurrealDB, Minne, Supabase, Accounted)
 - `machines/charon`: Workstation (Worker of distributed services)
-- `machines/sedna`: External monitor 
+- `machines/sedna`: External monitor
 
 Each machine imports shared modules via flake-parts, follows consistent patterns, and consumes secrets declaratively.
 
@@ -117,6 +117,7 @@ machine-update <machine> [<machine> ...] [options]
 | `check-profile-politikerstod` | `politikerstod-checks` |
 | `check-profile-wireguard` | `wireguard-checks` |
 | `check-profile-paperless` | `paperless-checks` |
+| `check-profile-accounted` | `accounted-checks` |
 | `check-profile-backups` | `backups-checks` |
 
 All machines always run `nix fmt` + treefmt verification first (unless `--force`).
@@ -180,6 +181,7 @@ Additional local check bundles:
 - `nix build path:.#politikerstod-checks`
 - `nix build path:.#wireguard-checks`
 - `nix build path:.#paperless-checks`
+- `nix build path:.#accounted-checks`
 - `nix build path:.#backups-checks`
 - `nix build path:.#backups-multi-checks`
 - `nix build path:.#backups-failure-checks`

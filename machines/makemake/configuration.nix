@@ -33,6 +33,8 @@
       storage-alerts
       wireguard-tunnels
       indicator-alert-daemon
+      supabase
+      accounted
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
@@ -103,7 +105,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted"];
       };
 
       generateManifest = false;
@@ -510,6 +512,60 @@
       tunnels = {
         genome-worktree-zenith = {
           activationPolicy = "manual";
+        };
+      };
+    };
+
+    # Self-hosted Supabase + Accounted (LAN-only via io)
+    supabase = {
+      enable = true;
+      siteUrl = "https://accounting.lan.stark.pub";
+      additionalRedirectUrls = [
+        "https://accounting.lan.stark.pub/auth/callback"
+        "https://accounting.lan.stark.pub/api/auth/callback"
+      ];
+      smtp = {
+        host = "mail-eu.smtp2go.com";
+        port = 587;
+        adminEmail = "noreply@stark.pub";
+        senderName = "Accounted";
+      };
+      storage = {
+        endpoint = "http://10.0.0.10:3900";
+        bucket = "supabase";
+      };
+      exposure = {
+        enable = true;
+        domain = "supabase.lan.stark.pub";
+        useWildcard = "lanstark";
+        lanOnly = true;
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
+    };
+
+    accounted = {
+      enable = true;
+      port = 3050;
+      address = "10.0.0.10";
+      supabaseUrl = "https://supabase.lan.stark.pub";
+      exposure = {
+        enable = true;
+        domain = "accounting.lan.stark.pub";
+        useWildcard = "lanstark";
+        lanOnly = true;
+        # Next.js auth sends large Set-Cookie headers; increase nginx proxy
+        # buffers to avoid "upstream sent too big header" 502 errors.
+        extraConfig = ''
+          proxy_buffer_size 16k;
+          proxy_buffers 8 16k;
+          proxy_busy_buffers_size 32k;
+        '';
+        router = {
+          enable = true;
+          targets = ["io"];
         };
       };
     };

@@ -225,6 +225,21 @@ in {
               systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
             };
           };
+          mcpServers = {
+            accounted = {
+              url = "https://accounting.lan.stark.pub/api/extensions/ext/mcp-server/mcp?client=pi-code";
+              auth = "bearer";
+              bearerToken = "!cat ${config.my.secrets.getPath "accounted-mcp-key" "env"} | grep '^ACCOUNTED_MCP_API_KEY=' | cut -d= -f2";
+              lifecycle = "lazy";
+            };
+            context7 = {
+              url = "https://mcp.context7.com/mcp";
+              lifecycle = "lazy";
+              headers = {
+                CONTEXT7_API_KEY = "!cat ${config.my.secrets.getPath "context7" "env"} | grep '^CONTEXT7_API_KEY=' | cut -d= -f2";
+              };
+            };
+          };
         };
         pi-web = {
           enable = true;
@@ -301,7 +316,7 @@ in {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "openchamber" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "openchamber" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp"];
       };
 
       exposeUserSecrets = [
@@ -341,6 +356,14 @@ in {
         {
           readers = [config.my.mainUser.name];
           path = config.my.secrets.getPath "z-ai-env" "env";
+        }
+        {
+          readers = [config.my.mainUser.name];
+          path = config.my.secrets.getPath "accounted-mcp-key" "env";
+        }
+        {
+          readers = [config.my.mainUser.name];
+          path = config.my.secrets.getPath "context7" "env";
         }
         {
           readers = ["politikerstod-worker-lekeberg"];

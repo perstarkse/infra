@@ -92,6 +92,11 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    accountedSystemChecks = import ../../tests/accounted-system.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+    };
     exposureManifestData = inputs.self.lib.exposure.mkExposureManifest systemNixosConfigs;
 
     exposureManifest = pkgs.writeText "exposure-manifest.json" (builtins.toJSON exposureManifestData);
@@ -138,6 +143,7 @@
       mailserver-checks = mkCheckBundle "mailserver-checks" mailserverSystemChecks;
       sedna-failover-checks = mkCheckBundle "sedna-failover-checks" sednaFailoverChecks;
       auto-suspend-checks = mkCheckBundle "auto-suspend-checks" autoSuspendChecks;
+      accounted-checks = mkCheckBundle "accounted-checks" accountedSystemChecks;
     };
 
     machineUpdatePlanResolverPy = pkgs.writeText "machine-update-plan-resolver.py" ''
@@ -157,6 +163,7 @@
           "check-profile-backups": ["backups-checks", "backups-multi-checks", "backups-failure-checks"],
           "check-profile-mailserver": ["mailserver-checks"],
           "check-profile-sedna": ["sedna-failover-checks"],
+          "check-profile-accounted": ["accounted-checks"],
       }
 
       machine = os.environ["MU_PLAN_MACHINE"]

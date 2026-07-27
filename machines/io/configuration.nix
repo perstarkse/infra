@@ -508,6 +508,7 @@ in {
                 "orebro.politikerstod.stark.pub"
                 "wake.stark.pub"
                 "wg.stark.pub"
+                "invoices.stark.pub"
               ];
               passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
             }
@@ -617,6 +618,29 @@ in {
         enable = true;
         address = "10.0.0.22";
       };
+    };
+  };
+
+  # invoices.stark.pub — public webhook endpoint for Accounted invoice-inbox
+  # Only exposes the Resend inbound email webhook path; everything else returns 444.
+  # The main accounted app remains LAN-only at accounting.lan.stark.pub.
+  security.acme.certs."invoices.stark.pub" = {
+    domain = "invoices.stark.pub";
+    dnsProvider = "cloudflare";
+    environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+    group = "nginx";
+    webroot = null;
+  };
+  services.nginx.virtualHosts."invoices.stark.pub" = {
+    serverName = "invoices.stark.pub";
+    enableACME = true;
+    forceSSL = true;
+    locations."/api/extensions/ext/invoice-inbox/inbound" = {
+      proxyPass = "http://10.0.0.10:3050";
+      recommendedProxySettings = true;
+    };
+    locations."/" = {
+      return = "444";
     };
   };
 

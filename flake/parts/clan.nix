@@ -45,6 +45,7 @@
             "check-profile-paperless"
             "check-profile-backups"
             "check-profile-mailserver"
+            "check-profile-accounted"
           ];
         };
         charon = {
