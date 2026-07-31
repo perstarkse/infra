@@ -66,6 +66,11 @@ _: {
           default = "swe+eng";
           description = "OCR languages (tesseract format)";
         };
+        mode = lib.mkOption {
+          type = lib.types.enum ["skip" "always" "redo" "force"];
+          default = "skip";
+          description = "Paperless OCR mode: skip (no OCR, trust embedded text), always (OCR every document), redo (OCR even if text already exists), or force (same as redo).";
+        };
       };
 
       database = {
@@ -165,7 +170,7 @@ _: {
         settings = {
           PAPERLESS_URL = cfg.url;
           PAPERLESS_OCR_LANGUAGE = cfg.ocr.language;
-          PAPERLESS_OCR_MODE = "skip";
+          PAPERLESS_OCR_MODE = cfg.ocr.mode;
           PAPERLESS_OCR_USER_ARGS = {
             optimize = 1;
             pdfa_image_compression = "lossless";

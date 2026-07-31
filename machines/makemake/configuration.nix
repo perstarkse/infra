@@ -35,6 +35,7 @@
       indicator-alert-daemon
       supabase
       accounted
+      accounted-ocr
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
@@ -477,7 +478,10 @@
       dataDir = "/var/lib/paperless";
       consumptionDir = "/var/lib/paperless/consume";
       mediaDir = "/var/lib/paperless/media";
-      ocr.language = "swe+eng";
+      ocr = {
+        language = "swe+eng";
+        mode = "always";
+      };
       database = {
         name = "paperless";
         user = "paperless";
@@ -567,6 +571,15 @@
           enable = true;
           targets = ["io"];
         };
+      };
+    };
+
+    accounted-ocr = {
+      enable = true;
+      backend = "local";
+      llm.ollama = {
+        model = "qwen2.5:3b"; # 3B is snappy on N100; try 7B if you have patience
+        igpu = true; # Uses Intel UHD Graphics via Vulkan
       };
     };
 
