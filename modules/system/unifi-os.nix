@@ -699,6 +699,18 @@ _: {
                 ${config.virtualisation.podman.package}/bin/podman load -i ${cfg.runtimeDir}/image.tar
               fi
 
+              if /usr/bin/podman container exists ${lib.escapeShellArg cfg.container.name}; then
+                # Recreate the container if any Nix store bind mounts have been
+                # garbage-collected since the container was created.
+                if ! /usr/bin/podman container inspect ${lib.escapeShellArg cfg.container.name} \
+                  --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' \
+                  | ${pkgs.gnugrep}/bin/grep '^/nix/store/' \
+                  | while IFS= read -r src; do test -e "$src" || exit 1; done; then
+                  echo "unifi-os: container bind mounts are stale (Nix store paths GC'd), recreating..."
+                  /usr/bin/podman rm -f ${lib.escapeShellArg cfg.container.name}
+                fi
+              fi
+
               if ! /usr/bin/podman container exists ${lib.escapeShellArg cfg.container.name}; then
                 /usr/bin/podman create \
                   --name ${lib.escapeShellArg cfg.container.name} \
