@@ -378,11 +378,11 @@
         "treefmt-nix": "treefmt-nix_3"
       },
       "locked": {
-        "lastModified": 1785576568,
-        "narHash": "sha256-jHr+xIsftaP0bHRn8xD35aA3Wqt+lVQEl2t1z6PC6jA=",
+        "lastModified": 1785590115,
+        "narHash": "sha256-BajlY8/JlKQZhu9BcSOHekD+ytrYmgv5hAkPV9Pl9s4=",
         "ref": "refs/heads/main",
-        "rev": "6051fd78f278fdff3deb824d7c68084889a512f4",
-        "revCount": 7,
+        "rev": "ed5d3f2970e87d085a71f23129340eddb78f3e6c",
+        "revCount": 8,
         "type": "git",
         "url": "file:///home/p/repos/digikey-mcp"
       },
