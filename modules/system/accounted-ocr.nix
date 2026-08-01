@@ -392,7 +392,7 @@ _: {
         poppler-utils
         tesseract5
       ];
-      environment.sessionVariables.TESSDATA_PREFIX = "${pkgs.tesseract5.tessdata}/share/tessdata";
+      environment.sessionVariables.TESSDATA_PREFIX = "${pkgs.tesseract5.tessdata}";
 
       # ── Local backend: Ollama ────────────────────────────────────
       services.ollama = lib.mkIf (cfg.enable && cfg.backend == "local") {
@@ -404,7 +404,14 @@ _: {
         loadModels = [cfg.llm.ollama.model];
       };
 
-      # Ensure the ollama service can access the iGPU when Vulkan is used
+      # Ensure the ollama service can access the iGPU when Vulkan is used:
+      # mesa provides the Intel ANV Vulkan driver (libvulkan_intel.so); the
+      # VK_ICD_FILENAMES override is needed because systemd services do not
+      # inherit the system profile's XDG search paths.
+      hardware.graphics = lib.mkIf (cfg.backend == "local" && cfg.llm.ollama.igpu) {
+        enable = true;
+      };
+
       systemd.services.ollama = lib.mkIf (cfg.backend == "local" && cfg.llm.ollama.igpu) {
         serviceConfig = {
           # Allow DRI render nodes (/dev/dri/renderD*)
@@ -415,6 +422,11 @@ _: {
             "/dev/dri/renderD128"
           ];
           SupplementaryGroups = ["render"];
+        };
+        environment = {
+          VK_ICD_FILENAMES = "${pkgs.mesa}/share/vulkan/icd.d/intel_icd.x86_64.json";
+          # Ollama skips integrated GPUs unless explicitly enabled
+          OLLAMA_IGPU_ENABLE = "1";
         };
       };
 

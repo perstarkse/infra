@@ -370,6 +370,27 @@
         "url": "https://git.clan.lol/clan/data-mesher/archive/main.tar.gz"
       }
     },
+    "digikey-mcp": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "treefmt-nix": "treefmt-nix_3"
+      },
+      "locked": {
+        "lastModified": 1785534213,
+        "narHash": "sha256-o/9RnUtFcKBmP/WWAhHWRO8879vw0ni3XxgEePXDwZQ=",
+        "ref": "refs/heads/main",
+        "rev": "9de32599a84dd4bdb443629614c5845e1b3e4bcc",
+        "revCount": 1,
+        "type": "git",
+        "url": "file:///home/p/repos/digikey-mcp"
+      },
+      "original": {
+        "type": "git",
+        "url": "file:///home/p/repos/digikey-mcp"
+      }
+    },
     "disko": {
       "inputs": {
         "nixpkgs": [
@@ -1698,7 +1719,7 @@
         "nixpkgs": [
           "nixpkgs"
         ],
-        "treefmt-nix": "treefmt-nix_3"
+        "treefmt-nix": "treefmt-nix_4"
       },
       "locked": {
         "lastModified": 1784640720,
@@ -1723,7 +1744,7 @@
           "nixpkgs-unstable"
         ],
         "systems": "systems_3",
-        "treefmt-nix": "treefmt-nix_4"
+        "treefmt-nix": "treefmt-nix_5"
       },
       "locked": {
         "lastModified": 1783014537,
@@ -1768,7 +1789,7 @@
         "flake-parts": "flake-parts_5",
         "git-hooks": "git-hooks",
         "nixpkgs": "nixpkgs_2",
-        "treefmt-nix": "treefmt-nix_5"
+        "treefmt-nix": "treefmt-nix_6"
       },
       "locked": {
         "lastModified": 1782755318,
@@ -2090,7 +2111,7 @@
           "nixpkgs"
         ],
         "process-compose-flake": "process-compose-flake",
-        "treefmt-nix": "treefmt-nix_6"
+        "treefmt-nix": "treefmt-nix_7"
       },
       "locked": {
         "lastModified": 1782850199,
@@ -2188,7 +2209,7 @@
         ],
         "nixpkgs-unstable": "nixpkgs-unstable_2",
         "simple-nixos-mailserver": "simple-nixos-mailserver",
-        "treefmt-nix": "treefmt-nix_7",
+        "treefmt-nix": "treefmt-nix_8",
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
@@ -2226,6 +2247,7 @@
         "agent-microvm": "agent-microvm",
         "agent-tooling": "agent-tooling",
         "clan-core": "clan-core",
+        "digikey-mcp": "digikey-mcp",
         "flake-parts": "flake-parts_2",
         "home-manager": "home-manager_2",
         "hy3": "hy3",
@@ -2248,7 +2270,7 @@
         "sops-nix": "sops-nix_2",
         "stylix": "stylix",
         "sway-focus-flash": "sway-focus-flash",
-        "treefmt-nix": "treefmt-nix_8",
+        "treefmt-nix": "treefmt-nix_9",
         "vars-helper": "vars-helper",
         "voxtype": "voxtype",
         "wol-web-proxy": "wol-web-proxy"
@@ -2704,6 +2726,27 @@
         "type": "github"
       }
     },
+    "treefmt-nix_10": {
+      "inputs": {
+        "nixpkgs": [
+          "vars-helper",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1780220602,
+        "narHash": "sha256-eynAfOmbmxJnkp7YewvCEbShNnnYJ9gLLqkzsYtBPeM=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "db947814a175b7ca6ded66e21383d938df01c227",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
     "treefmt-nix_2": {
       "inputs": {
         "nixpkgs": [
@@ -2728,16 +2771,16 @@
     "treefmt-nix_3": {
       "inputs": {
         "nixpkgs": [
-          "indicator-alert-daemon",
+          "digikey-mcp",
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1780220602,
-        "narHash": "sha256-eynAfOmbmxJnkp7YewvCEbShNnnYJ9gLLqkzsYtBPeM=",
+        "lastModified": 1785360170,
+        "narHash": "sha256-XE1lKgQ3eIO3E7zWryqcRsax+mYXod/5RHBn4YaR9YE=",
         "owner": "numtide",
         "repo": "treefmt-nix",
-        "rev": "db947814a175b7ca6ded66e21383d938df01c227",
+        "rev": "d1187f8bc71fb8aab02395869ec3f5c1920f75c0",
         "type": "github"
       },
       "original": {
@@ -2749,7 +2792,7 @@
     "treefmt-nix_4": {
       "inputs": {
         "nixpkgs": [
-          "llm-agents",
+          "indicator-alert-daemon",
           "nixpkgs"
         ]
       },
@@ -2770,7 +2813,7 @@
     "treefmt-nix_5": {
       "inputs": {
         "nixpkgs": [
-          "minne",
+          "llm-agents",
           "nixpkgs"
         ]
       },
@@ -2791,7 +2834,7 @@
     "treefmt-nix_6": {
       "inputs": {
         "nixpkgs": [
-          "nous",
+          "minne",
           "nixpkgs"
         ]
       },
@@ -2812,7 +2855,7 @@
     "treefmt-nix_7": {
       "inputs": {
         "nixpkgs": [
-          "private-infra",
+          "nous",
           "nixpkgs"
         ]
       },
@@ -2833,6 +2876,7 @@
     "treefmt-nix_8": {
       "inputs": {
         "nixpkgs": [
+          "private-infra",
           "nixpkgs"
         ]
       },
@@ -2853,7 +2897,6 @@
     "treefmt-nix_9": {
       "inputs": {
         "nixpkgs": [
-          "vars-helper",
           "nixpkgs"
         ]
       },
@@ -2880,7 +2923,7 @@
         "nixpkgs": [
           "nixpkgs"
         ],
-        "treefmt-nix": "treefmt-nix_9"
+        "treefmt-nix": "treefmt-nix_10"
       },
       "locked": {
         "lastModified": 1783331540,

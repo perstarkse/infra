@@ -239,6 +239,14 @@ in {
                 CONTEXT7_API_KEY = "!cat ${config.my.secrets.getPath "context7" "env"} | grep '^CONTEXT7_API_KEY=' | cut -d= -f2";
               };
             };
+            digikey = {
+              command = "${ctx.inputs.digikeyMcp.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/digikey-mcp";
+              lifecycle = "lazy";
+              env = {
+                DIGIKEY_CLIENT_ID = "!cat ${config.my.secrets.getPath "digikey" "env"} | grep '^DIGIKEY_CLIENT_ID=' | cut -d= -f2";
+                DIGIKEY_CLIENT_SECRET = "!cat ${config.my.secrets.getPath "digikey" "env"} | grep '^DIGIKEY_CLIENT_SECRET=' | cut -d= -f2";
+              };
+            };
           };
         };
         pi-web = {
@@ -316,7 +324,7 @@ in {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "openchamber" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "openchamber" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey"];
       };
 
       exposeUserSecrets = [
@@ -364,6 +372,10 @@ in {
         {
           readers = [config.my.mainUser.name];
           path = config.my.secrets.getPath "context7" "env";
+        }
+        {
+          readers = [config.my.mainUser.name];
+          path = config.my.secrets.getPath "digikey" "env";
         }
         {
           readers = ["politikerstod-worker-lekeberg"];

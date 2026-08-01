@@ -137,6 +137,11 @@
       url = "git+file:///home/p/repos/agent-microvm";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    digikey-mcp = {
+      url = "git+file:///home/p/repos/digikey-mcp";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs @ {flake-parts, ...}:

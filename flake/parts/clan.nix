@@ -14,6 +14,7 @@
           varsHelper = inputs.vars-helper;
           inherit (inputs) nous voxtype;
           agentTooling = inputs."agent-tooling";
+          digikeyMcp = inputs."digikey-mcp";
         };
       };
     };
