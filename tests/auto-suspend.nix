@@ -64,6 +64,30 @@
   inhibitorNode = mkNode {
     loadThreshold = "100.0";
   };
+
+  resumeHookNode = lib.recursiveUpdate (testHelpers.mkCommonNode {}) {
+    imports = [
+      nixosModules.options
+      nixosModules.auto-suspend
+      nixosModules.ddcutil
+      nixosModules.bluetooth-resume
+    ];
+
+    my.mainUser.name = "testuser";
+    users.users.testuser = {
+      isNormalUser = true;
+    };
+
+    my.bluetooth-resume.enable = true;
+
+    my.ddcutil = {
+      enable = true;
+      monitor = {
+        enable = true;
+        dataDir = ../machines/charon/monitor;
+      };
+    };
+  };
 in {
   auto-suspend-idle-suspends = pkgs.testers.runNixOSTest {
     name = "auto-suspend-idle-suspends";
@@ -136,6 +160,28 @@ in {
       machine.succeed("test \"$(cat /run/auto-suspend/idle-count)\" = 0")
 
       machine.succeed("systemctl stop test-sleep-inhibit.service")
+    '';
+  };
+
+  auto-suspend-resume-hooks = pkgs.testers.runNixOSTest {
+    name = "auto-suspend-resume-hooks";
+    nodes.machine = resumeHookNode;
+
+    testScript = ''
+      start_all()
+      machine.wait_for_unit("multi-user.target")
+
+      # Test bluetooth resume post-sleep hook triggers bluetooth-resume-recover non-blockingly
+      machine.succeed("/etc/systemd/system-sleep/bluetooth-resume post")
+      machine.wait_until_succeeds("journalctl -u bluetooth-resume-recover.service | grep -i 'Bluetooth'", timeout=30)
+
+      # Test monitor-power pre hook records wakeup devices
+      machine.succeed("/etc/systemd/system-sleep/monitor-power pre")
+      machine.succeed("test -f /run/monitor-power-suspend-wakeup")
+
+      # Test monitor-power post hook triggers monitor-power-resume service non-blockingly
+      machine.succeed("/etc/systemd/system-sleep/monitor-power post")
+      machine.wait_until_succeeds("journalctl -u monitor-power-resume.service | grep -i 'monitor'", timeout=30)
     '';
   };
 }

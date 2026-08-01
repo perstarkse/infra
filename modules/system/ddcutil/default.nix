@@ -236,6 +236,16 @@
                   | ${pkgs.gawk}/bin/awk -F';' '/^-- cursor:/ { print $2; exit }' \
                   > /run/monitor-power-suspend-cursor || true
                 ${pkgs.coreutils}/bin/date -Iseconds > /run/monitor-power-suspend-since || true
+                ${pkgs.coreutils}/bin/rm -f /run/monitor-power-suspend-wakeup
+                for dev in /sys/class/wakeup/wakeup*; do
+                  if [ -f "$dev/name" ]; then
+                    name=$(${pkgs.coreutils}/bin/cat "$dev/name" 2>/dev/null)
+                    wc=$(${pkgs.coreutils}/bin/cat "$dev/wakeup_count" 2>/dev/null || echo 0)
+                    ec=$(${pkgs.coreutils}/bin/cat "$dev/event_count" 2>/dev/null || echo 0)
+                    ac=$(${pkgs.coreutils}/bin/cat "$dev/active_count" 2>/dev/null || echo 0)
+                    echo "$name $wc $ec $ac" >> /run/monitor-power-suspend-wakeup
+                  fi
+                done
                 ;;
               post)
                 # Non-blocking: do not hold systemd-sleep / user.slice thaw.

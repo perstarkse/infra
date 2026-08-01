@@ -62,12 +62,22 @@
     config = lib.mkIf cfg.enable {
       systemd.services.bluetooth-resume-recover = {
         description = "Recover Bluetooth after resume";
-        wantedBy = sleepTargets;
-        after = sleepTargets;
         serviceConfig = {
           Type = "oneshot";
           ExecStart = bluetoothResume;
         };
+      };
+
+      environment.etc."systemd/system-sleep/bluetooth-resume" = {
+        source = pkgs.writeShellScript "bluetooth-resume-hook" ''
+          case "$1" in
+            post)
+              # Non-blocking: do not hold systemd-sleep / user.slice thaw.
+              ${pkgs.systemd}/bin/systemctl start --no-block bluetooth-resume-recover.service || true
+              ;;
+          esac
+        '';
+        mode = "0755";
       };
     };
   };

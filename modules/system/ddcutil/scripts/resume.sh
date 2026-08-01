@@ -11,6 +11,41 @@ KEEP_AWAKE_STATE_DIR="@KEEP_AWAKE_STATE_DIR@"
 KEEP_AWAKE_UNIT="@KEEP_AWAKE_UNIT@"
 SUSPEND_CURSOR_FILE="/run/monitor-power-suspend-cursor"
 SUSPEND_SINCE_FILE="/run/monitor-power-suspend-since"
+SUSPEND_WAKEUP_FILE="/run/monitor-power-suspend-wakeup"
+
+# Hardware-level Wake-on-LAN detection via /sys/class/wakeup.
+# Checks if any network interface's wakeup counter incremented during sleep.
+sysfs_wol_wake_detected() {
+	[[ -s "$SUSPEND_WAKEUP_FILE" ]] || return 1
+
+	local iface dev_link pci_addr wakeup_dev name new_wc new_ec new_ac old_name old_wc old_ec old_ac
+	for iface in /sys/class/net/*; do
+		[[ -e "$iface/device" ]] || continue
+		dev_link=$(readlink -f "$iface/device" 2>/dev/null || true)
+		[[ -n "$dev_link" ]] || continue
+		pci_addr=$(basename "$dev_link")
+		[[ -n "$pci_addr" ]] || continue
+
+		for wakeup_dev in /sys/class/wakeup/wakeup*; do
+			[[ -f "$wakeup_dev/name" ]] || continue
+			name=$(<"$wakeup_dev/name")
+			[[ "$name" == *"$pci_addr"* ]] || continue
+
+			new_wc=$(<"$wakeup_dev/wakeup_count" 2>/dev/null || echo 0)
+			new_ec=$(<"$wakeup_dev/event_count" 2>/dev/null || echo 0)
+			new_ac=$(<"$wakeup_dev/active_count" 2>/dev/null || echo 0)
+
+			while read -r old_name old_wc old_ec old_ac; do
+				if [[ "$old_name" == "$name" ]]; then
+					if (( new_wc > old_wc || new_ec > old_ec || new_ac > old_ac )); then
+						return 0
+					fi
+				fi
+			done < "$SUSPEND_WAKEUP_FILE"
+		done
+	done
+	return 1
+}
 
 # Active wake-proxy lease: until timestamp in the future AND pid still alive.
 # Stale files after suspend must not count (pid is dead).
@@ -51,6 +86,10 @@ remote_ssh_since_suspend() {
 }
 
 remote_wake_reason() {
+	if sysfs_wol_wake_detected; then
+		echo "hardware WOL wake (sysfs)"
+		return 0
+	fi
 	if keep_awake_lease_active; then
 		echo "keep-awake lease (${KEEP_AWAKE_UNIT})"
 		return 0
