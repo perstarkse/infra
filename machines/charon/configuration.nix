@@ -240,11 +240,16 @@ in {
               };
             };
             digikey = {
+              # MyLists tools need the app subscribed to MyLists in the portal and its
+              # OAuth Callback URL set to DIGIKEY_CALLBACK_URL below; the account owner
+              # then runs the one-time mylists_authorize consent flow.
               command = "${ctx.inputs.digikeyMcp.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/digikey-mcp";
               lifecycle = "lazy";
               env = {
                 DIGIKEY_CLIENT_ID = "!cat ${config.my.secrets.getPath "digikey" "env"} | grep '^DIGIKEY_CLIENT_ID=' | cut -d= -f2";
                 DIGIKEY_CLIENT_SECRET = "!cat ${config.my.secrets.getPath "digikey" "env"} | grep '^DIGIKEY_CLIENT_SECRET=' | cut -d= -f2";
+                DIGIKEY_CALLBACK_URL = "https://localhost:8139/digikey_callback";
+                DIGIKEY_TOKEN_STORE = "/home/p/.local/state/digikey-mcp/tokens.json";
               };
             };
           };
