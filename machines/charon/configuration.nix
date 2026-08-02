@@ -156,8 +156,8 @@ in {
           permissionSystem.enable = false;
           enable = true;
           shellAlias = "PI_FFF_MODE=override command pi";
-          defaultProvider = "cursor";
-          defaultModel = "grok-4.5:slow";
+          defaultProvider = "cline-pass";
+          defaultModel = "deepseek/deepseek-v4-flash";
           extraPackages = ["/home/p/repos/pi-cline-provider"];
           models = {
             providers.openrouter.models = [
