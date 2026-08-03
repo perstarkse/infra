@@ -32,13 +32,6 @@
     bluetoothResume =
       pkgs.writeShellScript "bluetooth-resume"
       (lib.replaceStrings scriptSubstitutions scriptReplacements (builtins.readFile ./scripts/resume.sh));
-
-    sleepTargets = [
-      "suspend.target"
-      "hibernate.target"
-      "hybrid-sleep.target"
-      "suspend-then-hibernate.target"
-    ];
   in {
     options.my.bluetooth-resume = {
       enable = lib.mkEnableOption "Fast Bluetooth recovery after system sleep";

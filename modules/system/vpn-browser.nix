@@ -174,12 +174,21 @@
           # Default route via host
           ip netns exec "$NS" ip route add default via "$HOST_ADDR"
 
-          # Give the namespace its own resolv.conf so wg-quick's DNS changes
-          # don't leak onto the host
+          # Per-netns /etc overlays (ip netns exec bind-mounts these over /etc/*).
+          # Never copy the host systemd-resolved stub (127.0.0.53) — that listener
+          # does not exist inside the netns, so dig/getaddrinfo break or fall
+          # through nss-resolve to the *host* resolver (LAN split-horizon →
+          # 10.0.0.1 for public vhosts), which then hairpins through Mullvad and
+          # surfaces Mullvad's "VPN Server / no content hosted here" page.
           mkdir -p "/etc/netns/$NS"
-          if [ ! -f "/etc/netns/$NS/resolv.conf" ]; then
-            cp /etc/resolv.conf "/etc/netns/$NS/resolv.conf"
-          fi
+          printf '%s\n' \
+            'nameserver 1.1.1.1' \
+            'nameserver 9.9.9.9' \
+            'options edns0' \
+            > "/etc/netns/$NS/resolv.conf"
+          # Strip systemd-resolved NSS so glibc uses resolv.conf, not host D-Bus.
+          ${pkgs.gnused}/bin/sed '/^hosts:/c hosts: files dns' /etc/nsswitch.conf \
+            > "/etc/netns/$NS/nsswitch.conf"
 
           # Boot can satisfy network-online before resolved can answer external DNS.
           ENDPOINT_HOST=$(
