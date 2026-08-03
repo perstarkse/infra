@@ -445,7 +445,7 @@ in {
 
       shutdownOnSuspend = {
         enable = true;
-        vms = ["new"];
+        vms = ["win11"];
       };
 
       # Dir-backed pool so NixVirt creates win11-new.qcow2 on activation if missing.
@@ -506,6 +506,10 @@ in {
           name = "vm-isolated";
           uuid = "90d2a8a3-4afe-6d69-12c3-67dd0cbd1c7c";
           mode = "isolated";
+          subnet = "192.168.123.0/24";
+          gateway = "192.168.123.1";
+          dhcpStart = "192.168.123.10";
+          dhcpEnd = "192.168.123.254";
           firewallPorts = {
             tcp = [];
             udp = [];

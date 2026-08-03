@@ -6,6 +6,49 @@
     ...
   }: let
     cfg = config.my.libvirt;
+
+    # Convert a CIDR prefix to a dotted netmask, e.g. "192.168.1.0/24" → "255.255.255.0".
+    netmaskOf = cidr: let
+      prefix = lib.toInt (lib.last (lib.splitString "/" cidr));
+      pow2 = k: lib.foldl' (a: _: a * 2) 1 (lib.range 1 k);
+      octetValue = b:
+        if b == 0
+        then 0
+        else 256 - pow2 (8 - b);
+      octets = lib.genList (n: let
+        bits = lib.min 8 (lib.max 0 (prefix - 8 * n));
+      in
+        octetValue bits)
+      4;
+    in
+      lib.concatStringsSep "." (map toString octets);
+
+    # Replace the last octet of an IPv4 address.
+    withLastOctet = addr: octet:
+      lib.concatStringsSep "." ((lib.take 3 (lib.splitString "." addr)) ++ [octet]);
+
+    # FORWARD rules toward a VM network's subnet. VM services live behind the
+    # NAT bridge, so firewallPorts must not open the HOST's own ports (the old
+    # behaviour leaked host 22/80/443/53 onto charon). Isolated networks
+    # forward nothing, so they get no rules.
+    mkFirewallForwardRules = backend:
+      lib.concatStringsSep "\n" (
+        lib.concatLists (
+          map (
+            network:
+              if network.mode == "isolated" || network.subnet == null
+              then []
+              else if backend == "nft"
+              then
+                (map (p: "tcp dport ${toString p} ip daddr ${network.subnet} accept") network.firewallPorts.tcp)
+                ++ (map (p: "udp dport ${toString p} ip daddr ${network.subnet} accept") network.firewallPorts.udp)
+              else
+                (map (p: "${pkgs.iptables}/bin/iptables -A FORWARD -d ${network.subnet} -p tcp --dport ${toString p} -j ACCEPT") network.firewallPorts.tcp)
+                ++ (map (p: "${pkgs.iptables}/bin/iptables -A FORWARD -d ${network.subnet} -p udp --dport ${toString p} -j ACCEPT") network.firewallPorts.udp)
+          )
+          cfg.networks
+        )
+      );
   in {
     imports = [
       inputs.NixVirt.nixosModules.default
@@ -298,7 +341,24 @@
                     subnet_byte = lib.toInt (lib.last (lib.splitString "." network.gateway));
                   }
                 else if network.mode == "isolated"
-                then {
+                then let
+                  gateway =
+                    if network.gateway != null
+                    then network.gateway
+                    else "192.168.122.1";
+                  subnet =
+                    if network.subnet != null
+                    then network.subnet
+                    else "192.168.122.0/24";
+                  dhcpStart =
+                    if network.dhcpStart != null
+                    then network.dhcpStart
+                    else withLastOctet gateway "2";
+                  dhcpEnd =
+                    if network.dhcpEnd != null
+                    then network.dhcpEnd
+                    else withLastOctet gateway "254";
+                in {
                   inherit (network) name;
                   inherit (network) uuid;
                   forward = {
@@ -308,12 +368,12 @@
                     address = "52:54:00:02:77:4b";
                   };
                   ip = {
-                    address = "192.168.122.1";
-                    netmask = "255.255.255.0";
+                    address = gateway;
+                    netmask = netmaskOf subnet;
                     dhcp = {
                       range = {
-                        start = "192.168.122.2";
-                        end = "192.168.122.254";
+                        start = dhcpStart;
+                        end = dhcpEnd;
                       };
                     };
                   };
@@ -520,10 +580,11 @@
         path = [pkgs.libvirt];
       };
 
-      # Firewall configuration for networks
+      # Firewall configuration for networks: forward rules to the VM subnet,
+      # not host INPUT ports.
       networking.firewall = {
-        allowedTCPPorts = lib.concatLists (map (network: network.firewallPorts.tcp) cfg.networks);
-        allowedUDPPorts = lib.concatLists (map (network: network.firewallPorts.udp) cfg.networks);
+        extraForwardRules = lib.mkIf config.networking.nftables.enable (mkFirewallForwardRules "nft");
+        extraCommands = lib.mkIf (!config.networking.nftables.enable) (mkFirewallForwardRules "ipt");
         # Add trusted interfaces for all network bridges
         trustedInterfaces = lib.mkIf (cfg.networks != []) (
           lib.unique (["virbr0"]
