@@ -148,7 +148,6 @@
         };
       };
     in {
-      minne = mkB2 config.my.minne.dataDir;
       minne-saas = mkB2 config.my.minne-saas.dataDir;
       vaultwarden = mkB2 config.my.vaultwarden.backupDir;
 
@@ -321,6 +320,12 @@
       };
     };
 
+    # Restrict WebDAV to the router's nginx only (io proxies
+    # webdav.lan.stark.pub → 10.0.0.10:8081). The exposure module emits the
+    # dual-backend firewall rules (nft extraInputRules + iptables
+    # extraCommands) and excludes 8081 from allowedTCPPorts.
+    exposure.services.webdav-garage.firewall.local.allowedSources = ["10.0.0.1"];
+
     # Nous burnout prevention app
     nous = {
       enable = true;
@@ -401,6 +406,7 @@
             pollingHistoricalMonths = 36;
             openaiModel = "gpt-4.1-mini";
             evaluationModel = "gpt-4.1-mini";
+            authAllowedEmailDomains = ["lekeberg.se"];
           };
         };
 
@@ -667,22 +673,6 @@
         ];
       }
       {
-        symbol = "ETH-USD";
-        indicators = [
-          {
-            type = "rsi";
-            threshold = 30.0;
-            period = 14;
-          }
-          {
-            type = "rsi";
-            threshold = 70.0;
-            period = 14;
-            direction = "above";
-          }
-        ];
-      }
-      {
         symbol = "BOTZ";
         indicators = [
           {
@@ -756,12 +746,6 @@
       end
     '';
   };
-
-  # Restrict WebDAV port to router only (auth handled by nginx on io)
-  networking.firewall.extraInputRules = ''
-    ip saddr 10.0.0.1 tcp dport 8081 accept
-    tcp dport 8081 drop
-  '';
 
   networking = {
     firewall.allowedTCPPorts = [8088];

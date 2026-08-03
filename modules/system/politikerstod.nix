@@ -366,6 +366,14 @@
                     "$AWS_ACCESS_KEY_ID" \
                     "$AWS_SECRET_ACCESS_KEY" \
                     >/dev/null 2>&1 || true
+                  # Only grant when garage runs on this host (its config file
+                  # exists); in test/worker-only topologies garage is absent
+                  # and the app has no S3 access to grant.
+                  if [ -f /etc/garage.toml ]; then
+                    ${pkgs.garage}/bin/garage bucket allow \
+                      --read --write ${instance.s3.bucket or "politikerstod-${name}"} \
+                      --key "$AWS_ACCESS_KEY_ID"
+                  fi
                 '';
               }
           )
