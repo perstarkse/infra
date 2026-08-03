@@ -2,6 +2,7 @@
   config.flake.nixosModules.frigate = {
     config,
     lib,
+    pkgs,
     mkStandardExposureOptions,
     ...
   }: let
@@ -27,9 +28,9 @@
       go2rtc:
         streams:
           reolink_p330:
-            - rtsp://watcher:REDACTED@10.0.30.10:554/h264Preview_01_main
+            - $RTSP_MAIN_URL
           reolink_p330_sub:
-            - rtsp://watcher:REDACTED@10.0.30.10:554/h264Preview_01_sub
+            - $RTSP_SUB_URL
 
       cameras:
         reolink_p330:
@@ -53,6 +54,9 @@
             retain:
               days: 0
     '';
+
+    rtspMainUrl = config.my.secrets.getPath "frigate" "rtsp-main-url";
+    rtspSubUrl = config.my.secrets.getPath "frigate" "rtsp-sub-url";
   in {
     options.my.frigate = {
       enable = lib.mkEnableOption "Frigate NVR";
@@ -90,8 +94,13 @@
           description = "Sync Frigate config into persistent storage";
           before = ["podman-frigate.service"];
           serviceConfig.Type = "oneshot";
+          # RTSP credentials come from Clan vars at runtime; the Nix store
+          # contains only the template with $RTSP_*_URL placeholders.
           script = ''
-            install -D -m 0644 ${frigateConfigYAML} /storage/frigate/config/config.yml
+            RTSP_MAIN_URL="$(cat ${rtspMainUrl})" RTSP_SUB_URL="$(cat ${rtspSubUrl})" \
+              ${pkgs.gettext}/bin/envsubst < ${frigateConfigYAML} \
+              > /tmp/frigate-config.yml
+            install -D -m 0644 /tmp/frigate-config.yml /storage/frigate/config/config.yml
           '';
         };
 
