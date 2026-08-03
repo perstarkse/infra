@@ -30,29 +30,34 @@
           ))
           + ")";
       dataDir = instance.dataDir or "/var/lib/politikerstod-worker-${name}";
-    in [
-      "LOCO_ENV=production"
-      "DATABASE_URL=postgres://${instance.database.user or "politikerstod"}:@${instance.database.host or "10.0.0.10"}:${toString (instance.database.port or 5432)}/${instance.database.name or "politikerstod_prod"}"
-      "S3_ENDPOINT=${instance.s3.endpoint or "http://10.0.0.1:3900"}"
-      "S3_BUCKET=${instance.s3.bucket or "politikerstod-${name}"}"
-      "AWS_REGION=${instance.s3.region or "garage"}"
-      "S3_KEY_PREFIX=${instance.s3.prefix or ""}"
-      "LEKEBERG_BASE_URL=${instance.scraper.baseUrl or ""}"
-      "LOG_LEVEL=${instance.logLevel or "info"}"
-      "NUM_WORKERS=${toString (instance.numWorkers or 4)}"
-      "OPENAI_MODEL=${instance.openai.model or "gpt-4.1-mini"}"
-      "FASTEMBED_CACHE_PATH=${dataDir}/fastembed_cache"
-      "HOST=http://localhost"
-      "PORT=5150"
-      "CORS_ALLOW_ORIGIN=http://localhost"
-      "AUTH_ALLOWED_EMAIL_DOMAINS=\"${authAllowedRegex}\""
-      "SMTP_HOST=${instance.smtp.host or "smtp.example.com"}"
-      "SMTP_PORT=${toString (instance.smtp.port or 587)}"
-      "MAILER_FROM=${instance.smtp.from or "politikerstod@stark.pub"}"
-      "PRETTY_BACKTRACE=false"
-      "POLLING_HISTORICAL_MONTHS=${toString (instance.settings.pollingHistoricalMonths or 12)}"
-      "EVALUATION_MODEL=${instance.settings.evaluationModel or "gpt-4o-mini"}"
-    ];
+      dbUrl =
+        if (instance.database.passwordFile or null) != null
+        then []
+        else ["DATABASE_URL=postgres://${instance.database.user or "politikerstod"}:@${instance.database.host or "10.0.0.10"}:${toString (instance.database.port or 5432)}/${instance.database.name or "politikerstod_prod"}"];
+    in
+      [
+        "LOCO_ENV=production"
+        "S3_ENDPOINT=${instance.s3.endpoint or "http://10.0.0.1:3900"}"
+        "S3_BUCKET=${instance.s3.bucket or "politikerstod-${name}"}"
+        "AWS_REGION=${instance.s3.region or "garage"}"
+        "S3_KEY_PREFIX=${instance.s3.prefix or ""}"
+        "LEKEBERG_BASE_URL=${instance.scraper.baseUrl or ""}"
+        "LOG_LEVEL=${instance.logLevel or "info"}"
+        "NUM_WORKERS=${toString (instance.numWorkers or 4)}"
+        "OPENAI_MODEL=${instance.openai.model or "gpt-4.1-mini"}"
+        "FASTEMBED_CACHE_PATH=${dataDir}/fastembed_cache"
+        "HOST=http://localhost"
+        "PORT=5150"
+        "CORS_ALLOW_ORIGIN=http://localhost"
+        "AUTH_ALLOWED_EMAIL_DOMAINS=\"${authAllowedRegex}\""
+        "SMTP_HOST=${instance.smtp.host or "smtp.example.com"}"
+        "SMTP_PORT=${toString (instance.smtp.port or 587)}"
+        "MAILER_FROM=${instance.smtp.from or "politikerstod@stark.pub"}"
+        "PRETTY_BACKTRACE=false"
+        "POLLING_HISTORICAL_MONTHS=${toString (instance.settings.pollingHistoricalMonths or 12)}"
+        "EVALUATION_MODEL=${instance.settings.evaluationModel or "gpt-4o-mini"}"
+      ]
+      ++ dbUrl;
   in {
     options.my.politikerstod-remote-worker = {
       package = lib.mkOption {
@@ -114,6 +119,11 @@
               user = lib.mkOption {
                 type = lib.types.str;
                 default = "politikerstod";
+              };
+              passwordFile = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Runtime path to a file containing the DB password (scram). When set, DATABASE_URL carries the password.";
               };
             };
 
@@ -215,7 +225,22 @@
                       if (instance.workerTags or []) != []
                       then "--worker=${lib.concatStringsSep "," (instance.workerTags or [])}"
                       else "--worker";
-                  in "${config.my.politikerstod-remote-worker.package}/bin/politikerstod-cli start ${workerArgs}";
+                    pkg = config.my.politikerstod-remote-worker.package;
+                    startCmd = "${pkg}/bin/politikerstod-cli start ${workerArgs}";
+                    passwordFile = instance.database.passwordFile or null;
+                    dbUser = instance.database.user or "politikerstod";
+                    dbHost = instance.database.host or "10.0.0.10";
+                    dbPort = instance.database.port or 5432;
+                    dbName = instance.database.name or "politikerstod_prod";
+                  in
+                    if passwordFile != null
+                    then
+                      pkgs.writeShellScript "politikerstod-worker-${name}-start" ''
+                        set -euo pipefail
+                        export DATABASE_URL="postgres://${dbUser}:$(cat ${passwordFile})@${dbHost}:${toString dbPort}/${dbName}"
+                        exec ${startCmd}
+                      ''
+                    else startCmd;
 
                   Restart = "always";
                   RestartSec = "10";

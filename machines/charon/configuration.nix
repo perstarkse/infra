@@ -329,7 +329,7 @@ in {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "openchamber" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "openchamber" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords"];
       };
 
       exposeUserSecrets = [
@@ -385,6 +385,10 @@ in {
         {
           readers = ["politikerstod-worker-lekeberg"];
           path = config.my.secrets.getPath "politikerstod-lekeberg" "env";
+        }
+        {
+          readers = ["politikerstod-worker-lekeberg"];
+          path = config.my.secrets.getPath "db-passwords" "politikerstod";
         }
         # Add back again when deploying politikerstod-orebro again
         # {
@@ -574,6 +578,7 @@ in {
           s3.bucket = "politikerstod";
           s3.prefix = "lekeberg";
           scraper.baseUrl = "https://meetings.lekeberg.se";
+          database.passwordFile = config.my.secrets.getPath "db-passwords" "politikerstod";
         };
 
         orebro = {

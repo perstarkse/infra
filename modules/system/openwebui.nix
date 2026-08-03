@@ -27,6 +27,12 @@
         description = "Directory to store OpenWebUI data";
       };
 
+      image = lib.mkOption {
+        type = lib.types.str;
+        default = "ghcr.io/open-web-ui/open-webui:main";
+        description = "OCI image (pin to a digest for reproducible updates)";
+      };
+
       timezone = lib.mkOption {
         type = lib.types.str;
         default = "Europe/Amsterdam";
@@ -77,8 +83,11 @@
           description = "Update OpenWebUI container";
           serviceConfig = {
             Type = "oneshot";
-            ExecStart = "${pkgs.podman}/bin/podman pull ghcr.io/open-webui/open-webui:main";
-            ExecStartPost = "${pkgs.podman}/bin/podman container restart openwebui";
+            ExecStart = "${pkgs.podman}/bin/podman pull ${cfg.image}";
+            ExecStartPost = [
+              "${pkgs.podman}/bin/podman rm -f openwebui"
+              "${pkgs.systemd}/bin/systemctl restart podman-openwebui"
+            ];
           };
         };
 
@@ -119,7 +128,7 @@
 
       # OpenWebUI container configuration
       virtualisation.oci-containers.containers.openwebui = {
-        image = "ghcr.io/open-webui/open-webui:main";
+        inherit (cfg) image;
         environment = {
           TZ = cfg.timezone;
           HOST = "0.0.0.0";

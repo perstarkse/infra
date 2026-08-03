@@ -111,6 +111,16 @@ _: {
             description = "Container local address";
           };
         };
+        passwordFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = "Runtime path to a file containing the DB password. When set, container auth switches to scram-sha-256 and paperless units get PAPERLESS_DBPASS.";
+        };
+        passwordEnvFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = "Runtime path to an EnvironmentFile snippet (PAPERLESS_DBPASS=<pass>) for the paperless systemd units.";
+        };
       };
 
       tika = {
@@ -201,6 +211,10 @@ _: {
           # Logging
           PAPERLESS_LOGGING_DIR = "${cfg.dataDir}/log";
         };
+
+        # PAPERLESS_DBPASS comes from the Clan var at runtime (env file),
+        # not from the store.
+        environmentFile = cfg.database.passwordEnvFile;
       };
 
       # Redis for Paperless task queue
@@ -343,11 +357,22 @@ _: {
       containers.paperless-db = lib.mkIf cfg.database.enableContainer (
         let
           hostStateVersion = config.my.stateVersion;
+          passwordFile = cfg.database.passwordFile;
+          authMethod =
+            if passwordFile != null
+            then "scram-sha-256"
+            else "trust";
         in {
           autoStart = true;
           privateNetwork = true;
           inherit (cfg.database.container) hostAddress;
           inherit (cfg.database.container) localAddress;
+          bindMounts = lib.optionalAttrs (passwordFile != null) {
+            "/run/secrets/db-password" = {
+              hostPath = passwordFile;
+              isReadOnly = true;
+            };
+          };
 
           config = {
             pkgs,
@@ -361,8 +386,8 @@ _: {
 
               authentication = pkgs.lib.mkOverride 10 ''
                 # TYPE  DATABASE        USER            ADDRESS                 METHOD
-                host    all             all             ${cfg.database.container.hostAddress}/32       trust
-                host    all             all             169.254.0.0/16          trust
+                host    all             all             ${cfg.database.container.hostAddress}/32       ${authMethod}
+                host    all             all             169.254.0.0/16          ${authMethod}
                 local   all             all                                     peer
               '';
 
@@ -373,6 +398,21 @@ _: {
                   ensureDBOwnership = false;
                 }
               ];
+            };
+
+            systemd.services.fix-db-password = lib.mkIf (passwordFile != null) {
+              description = "Set DB password for paperless (scram)";
+              after = ["postgresql.service" "postgresql-setup.service"];
+              requires = ["postgresql.service"];
+              wantedBy = ["multi-user.target"];
+              serviceConfig = {
+                Type = "oneshot";
+              };
+              script = ''
+                pass=$(cat /run/secrets/db-password)
+                printf "ALTER USER ${cfg.database.user} WITH PASSWORD '%s';\n" "$pass" | \
+                  ${pkgs.util-linux}/bin/runuser -u postgres -- ${pkgs.postgresql}/bin/psql -d postgres
+              '';
             };
 
             systemd.services.fix-db-permissions = {

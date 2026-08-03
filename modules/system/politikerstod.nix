@@ -78,29 +78,36 @@
       serviceName = "politikerstod-${name}";
       dataDir = instance.dataDir or "/var/lib/${serviceName}";
       inherit (config.my.politikerstod) smtp;
-    in [
-      "LOCO_ENV=production"
-      "PORT=${toString (instance.port or 5150)}"
-      "HOST=${instance.host or "http://localhost:5150"}"
-      "CORS_ALLOW_ORIGIN=${instance.host or "http://localhost:5150"}"
-      "DATABASE_URL=postgres://${instance.database.user or "politikerstod"}:@${instance.database.host or "127.0.0.1"}:${toString (instance.database.port or 5432)}/${instance.database.name or "politikerstod"}"
-      "SMTP_HOST=${smtp.host or "smtp.example.com"}"
-      "SMTP_PORT=${toString (smtp.port or 587)}"
-      "MAILER_FROM=${smtp.from or "politikerstod@stark.pub"}"
-      "S3_ENDPOINT=${instance.s3.endpoint or "http://127.0.0.1:3900"}"
-      "S3_BUCKET=${instance.s3.bucket or "politikerstod-${name}"}"
-      "AWS_REGION=${instance.s3.region or "garage"}"
-      "S3_KEY_PREFIX=${instance.s3.prefix or ""}"
-      "LEKEBERG_BASE_URL=${instance.scraper.baseUrl or ""}"
-      "LOG_LEVEL=${instance.settings.logLevel or "info"}"
-      "PRETTY_BACKTRACE=${lib.boolToString (instance.settings.prettyBacktrace or false)}"
-      "NUM_WORKERS=${toString (instance.settings.numWorkers or 2)}"
-      "POLLING_HISTORICAL_MONTHS=${toString (instance.settings.pollingHistoricalMonths or 12)}"
-      "OPENAI_MODEL=${instance.settings.openaiModel or "gpt-4o-mini"}"
-      "EVALUATION_MODEL=${instance.settings.evaluationModel or "gpt-4o-mini"}"
-      "AUTH_ALLOWED_EMAIL_DOMAINS=\"${authAllowedRegex}\""
-      "FASTEMBED_CACHE_PATH=${dataDir}/fastembed_cache"
-    ];
+      # With scram (passwordFile set) the DATABASE_URL is built at runtime by
+      # the ExecStart wrapper so the password never appears in the store.
+      baseEnv = [
+        "LOCO_ENV=production"
+        "PORT=${toString (instance.port or 5150)}"
+        "HOST=${instance.host or "http://localhost:5150"}"
+        "CORS_ALLOW_ORIGIN=${instance.host or "http://localhost:5150"}"
+        "SMTP_HOST=${smtp.host or "smtp.example.com"}"
+        "SMTP_PORT=${toString (smtp.port or 587)}"
+        "MAILER_FROM=${smtp.from or "politikerstod@stark.pub"}"
+        "S3_ENDPOINT=${instance.s3.endpoint or "http://127.0.0.1:3900"}"
+        "S3_BUCKET=${instance.s3.bucket or "politikerstod-${name}"}"
+        "AWS_REGION=${instance.s3.region or "garage"}"
+        "S3_KEY_PREFIX=${instance.s3.prefix or ""}"
+        "LEKEBERG_BASE_URL=${instance.scraper.baseUrl or ""}"
+        "LOG_LEVEL=${instance.settings.logLevel or "info"}"
+        "PRETTY_BACKTRACE=${lib.boolToString (instance.settings.prettyBacktrace or false)}"
+        "NUM_WORKERS=${toString (instance.settings.numWorkers or 2)}"
+        "POLLING_HISTORICAL_MONTHS=${toString (instance.settings.pollingHistoricalMonths or 12)}"
+        "OPENAI_MODEL=${instance.settings.openaiModel or "gpt-4o-mini"}"
+        "EVALUATION_MODEL=${instance.settings.evaluationModel or "gpt-4o-mini"}"
+        "AUTH_ALLOWED_EMAIL_DOMAINS=\"${authAllowedRegex}\""
+        "FASTEMBED_CACHE_PATH=${dataDir}/fastembed_cache"
+      ];
+      dbUrl =
+        if (instance.database.passwordFile or null) != null
+        then []
+        else ["DATABASE_URL=postgres://${instance.database.user or "politikerstod"}:@${instance.database.host or "127.0.0.1"}:${toString (instance.database.port or 5432)}/${instance.database.name or "politikerstod"}"];
+    in
+      baseEnv ++ dbUrl;
   in {
     options.my.politikerstod = {
       package = lib.mkOption {
@@ -206,6 +213,11 @@
                 default = 5432;
                 description = "Port for the host-side DB proxy (socat) listener. Must be unique per instance when multiple containers expose port 5432.";
               };
+              passwordFile = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Runtime path to a file containing the DB password. When set, container auth switches to scram-sha-256 and DATABASE_URL carries the password.";
+              };
             };
             s3 = {
               endpoint = lib.mkOption {
@@ -293,6 +305,17 @@
               secretName = "politikerstod-${name}";
               containerName = instance.database.container.name or "politikerstod-db-${name}";
               hasContainer = instance.database.enableContainer or false;
+              passwordFile = instance.database.passwordFile or null;
+              startCmd = "${config.my.politikerstod.package}/bin/politikerstod-cli start --${instance.startMode or "all"}";
+              execStart =
+                if passwordFile != null
+                then
+                  pkgs.writeShellScript "politikerstod-${name}-start" ''
+                    set -euo pipefail
+                    export DATABASE_URL="postgres://${instance.database.user or "politikerstod"}:$(cat ${passwordFile})@${instance.database.host or "127.0.0.1"}:${toString (instance.database.port or 5432)}/${instance.database.name or "politikerstod"}"
+                    exec ${startCmd}
+                  ''
+                else startCmd;
             in
               lib.nameValuePair serviceName {
                 description = "Politikerstöd Service (${name})";
@@ -304,7 +327,7 @@
                   User = userName;
                   Group = groupName;
                   WorkingDirectory = dataDir;
-                  ExecStart = "${config.my.politikerstod.package}/bin/politikerstod-cli start --${instance.startMode or "all"}";
+                  ExecStart = execStart;
                   Restart = "always";
                   RestartSec = "10";
                   Environment = mkServiceEnv name instance;
@@ -453,12 +476,27 @@
           name: instance: let
             containerName = instance.database.container.name or "politikerstod-db-${name}";
             hostStateVersion = config.my.stateVersion;
+            passwordFile = instance.database.passwordFile or null;
+            dbUser = instance.database.user or "politikerstod";
+            dbName = instance.database.name or "politikerstod";
+            hostAddress = instance.database.container.hostAddress or "192.168.100.10";
+            allowedHosts = instance.database.allowedHosts or [];
+            authMethod =
+              if passwordFile != null
+              then "scram-sha-256"
+              else "trust";
           in
             lib.nameValuePair containerName {
               autoStart = true;
               privateNetwork = true;
-              hostAddress = instance.database.container.hostAddress or "192.168.100.10";
+              inherit hostAddress;
               localAddress = instance.database.container.localAddress or "192.168.100.12";
+              bindMounts = lib.optionalAttrs (passwordFile != null) {
+                "/run/secrets/db-password" = {
+                  hostPath = passwordFile;
+                  isReadOnly = true;
+                };
+              };
 
               config = {
                 pkgs,
@@ -471,15 +509,15 @@
                   enableTCPIP = true;
                   settings.listen_addresses = lib.mkForce "*";
                   authentication = pkgs.lib.mkOverride 10 ''
-                    host    all             all             ${instance.database.container.hostAddress or "192.168.100.10"}/32       trust
-                    host    all             all             169.254.0.0/16          trust
-                    ${lib.concatMapStringsSep "\n" (host: "host    all             all             ${host}/32          trust") (instance.database.allowedHosts or [])}
+                    host    all             all             ${hostAddress}/32       ${authMethod}
+                    host    all             all             169.254.0.0/16          ${authMethod}
+                    ${lib.concatMapStringsSep "\n" (host: "host    all             all             ${host}/32          ${authMethod}") allowedHosts}
                     local   all             all                                     peer
                   '';
-                  ensureDatabases = [(instance.database.name or "politikerstod")];
+                  ensureDatabases = [dbName];
                   ensureUsers = [
                     {
-                      name = instance.database.user or "politikerstod";
+                      name = dbUser;
                       # NixOS 25.05+ renamed ensureClause (string) to
                       # ensureClauses (attrset of bool). Re-encode "LOGIN" as
                       # the corresponding clause flag.
@@ -493,6 +531,23 @@
                   '';
                 };
 
+                systemd.services.fix-db-password = lib.mkIf (passwordFile != null) {
+                  description = "Set DB password for ${name} (scram)";
+                  after = ["postgresql.service" "postgresql-setup.service"];
+                  requires = ["postgresql.service"];
+                  wantedBy = ["multi-user.target"];
+                  serviceConfig = {
+                    Type = "oneshot";
+                    # root reads the 0400 secret; psql runs as postgres via
+                    # runuser so the peer-auth local line still applies.
+                  };
+                  script = ''
+                    pass=$(cat /run/secrets/db-password)
+                    printf "ALTER USER ${dbUser} WITH PASSWORD '%s';\n" "$pass" | \
+                      ${pkgs.util-linux}/bin/runuser -u postgres -- ${pkgs.postgresql}/bin/psql -d postgres
+                  '';
+                };
+
                 systemd.services.fix-db-permissions = {
                   description = "Fix DB permissions for ${name}";
                   after = ["postgresql.service" "postgresql-setup.service"];
@@ -503,22 +558,22 @@
                     User = "postgres";
                   };
                   script = ''
-                                        ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} <<'SQL'
-                                          CREATE EXTENSION IF NOT EXISTS vector;
-                                          GRANT ALL ON SCHEMA public TO ${instance.database.user or "politikerstod"};
+                    ${pkgs.postgresql}/bin/psql -d ${dbName} <<'SQL'
+                    CREATE EXTENSION IF NOT EXISTS vector;
+                    GRANT ALL ON SCHEMA public TO ${dbUser};
                     SQL
-                                        ${pkgs.postgresql}/bin/psql -d postgres -c "ALTER DATABASE ${instance.database.name or "politikerstod"} OWNER TO ${instance.database.user or "politikerstod"}"
-                                        ${pkgs.postgresql}/bin/psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${instance.database.name or "politikerstod"} TO ${instance.database.user or "politikerstod"}"
-                                        ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} <<'SQL'
-                                          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${instance.database.user or "politikerstod"};
-                                          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${instance.database.user or "politikerstod"};
+                    ${pkgs.postgresql}/bin/psql -d postgres -c "ALTER DATABASE ${dbName} OWNER TO ${dbUser}"
+                    ${pkgs.postgresql}/bin/psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUser}"
+                    ${pkgs.postgresql}/bin/psql -d ${dbName} <<'SQL'
+                    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${dbUser};
+                    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${dbUser};
                     SQL
-                                        ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} -c \
-                                          "SELECT format('ALTER TABLE public.%I OWNER TO ${instance.database.user or "politikerstod"};', tablename) FROM pg_tables WHERE schemaname = 'public'" \
-                                          | ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"}
-                                        ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"} -c \
-                                          "SELECT format('ALTER SEQUENCE public.%I OWNER TO ${instance.database.user or "politikerstod"};', sequencename) FROM pg_sequences WHERE schemaname = 'public'" \
-                                          | ${pkgs.postgresql}/bin/psql -d ${instance.database.name or "politikerstod"}
+                    ${pkgs.postgresql}/bin/psql -d ${dbName} -c \
+                      "SELECT format('ALTER TABLE public.%I OWNER TO ${dbUser};', tablename) FROM pg_tables WHERE schemaname = 'public'" \
+                      | ${pkgs.postgresql}/bin/psql -d ${dbName}
+                    ${pkgs.postgresql}/bin/psql -d ${dbName} -c \
+                      "SELECT format('ALTER SEQUENCE public.%I OWNER TO ${dbUser};', sequencename) FROM pg_sequences WHERE schemaname = 'public'" \
+                      | ${pkgs.postgresql}/bin/psql -d ${dbName}
                   '';
                 };
 

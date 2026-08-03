@@ -108,7 +108,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords"];
       };
 
       generateManifest = false;
@@ -129,6 +129,18 @@
         {
           readers = ["politikerstod-lekeberg"];
           path = config.my.secrets.getPath "politikerstod-lekeberg" "env";
+        }
+        {
+          readers = ["politikerstod-lekeberg"];
+          path = config.my.secrets.getPath "db-passwords" "politikerstod";
+        }
+        {
+          readers = ["paperless"];
+          path = config.my.secrets.getPath "db-passwords" "paperless";
+        }
+        {
+          readers = ["root"];
+          path = config.my.secrets.getPath "db-passwords" "paperless.env";
         }
         # {
         #   readers = ["politikerstod-orebro"];
@@ -189,6 +201,8 @@
           '';
         };
 
+      openwebui = mkB2 config.my.openwebui.dataDir;
+
       paperless = {
         enable = true;
         path = config.my.paperless.dataDir;
@@ -197,6 +211,7 @@
           type = "garage-s3";
         };
         backupPrepareCommand = ''
+          PGPASSWORD=$(cat ${config.my.secrets.getPath "db-passwords" "paperless"}) \
           ${pkgs.postgresql}/bin/pg_dump \
             -h 192.168.100.22 -U paperless -Fc -f ${config.my.paperless.dataDir}/paperless.dump paperless
         '';
@@ -225,6 +240,8 @@
     openwebui = {
       enable = true;
       port = 8080;
+      dataDir = "/storage/.state/openwebui";
+      image = "ghcr.io/open-webui/open-webui@sha256:6a773e5c3a246b65cbe74ce942b294292c0e5f81c138f703d111bc162f7d7c3d";
       autoUpdate = true;
       updateSchedule = "weekly";
       exposure = {
@@ -410,6 +427,7 @@
             port = 5432;
             enableContainer = true;
             allowedHosts = ["10.0.0.15"]; # charon - remote worker
+            passwordFile = config.my.secrets.getPath "db-passwords" "politikerstod";
             container = {
               name = "politikerstod-db"; # Preserve existing container data
               hostAddress = "192.168.100.10";
@@ -508,7 +526,9 @@
       mediaDir = "/var/lib/paperless/media";
       ocr = {
         language = "swe+eng";
-        mode = "always";
+        # paperless 2.20 dropped the legacy "always" value; "force" keeps
+        # the same intent (OCR everything, never skip).
+        mode = "force";
       };
       database = {
         name = "paperless";
@@ -516,6 +536,8 @@
         host = "192.168.100.22";
         port = 5432;
         enableContainer = true;
+        passwordFile = config.my.secrets.getPath "db-passwords" "paperless";
+        passwordEnvFile = config.my.secrets.getPath "db-passwords" "paperless.env";
         container = {
           hostAddress = "192.168.100.20";
           localAddress = "192.168.100.22";
