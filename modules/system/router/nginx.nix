@@ -138,34 +138,39 @@
         recommendedProxySettings = true;
         recommendedTlsSettings = true;
 
-        appendHttpConfig = lib.mkIf cfNeeded ''
-          # Trust Cloudflare edges for real client IP
-          include ${cfRealip};
+        appendHttpConfig = lib.mkMerge [
+          (lib.mkIf cfNeeded ''
+            # Trust Cloudflare edges for real client IP
+            include ${cfRealip};
 
-          # Cloudflare edge membership based on socket peer ($realip_remote_addr)
-          geo $realip_remote_addr $cf_edge {
-            default 0;
-            include ${cfGeo};
-          }
+            # Cloudflare edge membership based on socket peer ($realip_remote_addr)
+            geo $realip_remote_addr $cf_edge {
+              default 0;
+              include ${cfGeo};
+            }
 
-          # LAN + ULA64 + WireGuard membership based on (possibly realip) $remote_addr
-          geo $lan_wg {
-            default 0;
-            ${lib.concatMapStringsSep "\n            " (cidr: "${cidr} 1;") internalCidrs}
-            ${ulaPrefix}::/64 1;
-            ${wgCidr} 1;
-          }
+            # LAN + ULA64 + WireGuard membership based on (possibly realip) $remote_addr
+            geo $lan_wg {
+              default 0;
+              ${lib.concatMapStringsSep "\n            " (cidr: "${cidr} 1;") internalCidrs}
+              ${ulaPrefix}::/64 1;
+              ${wgCidr} 1;
+            }
 
-          # Combined access: allow if from LAN/WG, or via CF edge
-          map "$lan_wg$cf_edge" $cf_access_ok {
-            default 0;
-            10 1;
-            11 1;
-            01 1;
-          }
-
-          limit_req_zone $binary_remote_addr zone=public:10m rate=10r/m;
-        '';
+            # Combined access: allow if from LAN/WG, or via CF edge
+            map "$lan_wg$cf_edge" $cf_access_ok {
+              default 0;
+              10 1;
+              11 1;
+              01 1;
+            }
+          '')
+          # Declared whenever a public vhost exists (cfNeeded alone is not enough:
+          # public non-Cloudflare vhosts also reference the zone)
+          (lib.mkIf (publicVhosts != []) ''
+            limit_req_zone $binary_remote_addr zone=public:10m rate=10r/m;
+          '')
+        ];
 
         virtualHosts =
           # Hardened default vhost: reject requests with unknown/missing Host header
@@ -219,9 +224,17 @@
                   ''
                   else "";
 
+                limitReqConfig =
+                  # Public vhosts are WAN-reachable (same set as the WAN port
+                  # exposure below): cap request rate to blunt brute force and
+                  # scraping. LAN-only and WireGuard vhosts stay unlimited.
+                  if (vhost.lanOnly or false)
+                  then ""
+                  else "limit_req zone=public burst=20 nodelay;";
+
                 mergedExtra =
                   lib.concatStringsSep "\n"
-                  (lib.filter (s: s != "") [(vhost.extraConfig or "") acl basicAuthConfig]);
+                  (lib.filter (s: s != "") [(vhost.extraConfig or "") acl basicAuthConfig limitReqConfig]);
 
                 noAcme = vhost.noAcme or false;
 

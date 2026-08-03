@@ -547,40 +547,6 @@ in {
 
       monitoring = {
         enable = false;
-        grafana = {
-          enable = true;
-          httpAddr = "10.0.0.1";
-          httpPort = 8888;
-          dataDir = "/var/lib/grafana";
-        };
-        prometheus = {
-          enable = true;
-          port = 9990;
-          exporters = {
-            node = {
-              enable = true;
-              enabledCollectors = ["systemd"];
-            };
-            unbound.enable = true;
-          };
-          scrapeConfigs = [
-            {
-              job_name = "node";
-              static_configs = [{targets = ["localhost:9100"];}];
-            }
-            {
-              job_name = "unbound";
-              static_configs = [{targets = ["localhost:9167"];}];
-            }
-            {
-              job_name = "blocky";
-              static_configs = [{targets = ["127.0.0.1:4000"];}];
-              metrics_path = "/metrics";
-            }
-          ];
-        };
-        netdata.enable = false;
-        ntopng.enable = false;
       };
 
       security = {
@@ -620,6 +586,12 @@ in {
       };
     };
   };
+
+  # Wildcard *.lan.stark.pub ACME renewal: the router's own resolver
+  # (blocky→unbound, lan.stark.pub is a static local zone) answers NODATA for
+  # _acme-challenge.lan.stark.pub, so lego's DNS-01 propagation check would
+  # fail. Query public resolvers for the challenge TXT record instead.
+  security.acme.certs."lan.stark.pub".extraLegoFlags = ["--dns.resolvers=1.1.1.1:53,1.0.0.1:53"];
 
   # invoices.stark.pub — public webhook endpoint for Accounted invoice-inbox
   # Only exposes the Resend inbound email webhook path; everything else returns 444.
