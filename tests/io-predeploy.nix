@@ -292,6 +292,13 @@
         mode = "0400";
       };
 
+      "test-secrets/journal-upload/ca.pem".source = ./lib/journal-upload/ca.pem;
+      "test-secrets/journal-upload/server.pem".source = ./lib/journal-upload/server.pem;
+      "test-secrets/journal-upload/server.key" = {
+        source = ./lib/journal-upload/server.key;
+        mode = "0400";
+      };
+
       "test-secrets/wake-proxy/env" = {
         text = ''
           WAKEPROXY_PASSWORD_HASH=$argon2id$v=19$m=19456,t=2,p=1$dGVzdHRlc3R0ZXN0dGVzdA$0xDPfypM3Y76kJumWn95v9PoW7A1WeNseyX2VINeodQ

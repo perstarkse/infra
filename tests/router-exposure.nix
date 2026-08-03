@@ -10,6 +10,7 @@
   secretsStubModule = import ./lib/secrets-stub.nix {
     inherit lib;
     getPathDefault = _name: _file: "/run/empty-secret";
+    withAllowReadAccess = true;
   };
 
   commonNode = testHelpers.mkCommonNode {

@@ -15,11 +15,6 @@
     wgSubnet = wgCfg.subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/${toString (wgCfg.cidrPrefix or 24)}";
     routerIp = helpers.primaryRouterIp;
-    jrListenHost =
-      if builtins.match ".*:.*" jrCfg.listenAddress != null && !(lib.hasPrefix "[" jrCfg.listenAddress)
-      then "[${jrCfg.listenAddress}]"
-      else jrCfg.listenAddress;
-    jrListenStream = "${jrListenHost}:${toString jrCfg.port}";
 
     # Compute all IPs to ignore (never ban)
     autoIgnoreIPs =
@@ -36,6 +31,10 @@
     journalLogDir = "/var/log/journal/remote";
 
     enabled = cfg.enable && secCfg.enable;
+    # The journal receiver itself binds loopback only; the LAN-facing endpoint
+    # is nginx (port jrCfg.port) with client-certificate authentication, because
+    # systemd-journal-remote in this nixpkgs build has client-cert verification
+    # compiled out (HAVE_GNUTLS off — "Certificate checking disabled").
     journalReceiverPorts = lib.optionals (enabled && jrCfg.enable) [
       {
         access = "admin";
@@ -285,9 +284,11 @@
           "fail2ban/filter.d/nginx-botsearch.local".text = ''
             [Definition]
             # Bad bot detection based on user agent and path patterns
+            # (the invoices webhook path is excluded: Resend's retrying egress
+            # IPs legitimately get 401s from accounted's Svix signature check)
             failregex = ^<HOST> .* ".*(?:zgrab|Nuclei|Nmap|masscan|curl/|python-requests|Go-http-client|libwww-perl|Wget|nikto|sqlmap|nessus|nmap).*" \d+
                         ^<HOST> .* "(GET|POST) /actuator.*" (200|403|404)
-                        ^<HOST> .* "(GET|POST) /api/.*" 401
+                        ^<HOST> .* "(GET|POST) /api/(?!extensions/ext/invoice-inbox/inbound).*" 401
 
             ignoreregex =
 
@@ -310,22 +311,84 @@
         ];
       })
 
-      # Journal receiver configuration
+      # Journal receiver configuration.
+      #
+      # systemd-journal-remote in this nixpkgs build cannot enforce client
+      # certificates (HAVE_GNUTLS off: "Certificate checking disabled"), so
+      # the receiver binds loopback only and the LAN-facing endpoint on port
+      # jrCfg.port is nginx with client-certificate authentication against the
+      # journal-upload CA. makemake's journal-upload presents client.pem;
+      # requests without a valid client cert get HTTP 401.
       (mkIf jrCfg.enable {
-        # Enable journal-remote service to receive logs from other hosts
         services.journald.remote = {
           enable = true;
           listen = "http";
           inherit (jrCfg) port;
         };
 
-        # Bind journal-remote to an explicit address+port socket after network addresses exist
+        # LAN-facing mTLS endpoint for journal uploads
+        services.nginx.virtualHosts."journal-upload" = {
+          listen = [
+            {
+              addr = "10.0.0.1";
+              inherit (jrCfg) port;
+              ssl = true;
+            }
+          ];
+          serverName = "journal-upload";
+          # onlySSL: no port-80 redirect server. (A listen-less redirect would
+          # bind this nginx build's default port 8000, colliding with kea's
+          # control agent.) journal-upload always uses https.
+          onlySSL = true;
+          sslCertificate = toString (config.my.secrets.getPath "journal-upload" "server.pem");
+          sslCertificateKey = toString (config.my.secrets.getPath "journal-upload" "server.key");
+          sslTrustedCertificate = toString (config.my.secrets.getPath "journal-upload" "ca.pem");
+          extraConfig = ''
+            # journal-upload catch-up streams very large bodies
+            client_max_body_size 0;
+            ssl_client_certificate ${toString (config.my.secrets.getPath "journal-upload" "ca.pem")};
+            ssl_verify_client optional;
+            ssl_verify_depth 2;
+          '';
+          locations."/" = {
+            proxyPass = "http://127.0.0.1:${toString jrCfg.port}";
+            recommendedProxySettings = true;
+            extraConfig = ''
+              # Require a client certificate signed by the journal-upload CA
+              if ($ssl_client_verify != "SUCCESS") { return 401; }
+              # Buffer the request so the upstream journal-remote gets a single
+              # Content-Length (no Transfer-Encoding), which its handler
+              # requires.
+              proxy_request_buffering on;
+              proxy_http_version 1.1;
+            '';
+          };
+        };
+
+        my.secrets.allowReadAccess = [
+          {
+            readers = ["nginx"];
+            path = config.my.secrets.getPath "journal-upload" "server.key";
+          }
+          {
+            readers = ["nginx"];
+            path = config.my.secrets.getPath "journal-upload" "server.pem";
+          }
+          {
+            readers = ["nginx"];
+            path = config.my.secrets.getPath "journal-upload" "ca.pem";
+          }
+        ];
+
+        # Bind journal-remote to the loopback only; the LAN-facing endpoint is
+        # nginx (above). The leading "" is systemd's list-reset marker: it
+        # clears the upstream unit's wildcard ListenStream=19532.
         systemd.sockets.systemd-journal-remote = {
           after = ["systemd-networkd-wait-online.service" "network-online.target"];
           wants = ["network-online.target"];
           listenStreams = lib.mkForce [
             ""
-            jrListenStream
+            "127.0.0.1:${toString jrCfg.port}"
           ];
         };
 

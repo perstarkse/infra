@@ -10,6 +10,7 @@
   secretsStubModule = import ./lib/secrets-stub.nix {
     inherit lib;
     getPathDefault = _name: _file: "/run/empty-secret";
+    withAllowReadAccess = true;
   };
 
   wireguardTestKeys = {
@@ -339,6 +340,17 @@
         # internet. Production keeps "blocking".
         {services.blocky.settings.upstreams.init.strategy = lib.mkForce "fast";}
       ];
+
+      # journal-upload TLS endpoint needs real certs; everything else in the
+      # stub resolves to /run/empty-secret.
+      my.secrets.getPath = lib.mkForce (name: file:
+        if name == "journal-upload"
+        then "/etc/test-secrets/journal-upload/${file}"
+        else "/run/empty-secret");
+
+      environment.etc."test-secrets/journal-upload/ca.pem".source = ./lib/journal-upload/ca.pem;
+      environment.etc."test-secrets/journal-upload/server.pem".source = ./lib/journal-upload/server.pem;
+      environment.etc."test-secrets/journal-upload/server.key".source = ./lib/journal-upload/server.key;
 
       my.router =
         lib.recursiveUpdate

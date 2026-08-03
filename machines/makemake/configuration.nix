@@ -1,6 +1,7 @@
 {
   ctx,
   config,
+  lib,
   pkgs,
   ...
 }: {
@@ -73,6 +74,7 @@
     backupFailureNtfy = {
       enable = true;
       url = "https://ntfy.lan.stark.pub/backup-alerts";
+      tokenFile = config.my.secrets.getPath "ntfy" "backup-token";
     };
 
     privateInfra.overseerr.exposure = {
@@ -106,7 +108,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted"];
+        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload"];
       };
 
       generateManifest = false;
@@ -132,6 +134,26 @@
         #   readers = ["politikerstod-orebro"];
         #   path = config.my.secrets.getPath "politikerstod-orebro" "env";
         # }
+        {
+          readers = ["root"];
+          path = config.my.secrets.getPath "journal-upload" "client.key";
+        }
+        {
+          readers = ["root"];
+          path = config.my.secrets.getPath "journal-upload" "client.pem";
+        }
+        {
+          readers = ["root"];
+          path = config.my.secrets.getPath "journal-upload" "ca.pem";
+        }
+        {
+          readers = ["root"];
+          path = config.my.secrets.getPath "ntfy" "backup-token";
+        }
+        {
+          readers = ["root"];
+          path = config.my.secrets.getPath "ntfy" "indicator-token";
+        }
       ];
     };
 
@@ -752,12 +774,108 @@
   };
 
   # Centralized logging to router for fail2ban
+  # Mail brute-force protection: SMTP/IMAP terminate on makemake, so the
+  # postfix/dovecot jails run here against the local journal (the router's
+  # copies of these jails read forwarded remote journals and never fire).
+  services.fail2ban = {
+    enable = true;
+    maxretry = 5;
+    bantime = "30m";
+    ignoreIP = [
+      "127.0.0.0/8"
+      "::1"
+    ];
+    jails = {
+      postfix = {
+        settings = {
+          enabled = true;
+          filter = "postfix";
+          backend = "systemd";
+          journalmatch = "_SYSTEMD_UNIT=postfix.service";
+          maxretry = 5;
+          findtime = "10m";
+          bantime = "30m";
+        };
+      };
+      dovecot = {
+        settings = {
+          enabled = true;
+          filter = "dovecot";
+          backend = "systemd";
+          journalmatch = "_SYSTEMD_UNIT=dovecot.service";
+          maxretry = 5;
+          findtime = "10m";
+          bantime = "30m";
+        };
+      };
+    };
+  };
+
+  # dovecot 2.3 logs via journald as "imap-login: Login aborted: ... (auth failed,
+  # N attempts ...) ... rip=<HOST>", which the stock fail2ban dovecot filter
+  # (written for the syslog form) does not match.
+  environment.etc."fail2ban/filter.d/dovecot.local".text = ''
+    [Definition]
+    failregex = \(auth failed, [0-9]+ attempts in [0-9]+ secs\).*rip=<HOST>
+    ignoreregex =
+  '';
+
+  # Centralized logging to router for fail2ban — mTLS with the router's
+  # journal-remote listener (client cert signed by journal-upload ca.pem).
   services.journald.upload = {
     enable = true;
     settings = {
       Upload = {
-        URL = "http://10.0.0.1:19532";
+        URL = "https://10.0.0.1:19532";
+        ServerKeyFile = toString (config.my.secrets.getPath "journal-upload" "client.key");
+        ServerCertificateFile = toString (config.my.secrets.getPath "journal-upload" "client.pem");
+        TrustedCertificateFile = toString (config.my.secrets.getPath "journal-upload" "ca.pem");
       };
+    };
+  };
+
+  # The mTLS client key is root-only; run the uploader as root (the module
+  # defaults to a DynamicUser that cannot read it).
+  systemd.services.systemd-journal-upload.serviceConfig = {
+    DynamicUser = lib.mkForce false;
+    User = lib.mkForce "root";
+  };
+
+  # indicator-alert-daemon publishes to a write-protected ntfy topic; the app
+  # has no auth support, so wrap its config: ntfy accepts the token in the
+  # ?auth= query param as base64url("Bearer <token>"), resolved at runtime from
+  # the secret (never baked into the store).
+  systemd.services.indicator-alert-daemon = let
+    iad = config.services.indicator-alert-daemon;
+    iadFmt = pkgs.formats.json {};
+    iadToken = config.my.secrets.getPath "ntfy" "indicator-token";
+    iadBin = ctx.inputs.indicator-alert-daemon.packages.${pkgs.system}.default;
+    iadConfig = iadFmt.generate "indicator-alert-daemon.json" (
+      {
+        ntfy_url = "https://ntfy.lan.stark.pub/indicator-alerts";
+        interval_type = iad.intervalType;
+        frequency_seconds = iad.pollFrequency;
+        ticker_delay_ms = iad.tickerDelayMs;
+        tickers = map (t:
+          {
+            inherit (t) symbol indicators;
+          }
+          // lib.optionalAttrs (t.intervalType != null) {interval_type = t.intervalType;})
+        iad.tickers;
+      }
+      // lib.optionalAttrs (iad.dbPath != null) {db_path = iad.dbPath;}
+    );
+  in {
+    serviceConfig = {
+      ExecStart = lib.mkForce (pkgs.writeShellScript "indicator-alert-daemon-tokenized" ''
+        set -euo pipefail
+        token=$(cat ${iadToken})
+        auth=$(printf 'Bearer %s' "$token" | ${pkgs.coreutils}/bin/base64 | ${pkgs.coreutils}/bin/tr '+/' '-_' | ${pkgs.coreutils}/bin/tr -d '=\n')
+        # StateDirectory is writable under ProtectSystem=strict (/run is not)
+        ${pkgs.jq}/bin/jq --arg u "https://ntfy.lan.stark.pub/indicator-alerts?auth=$auth" '.ntfy_url = $u' ${iadConfig} > /var/lib/indicator-alert-daemon/config.json
+        exec ${iadBin}/bin/indicator-alert-daemon --config /var/lib/indicator-alert-daemon/config.json
+      '');
+      DynamicUser = lib.mkForce false;
     };
   };
 }

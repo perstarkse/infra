@@ -208,7 +208,7 @@ in {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache"];
+        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload"];
       };
 
       generateManifest = false;
@@ -562,8 +562,11 @@ in {
               botsearch.enable = true;
             };
             mail = {
-              postfix.enable = true;
-              dovecot.enable = true;
+              # SMTP/IMAP terminate on makemake, where the postfix/dovecot
+              # jails run against its local journal (io's copies read remote
+              # forwarded journals and never fire).
+              postfix.enable = false;
+              dovecot.enable = false;
             };
           };
         };
@@ -610,6 +613,7 @@ in {
     locations."/api/extensions/ext/invoice-inbox/inbound" = {
       proxyPass = "http://10.0.0.10:3050";
       recommendedProxySettings = true;
+      extraConfig = "limit_req zone=public burst=20 nodelay;";
     };
     locations."/" = {
       return = "444";

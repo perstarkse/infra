@@ -12,7 +12,7 @@
         inputs = {
           privateInfra = inputs.private-infra;
           varsHelper = inputs.vars-helper;
-          inherit (inputs) nous voxtype;
+          inherit (inputs) nous voxtype indicator-alert-daemon;
           agentTooling = inputs."agent-tooling";
           digikeyMcp = inputs."digikey-mcp";
         };

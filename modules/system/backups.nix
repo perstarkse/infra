@@ -118,6 +118,11 @@
         default = "https://ntfy.lan.stark.pub/backup-alerts";
         description = "ntfy topic URL for backup failure notifications.";
       };
+      tokenFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = "Path to a file containing the ntfy access token for the backup-alerts topic (write-protected).";
+      };
     };
 
     config = let
@@ -445,12 +450,18 @@
               set -euo pipefail
               job="''${1:?backup job name required}"
 
+              auth_args=()
+              if [ -n "${ntfyCfg.tokenFile or ""}" ] && [ -f "${ntfyCfg.tokenFile or ""}" ]; then
+                auth_args=(-H "Authorization: Bearer $(cat ${ntfyCfg.tokenFile})")
+              fi
+
               ${pkgs.curl}/bin/curl -fsS \
                 --retry 2 \
                 --retry-delay 2 \
                 -H "Title: ${config.networking.hostName}: restic backup failed" \
                 -H "Priority: high" \
                 -H "Tags: warning,floppy_disk,${config.networking.hostName}" \
+                "''${auth_args[@]}" \
                 --data-binary "Backup job $job failed on ${config.networking.hostName}" \
                 ${lib.escapeShellArg ntfyCfg.url}
             '';
