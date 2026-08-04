@@ -111,6 +111,7 @@ in {
     };
 
     mainUser = {
+      enable = false;
       name = "p";
     };
 
@@ -537,6 +538,18 @@ in {
             useWildcard = "lanstark";
           }
         ];
+        # Interactive SPA apps (minne, chat, nous, …) are exempt from
+        # limit_req entirely: each page load fires ~40 requests, and any
+        # rate ceiling (even 60r/m) serializes them to ~1 req/s — the cause of
+        # the 10s+ page loads. fail2ban (url-probe/botsearch) still blunts
+        # path-based scanners on these hosts.
+        rateLimits = {
+          "minne.stark.pub" = null;
+          "chat.stark.pub" = null;
+          "nous.fyi" = null;
+          "politikerstod.stark.pub" = null;
+          "request.stark.pub" = null;
+        };
       };
 
       casting = {

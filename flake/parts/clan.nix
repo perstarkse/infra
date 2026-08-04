@@ -126,8 +126,13 @@
             name = "users";
             input = "clan-core";
           };
+          # The interactive user p exists only on the desktop machines;
+          # servers are root-only (admin via the clan sshd key).
           roles.default = {
-            tags.all = {};
+            machines = {
+              charon = {};
+              ariel = {};
+            };
             settings = {
               user = "p";
               prompt = true;

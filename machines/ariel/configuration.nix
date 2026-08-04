@@ -211,6 +211,9 @@
     };
 
     mainUser.name = "p";
+    mainUser.extraSshKeys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn p@charon"
+    ];
 
     greetd = {
       enable = true;

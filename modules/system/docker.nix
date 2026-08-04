@@ -13,7 +13,9 @@
         rootless.enable = false;
         autoPrune.enable = true;
       };
-      users.users.${config.my.mainUser.name} = {
+      # Only the interactive main user gets the docker group; on headless
+      # servers (mainUser.enable = false) there is no user to grant it to.
+      users.users.${config.my.mainUser.name} = lib.mkIf config.my.mainUser.enable {
         extraGroups = ["docker"];
       };
     };

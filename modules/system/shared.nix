@@ -1,6 +1,7 @@
 {inputs, ...}: {
   config.flake.nixosModules.shared = {
     config,
+    lib,
     pkgs,
     ...
   }: let
@@ -92,15 +93,15 @@
       mutableUsers = false;
       defaultUserShell = pkgs.fish;
 
-      users.${mainUser} = {
+      users.${mainUser} = lib.mkIf config.my.mainUser.enable {
         isNormalUser = true;
         extraGroups = ["wheel" "networkmanager" "video" "input" "libvirtd" "kvm" "qemu-libvirtd"];
         uid = 1000;
         shell = pkgs.fish;
-        openssh.authorizedKeys.keys =
-          # Combine root's keys with the user's extra keys
-          config.users.users.root.openssh.authorizedKeys.keys
-          ++ config.my.mainUser.extraSshKeys;
+        # The main user gets its own explicit key list. Root's keys are NOT
+        # mirrored here anymore: keys authorized for root (clan sshd) must not
+        # silently grant the user account too.
+        openssh.authorizedKeys.keys = config.my.mainUser.extraSshKeys;
       };
     };
 

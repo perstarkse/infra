@@ -225,6 +225,11 @@
         };
 
         mainUser = {
+          enable = lib.mkOption {
+            type = lib.types.bool;
+            default = true;
+            description = "Create the interactive main-user account on this machine. Disable on headless servers, where admin is root-only (no interactive user accounts).";
+          };
           name = lib.mkOption {
             type = lib.types.str;
             description = "The username of the primary user for this system.";

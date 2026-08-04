@@ -61,6 +61,7 @@
     };
 
     mainUser = {
+      enable = false;
       name = "p";
     };
 
@@ -201,7 +202,14 @@
           '';
         };
 
-      openwebui = mkB2 config.my.openwebui.dataDir;
+      openwebui =
+        (mkB2 config.my.openwebui.dataDir)
+        // {
+          # Most of the dataDir is cache/ (HuggingFace model weights + ephemeral
+          # generations) — regenerable, worthless in a backup. User state is
+          # webui.db + vector_db + uploads (~200M).
+          exclude = ["${config.my.openwebui.dataDir}/cache"];
+        };
 
       paperless = {
         enable = true;
