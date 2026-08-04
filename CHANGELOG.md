@@ -14,7 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- `vpn-browser` netns: stop copying the host systemd-resolved stub (`127.0.0.53`) into `/etc/netns/<ns>/resolv.conf`, and overlay `nsswitch.conf` with `hosts: files dns` so glibc cannot leak LAN split-horizon answers (`minne.stark.pub`/`nous.fyi` → `10.0.0.1`) via host `nss-resolve` — that path produced Mullvad's "VPN Server / no content hosted here" page inside the VPN browser.
 - makemake restic: restore B2 passwords into `restic-*-default` (multi-backend rename had regenerated passwords against existing repos); nous prepare runs `pg_dump` as `nous`; surrealdb(+saas) use RocksDB file-level backup (drop unsupported `surreal export`); paperless Garage bucket `restic-makemake-paperless` granted to `charon-key`; garage-s3 restic bootstrap uses Garage admin CLI on Garage nodes instead of S3 CreateBucket.
+- Router nginx: `rateLimits.<domain> = null` exempts a vhost from `limit_req`; the five JS-heavy public vhosts (`minne`, `chat`, `nous.fyi`, `politikerstod`, `request`) are now exempt — the previous 60 r/m zones serialized SPA page loads (~40 requests each) to ~1 req/s, producing 10 s+ page loads. Non-SPA tools keep the strict `public` zone (10 r/m, burst 20, nodelay); fail2ban still blunts scanners.
 - `indicator-alert-daemon` flake import uses `nixosModules.default` instead of the removed root `module.nix` path (flake-parts migration).
 - ntfy auth ACL now grants subscriber read on `storage-alerts`, `indicator-alerts`, and `backup-alerts` (previously write-only under `deny-all`, so phones could open the UI but never receive messages).
 - makemake storage/backup ntfy publishers now use `https://ntfy.lan.stark.pub` instead of firewalled `http://10.0.0.1:2586` (backup-failure-notify was failing with curl exit 28).

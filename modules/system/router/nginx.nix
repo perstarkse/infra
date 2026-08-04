@@ -38,6 +38,10 @@
       exposure.http.virtualHosts)
     exposureServices);
     allVirtualHosts = nginxCfg.virtualHosts ++ exposureVhosts;
+    # Vhosts with a dedicated limit_req zone (nginxCfg.rateLimits keyed by domain)
+    customRateVhosts = builtins.filter (v: (nginxCfg.rateLimits.${v.domain} or null) != null) allVirtualHosts;
+    # limit_req zone names must be single tokens; domains contain dots
+    sanitizeZoneName = domain: lib.replaceStrings ["." "-"] ["_" "_"] domain;
     cfNeeded = lib.any (v: (v.cloudflareProxied or false)) allVirtualHosts;
     cfDir = "/var/lib/cloudflare-ips";
     cfAllow = "${cfDir}/allow.conf";
@@ -170,6 +174,14 @@
           (lib.mkIf (publicVhosts != []) ''
             limit_req_zone $binary_remote_addr zone=public:10m rate=10r/m;
           '')
+          # One dedicated zone per SPA-heavy vhost (smaller memory: each zone
+          # only sees that vhost's clients)
+          (lib.mkIf (customRateVhosts != []) (lib.concatMapStringsSep "\n" (
+              v: let
+                rl = nginxCfg.rateLimits.${v.domain};
+              in "limit_req_zone $binary_remote_addr zone=${sanitizeZoneName v.domain}:5m rate=${rl.rate};"
+            )
+            customRateVhosts))
         ];
 
         virtualHosts =
@@ -228,9 +240,25 @@
                   # Public vhosts are WAN-reachable (same set as the WAN port
                   # exposure below): cap request rate to blunt brute force and
                   # scraping. LAN-only and WireGuard vhosts stay unlimited.
-                  if (vhost.lanOnly or false)
-                  then ""
-                  else "limit_req zone=public burst=20 nodelay;";
+                  # The strict shared `public` zone keeps nodelay so probes and
+                  # auth scans get dropped fast (and fail2ban sees the HTTP
+                  # status it needs). SPA-heavy vhosts with a dedicated zone
+                  # queue (no nodelay) so real interactions slow down instead
+                  # of hard-503ing. A vhost explicitly set to `null` in
+                  # rateLimits is exempt: an interactive SPA fires ~40 requests
+                  # per page load, indistinguishable from a scraper, so any
+                  # ceiling here serializes real users (fail2ban still blunts
+                  # path-based scanning).
+                  let
+                    rl = nginxCfg.rateLimits.${vhost.domain} or null;
+                  in
+                    if (vhost.lanOnly or false)
+                    then ""
+                    else if (nginxCfg.rateLimits ? ${vhost.domain} && rl == null)
+                    then ""
+                    else if rl != null
+                    then "limit_req zone=${sanitizeZoneName vhost.domain} burst=${toString rl.burst};"
+                    else "limit_req zone=public burst=20 nodelay;";
 
                 mergedExtra =
                   lib.concatStringsSep "\n"
