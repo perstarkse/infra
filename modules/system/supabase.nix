@@ -389,6 +389,40 @@ _: {
         '';
       };
 
+      # Logical pg_dump of the supabase postgres, decoupled from the restic
+      # jobs. Both backends scan ${cfg.dataDir}/backups at 00:00; a dump
+      # created in each job's own pre-start raced with the other's post-stop
+      # cleanup, so the b2 backend nightly snapshot came out empty (0 B).
+      # The dump unit runs at 23:30; the file is left in place (2.3 MiB,
+      # root-only dir) so a failed dump leaves a stale-but-present dump
+      # instead of an empty backup. Write via .tmp + mv so a crash mid-dump
+      # never exposes a truncated file to restic.
+      systemd.services.supabase-db-dump = {
+        description = "Dump supabase postgres to ${cfg.dataDir}/backups/supabase.dump";
+        after = ["docker.service" "supabase-stack.service"];
+        path = [pkgs.docker pkgs.coreutils];
+        serviceConfig = {
+          Type = "oneshot";
+        };
+        script = ''
+          set -euo pipefail
+          mkdir -p ${cfg.dataDir}/backups
+          ${pkgs.docker}/bin/docker exec supabase-db \
+            pg_dump -U postgres -Fc postgres \
+            > ${cfg.dataDir}/backups/supabase.dump.tmp
+          ${pkgs.coreutils}/bin/mv ${cfg.dataDir}/backups/supabase.dump.tmp ${cfg.dataDir}/backups/supabase.dump
+        '';
+      };
+
+      systemd.timers.supabase-db-dump = {
+        description = "Daily supabase postgres dump timer";
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnCalendar = "*-*-* 23:30:00";
+          Persistent = true;
+        };
+      };
+
       my.backups.supabase = lib.mkIf cfg.backup.enable {
         enable = true;
         path = "${cfg.dataDir}/backups";
@@ -404,15 +438,6 @@ _: {
             lifecycleKeepPriorVersionsDays = 30;
           };
         };
-        backupPrepareCommand = ''
-          mkdir -p ${cfg.dataDir}/backups
-          ${pkgs.docker}/bin/docker exec supabase-db \
-            pg_dump -U postgres -Fc postgres \
-            > ${cfg.dataDir}/backups/supabase.dump
-        '';
-        backupCleanupCommand = ''
-          rm -f ${cfg.dataDir}/backups/supabase.dump
-        '';
       };
 
       my.exposure.services.supabase = lib.mkIf cfg.exposure.enable {
