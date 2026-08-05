@@ -97,7 +97,7 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
-    endpointsManifestData = inputs.self.lib.endpoints.mkEndpointManifest systemNixosConfigs;
+    endpointsManifestData = inputs.self.lib.endpoints.mkEndpointsManifest systemNixosConfigs;
 
     endpointsManifest = pkgs.writeText "endpoints-manifest.json" (builtins.toJSON endpointsManifestData);
 

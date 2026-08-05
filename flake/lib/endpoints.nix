@@ -15,7 +15,7 @@
     })
     enabled;
 
-  mkEndpointManifest = nixosConfigurations: let
+  mkEndpointsManifest = nixosConfigurations: let
     entries = lib.flatten (lib.mapAttrsToList enabledEndpointsFor nixosConfigurations);
   in {
     exports = lib.filter (entry: entry.renderedFrom == null) entries;
@@ -36,7 +36,6 @@
       override = routerImportCfg.vhostOverrides."${machineName}.${serviceName}" or {};
       overrideBasicAuth = override.basicAuth or null;
       overrideAcmeDns01 = override.acmeDns01 or null;
-      overrideRateLimit = override.rateLimit or "keep";
       secretBasicAuth =
         if vhost.basicAuthSecret != null
         then resolveBasicAuthSecret vhost.basicAuthSecret
@@ -48,15 +47,9 @@
     in
       vhost
       // lib.optionalAttrs (basicAuth != null) {inherit basicAuth;}
-      // lib.optionalAttrs (overrideAcmeDns01 != null) {acmeDns01 = overrideAcmeDns01;}
-      // lib.optionalAttrs (overrideRateLimit != "keep") {
-        rateLimit =
-          if overrideRateLimit == "exempt"
-          then null
-          else overrideRateLimit;
-      };
+      // lib.optionalAttrs (overrideAcmeDns01 != null) {acmeDns01 = overrideAcmeDns01;};
 
-    mkImportedEndpoint = machineName: serviceName: endpoint: let
+    mkImportedEndpoints = machineName: serviceName: endpoint: let
       importedVhosts = map (applyVhostOverride machineName serviceName) endpoint.http.virtualHosts;
     in {
       name = "${machineName}-${serviceName}";
@@ -93,9 +86,9 @@
       endpoints = machineConfig.my.endpoints.services or {};
       routerEndpoints = lib.filterAttrs (_: endpoint: endpoint.enable && endpoint.router.enable && routerTargetAllowed endpoint) endpoints;
     in
-      lib.mapAttrsToList (mkImportedEndpoint machineName) routerEndpoints;
+      lib.mapAttrsToList (mkImportedEndpoints machineName) routerEndpoints;
   in
     lib.listToAttrs (lib.concatMap importsForMachine routerImportCfg.machines);
 in {
-  inherit enabledEndpointsFor mkEndpointManifest mkRouterImportedEndpoints;
+  inherit enabledEndpointsFor mkEndpointsManifest mkRouterImportedEndpoints;
 }

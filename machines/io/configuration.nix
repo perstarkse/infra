@@ -190,11 +190,6 @@ in {
           environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
         };
       };
-      # request.stark.pub (Overseerr) is an interactive SPA declared by the
-      # external private-infra module, which cannot express the limit_req
-      # exemption itself; apply it router-side (same effect as the old
-      # rateLimits."request.stark.pub" = null).
-      vhostOverrides."makemake.request".rateLimit = "exempt";
     };
 
     endpoints.services =

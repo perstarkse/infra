@@ -2,7 +2,7 @@
   config.flake.nixosModules.vaultwarden = {
     config,
     lib,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.vaultwarden;
@@ -44,7 +44,7 @@
       };
 
       endpoints =
-        mkStandardEndpointOptions {
+        mkStandardEndpointsOptions {
           subject = "Vaultwarden";
           visibility = "internal";
           withAcmeDns01 = true;

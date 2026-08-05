@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.minne-saas;
@@ -85,7 +85,7 @@
       };
 
       endpoints =
-        mkStandardEndpointOptions {
+        mkStandardEndpointsOptions {
           subject = "Minne SaaS";
           visibility = "public";
           withRouter = true;

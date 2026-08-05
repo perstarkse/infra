@@ -3,7 +3,7 @@ _: {
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.paperless;
@@ -131,7 +131,7 @@ _: {
         };
       };
 
-      endpoints = mkStandardEndpointOptions {
+      endpoints = mkStandardEndpointsOptions {
         subject = "Paperless";
         visibility = "internal";
         withRouter = true;

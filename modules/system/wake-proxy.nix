@@ -2,7 +2,7 @@
   config.flake.nixosModules.wake-proxy = {
     config,
     lib,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.services.wakeproxy;
@@ -10,7 +10,7 @@
   in {
     imports = [inputs.wol-web-proxy.nixosModules.wake-proxy];
 
-    options.my.wake-proxy.endpoints = mkStandardEndpointOptions {
+    options.my.wake-proxy.endpoints = mkStandardEndpointsOptions {
       subject = "wake-proxy";
       visibility = "public";
       withAcmeDns01 = true;

@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.nous;
@@ -93,7 +93,7 @@
       };
 
       endpoints =
-        mkStandardEndpointOptions {
+        mkStandardEndpointsOptions {
           subject = "Nous";
           visibility = "public";
           withRouter = true;

@@ -55,7 +55,7 @@
 in {
   inherit basicAuthSubmodule basicAuthSecretSubmodule acmeDns01Submodule;
 
-  mkStandardEndpointOptions = {
+  mkStandardEndpointsOptions = {
     subject,
     visibility,
     withRouter ? false,

@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     mkRestrictedPortRules,
     ...
   }: let
@@ -231,7 +231,7 @@
               };
             };
             endpoints =
-              mkStandardEndpointOptions {
+              mkStandardEndpointsOptions {
                 subject = "Politikerstöd (${name})";
                 visibility = "public";
                 withRouter = true;

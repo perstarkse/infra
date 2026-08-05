@@ -2,7 +2,7 @@ _: {
   config.flake.nixosModules.atuin-server = {
     config,
     lib,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.atuin-server;
@@ -28,7 +28,7 @@ _: {
         description = "Open firewall for Atuin server port";
       };
 
-      endpoints = mkStandardEndpointOptions {
+      endpoints = mkStandardEndpointsOptions {
         subject = "Atuin server";
         visibility = "internal";
         withRouter = true;

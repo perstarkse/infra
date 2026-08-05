@@ -238,13 +238,8 @@
     in
       lib.genAttrs domains zoneForPublicDomain;
 
-    inherit ((import ../../flake/lib/endpoints-options.nix {inherit lib;})) mkStandardEndpointOptions basicAuthSubmodule basicAuthSecretSubmodule acmeDns01Submodule;
+    inherit ((import ../../flake/lib/endpoints-options.nix {inherit lib;})) mkStandardEndpointsOptions basicAuthSubmodule basicAuthSecretSubmodule acmeDns01Submodule;
   in {
-    # Compatibility alias for the external private-infra input (arrs.nix
-    # overseerr), which still declares my.exposure.services.request. Drop once
-    # private-infra is migrated to my.endpoints.
-    imports = [(lib.mkAliasOptionModule ["my" "exposure"] ["my" "endpoints"])];
-
     options = {
       my = {
         stateVersion = mkOption {
@@ -343,11 +338,9 @@
                     default = null;
                     description = "Router-local DNS-01 ACME override for imported vhosts.";
                   };
-                  rateLimit = mkOption {
-                    type = types.either (types.enum ["keep" "strict" "exempt"]) rateLimitSubmodule;
-                    default = "keep";
-                    description = "Router-local rate limit override for imported vhosts: 'keep' (default) preserves the service-declared rateLimit; 'strict' applies the shared public zone; 'exempt' disables limit_req entirely; a {rate, burst, nodelay} spec gives the vhost a dedicated zone. Used when the exporting module cannot express the setting (e.g. external inputs).";
-                  };
+                  rateLimit =
+                    mkOption {
+                    };
                 };
               });
               default = {};
@@ -356,7 +349,7 @@
           };
 
           services = mkOption {
-            type = types.attrsOf (types.submodule ({name, ...}: {
+            type = types.attrsOf (types.submodule (_: {
               options = {
                 enable = mkOption {
                   type = types.bool;
@@ -451,10 +444,6 @@
                   };
                 };
               };
-
-              config = {
-                _module.args.endpointName = name;
-              };
             }));
             default = {};
             description = "Service-owned network endpoints declarations.";
@@ -465,10 +454,7 @@
 
     config = mkMerge [
       {
-        _module.args.mkStandardEndpointOptions = mkStandardEndpointOptions;
-        # Compatibility alias for the external private-infra input (overseerr),
-        # which still imports the old name. Drop once private-infra is renamed.
-        _module.args.mkStandardExposureOptions = mkStandardEndpointOptions;
+        _module.args.mkStandardEndpointsOptions = mkStandardEndpointsOptions;
         _module.args.mkRestrictedPortRules = mkRestrictedPortRules;
       }
       {

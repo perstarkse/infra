@@ -76,8 +76,7 @@
       tokenFile = config.my.secrets.getPath "ntfy" "backup-token";
     };
 
-    privateInfra.overseerr.exposure = {
-      # external private-infra module owns this option name
+    privateInfra.overseerr.endpoints = {
       enable = true;
       domain = "request.stark.pub";
       public = true;

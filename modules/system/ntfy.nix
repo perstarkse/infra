@@ -2,7 +2,7 @@ _: {
   config.flake.nixosModules.ntfy = {
     config,
     lib,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.ntfy;
@@ -57,7 +57,7 @@ _: {
       };
 
       endpoints =
-        mkStandardEndpointOptions {
+        mkStandardEndpointsOptions {
           subject = "ntfy";
           visibility = "internal";
           withExtraConfigDefault = ''

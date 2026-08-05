@@ -3,7 +3,7 @@ _: {
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.webdav-garage;
@@ -70,7 +70,7 @@ _: {
         description = "Group to run rclone as";
       };
 
-      endpoints = mkStandardEndpointOptions {
+      endpoints = mkStandardEndpointsOptions {
         subject = "WebDAV Garage";
         visibility = "internal";
         withBasicAuthSecret = true;

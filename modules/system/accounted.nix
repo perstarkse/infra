@@ -3,7 +3,7 @@ _: {
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.accounted;
@@ -81,7 +81,7 @@ _: {
         description = "NEXT_PUBLIC_SUPABASE_URL (browser + server).";
       };
 
-      endpoints = mkStandardEndpointOptions {
+      endpoints = mkStandardEndpointsOptions {
         subject = "Accounted";
         visibility = "internal";
         withRouter = true;

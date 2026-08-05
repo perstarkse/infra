@@ -3,14 +3,14 @@
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.home-assistant;
   in {
     options.my.home-assistant = {
       enable = lib.mkEnableOption "Home Assistant container";
-      endpoints = mkStandardEndpointOptions {
+      endpoints = mkStandardEndpointsOptions {
         subject = "Home Assistant";
         visibility = "internal";
       };

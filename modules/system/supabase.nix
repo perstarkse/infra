@@ -3,7 +3,7 @@ _: {
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.supabase;
@@ -170,7 +170,7 @@ _: {
         description = "GoTrue DISABLE_SIGNUP.";
       };
 
-      endpoints = mkStandardEndpointOptions {
+      endpoints = mkStandardEndpointsOptions {
         subject = "Supabase (Kong)";
         visibility = "internal";
         withRouter = true;

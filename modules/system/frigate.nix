@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.frigate;
@@ -60,7 +60,7 @@
   in {
     options.my.frigate = {
       enable = lib.mkEnableOption "Frigate NVR";
-      endpoints = mkStandardEndpointOptions {
+      endpoints = mkStandardEndpointsOptions {
         subject = "Frigate";
         visibility = "internal";
       };

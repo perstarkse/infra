@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardEndpointOptions,
+    mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.openwebui;
@@ -62,7 +62,7 @@
         description = "UDP ports to open for OpenWebUI.";
       };
 
-      endpoints = mkStandardEndpointOptions {
+      endpoints = mkStandardEndpointsOptions {
         subject = "OpenWebUI";
         visibility = "internal";
         withRouter = true;
