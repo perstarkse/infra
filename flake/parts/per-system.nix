@@ -62,7 +62,7 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
-    routerExposureChecks = import ../../tests/router-exposure.nix {
+    routerEndpointsChecks = import ../../tests/router-endpoints.nix {
       inherit lib;
       inherit pkgs;
       inherit (inputs.self) nixosModules;
@@ -97,41 +97,41 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
-    exposureManifestData = inputs.self.lib.exposure.mkExposureManifest systemNixosConfigs;
+    endpointsManifestData = inputs.self.lib.endpoints.mkEndpointManifest systemNixosConfigs;
 
-    exposureManifest = pkgs.writeText "exposure-manifest.json" (builtins.toJSON exposureManifestData);
+    endpointsManifest = pkgs.writeText "endpoints-manifest.json" (builtins.toJSON endpointsManifestData);
 
-    exposureManifestValidator = ../../lib/exposure-manifest-validator.py;
+    endpointsManifestValidator = ../../lib/endpoints-manifest-validator.py;
 
-    exposureManifestCheck =
-      pkgs.runCommand "exposure-manifest-check" {
+    endpointsManifestCheck =
+      pkgs.runCommand "endpoints-manifest-check" {
         nativeBuildInputs = [pkgs.python3];
-        manifest = exposureManifest;
+        manifest = endpointsManifest;
       } ''
-        python3 ${exposureManifestValidator} "$manifest"
+        python3 ${endpointsManifestValidator} "$manifest"
         touch $out
       '';
 
-    exposureListPy = ../../lib/exposure-list.py;
+    endpointsListPy = ../../lib/endpoints-list.py;
 
-    exposureListScript = pkgs.writeShellApplication {
-      name = "exposure-list";
+    endpointsListScript = pkgs.writeShellApplication {
+      name = "endpoints-list";
       runtimeInputs = [pkgs.python3];
       text = ''
         set -euo pipefail
-        exec python3 ${exposureListPy} ${exposureManifest}
+        exec python3 ${endpointsListPy} ${endpointsManifest}
       '';
     };
 
     localCheckTargets = {
-      exposure-manifest-check = exposureManifestCheck;
+      endpoints-manifest-check = endpointsManifestCheck;
       router-checks = mkCheckBundle "router-checks" routerChecks;
       predeploy-check = mkCheckBundle "predeploy-check" ioPredeployChecks;
       final-checks = mkCheckBundle "final-checks" (routerChecks // ioPredeployChecks);
       garage-checks = mkCheckBundle "garage-checks" garageChecks;
       politikerstod-checks = mkCheckBundle "politikerstod-checks" politikerstodDistributedChecks;
       wireguard-checks = mkCheckBundle "wireguard-checks" wireguardSystemChecks;
-      router-exposure-checks = mkCheckBundle "router-exposure-checks" routerExposureChecks;
+      router-endpoints-checks = mkCheckBundle "router-endpoints-checks" routerEndpointsChecks;
       paperless-checks = mkCheckBundle "paperless-checks" paperlessSystemChecks;
       backups-checks = mkCheckBundle "backups-checks" backupsSystemChecks;
       backups-multi-checks = mkCheckBundle "backups-multi-checks" {
@@ -153,9 +153,9 @@
 
       profile_to_checks = {
           "check-profile-fast": [],
-          "check-profile-router": ["router-checks", "router-exposure-checks"],
+          "check-profile-router": ["router-checks", "router-endpoints-checks"],
           "check-profile-io-predeploy": ["predeploy-check"],
-          "check-profile-io-final": ["final-checks", "router-exposure-checks", "exposure-manifest-check"],
+          "check-profile-io-final": ["final-checks", "router-endpoints-checks", "endpoints-manifest-check"],
           "check-profile-garage": ["garage-checks"],
           "check-profile-politikerstod": ["politikerstod-checks"],
           "check-profile-wireguard": ["wireguard-checks"],
@@ -812,28 +812,28 @@
         pkgs.gzip
         machineUpdatePlanScript
         machineUpdateScript
-        exposureListScript
+        endpointsListScript
       ];
     };
 
     packages =
       localCheckTargets
       // {
-        exposure-manifest = exposureManifest;
+        endpoints-manifest = endpointsManifest;
         machine-update-plan = machineUpdatePlanScript;
         machine-update = machineUpdateScript;
-        exposure-list = exposureListScript;
+        endpoints-list = endpointsListScript;
       };
 
     checks =
-      {inherit exposureManifestCheck;}
+      {inherit endpointsManifestCheck;}
       // buildChecks
       // routerChecks
       // ioPredeployChecks
       // garageChecks
       // politikerstodDistributedChecks
       // wireguardSystemChecks
-      // routerExposureChecks
+      // routerEndpointsChecks
       // paperlessSystemChecks
       // backupsSystemChecks
       // mailserverSystemChecks

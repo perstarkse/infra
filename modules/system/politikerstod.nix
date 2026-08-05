@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     mkRestrictedPortRules,
     ...
   }: let
@@ -26,7 +26,7 @@
 
     containerInstances = lib.filterAttrs (_: i: i.database.enableContainer or false) enabledInstances;
 
-    exposureInstances = lib.filterAttrs (_: i: i.exposure.enable or false) enabledInstances;
+    endpointInstances = lib.filterAttrs (_: i: i.endpoints.enable or false) enabledInstances;
 
     openDbInstances =
       lib.filterAttrs (
@@ -230,8 +230,8 @@
                 description = "Scraper base URL. Must be set per instance.";
               };
             };
-            exposure =
-              mkStandardExposureOptions {
+            endpoints =
+              mkStandardEndpointOptions {
                 subject = "Politikerstöd (${name})";
                 visibility = "public";
                 withRouter = true;
@@ -422,7 +422,7 @@
         )
         enabledInstances;
 
-      my.exposure.services =
+      my.endpoints.services =
         lib.mapAttrs' (
           name: instance: let
             serviceName = "politikerstod-${name}";
@@ -433,13 +433,13 @@
                 port = instance.port or 5150;
               };
               router = {
-                enable = instance.exposure.router.enable or false;
-                targets = instance.exposure.router.targets or [];
+                enable = instance.endpoints.router.enable or false;
+                targets = instance.endpoints.router.targets or [];
               };
-              http.virtualHosts = lib.optional ((instance.exposure.domain or null) != null) {
-                inherit (instance.exposure) domain;
-                public = instance.exposure.public or false;
-                cloudflareProxied = instance.exposure.cloudflareProxied or false;
+              http.virtualHosts = lib.optional ((instance.endpoints.domain or null) != null) {
+                inherit (instance.endpoints) domain;
+                public = instance.endpoints.public or false;
+                cloudflareProxied = instance.endpoints.cloudflareProxied or false;
                 websockets = false;
                 # Politikerstöd is an interactive SPA: exempt from limit_req (same
                 # rationale as the router's old rateLimits exemption).
@@ -452,7 +452,7 @@
               };
             }
         )
-        exposureInstances;
+        endpointInstances;
 
       networking.firewall = {
         allowedTCPPorts = lib.optionals (openDbInstances != {}) [5432];

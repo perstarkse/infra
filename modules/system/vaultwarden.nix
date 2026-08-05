@@ -2,7 +2,7 @@
   config.flake.nixosModules.vaultwarden = {
     config,
     lib,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.vaultwarden;
@@ -43,8 +43,8 @@
         description = "UDP ports to open for Vaultwarden.";
       };
 
-      exposure =
-        mkStandardExposureOptions {
+      endpoints =
+        mkStandardEndpointOptions {
           subject = "Vaultwarden";
           visibility = "internal";
           withAcmeDns01 = true;
@@ -72,15 +72,15 @@
         environmentFile = config.my.secrets.getPath "vaultwarden" "env";
       };
 
-      my.exposure.services.vaultwarden = lib.mkIf cfg.exposure.enable {
+      my.endpoints.services.vaultwarden = lib.mkIf cfg.endpoints.enable {
         upstream = {
           host = cfg.address;
           inherit (cfg) port;
         };
-        router = {inherit (cfg.exposure.router) enable targets targetHost dnsTarget;};
-        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
-          inherit (cfg.exposure) domain;
-          inherit (cfg.exposure) lanOnly cloudflareProxied useWildcard acmeDns01;
+        router = {inherit (cfg.endpoints.router) enable targets targetHost dnsTarget;};
+        http.virtualHosts = lib.optional (cfg.endpoints.domain != null) {
+          inherit (cfg.endpoints) domain;
+          inherit (cfg.endpoints) lanOnly cloudflareProxied useWildcard acmeDns01;
           websockets = true;
         };
         firewall.local = {

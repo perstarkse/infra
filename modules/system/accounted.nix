@@ -3,7 +3,7 @@ _: {
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.accounted;
@@ -81,7 +81,7 @@ _: {
         description = "NEXT_PUBLIC_SUPABASE_URL (browser + server).";
       };
 
-      exposure = mkStandardExposureOptions {
+      endpoints = mkStandardEndpointOptions {
         subject = "Accounted";
         visibility = "internal";
         withRouter = true;
@@ -100,8 +100,8 @@ _: {
           message = "my.accounted requires my.supabase.enable = true.";
         }
         {
-          assertion = cfg.exposure.enable -> cfg.exposure.domain != null;
-          message = "my.accounted.exposure.domain must be set when exposure is enabled.";
+          assertion = cfg.endpoints.enable -> cfg.endpoints.domain != null;
+          message = "my.accounted.endpoints.domain must be set when endpoints are enabled.";
         }
       ];
 
@@ -124,8 +124,8 @@ _: {
         };
         script = let
           appUrl =
-            if cfg.exposure.domain != null
-            then "https://${cfg.exposure.domain}"
+            if cfg.endpoints.domain != null
+            then "https://${cfg.endpoints.domain}"
             else "http://${cfg.address}:${toString cfg.port}";
         in ''
           set -euo pipefail
@@ -257,14 +257,14 @@ _: {
         '';
       };
 
-      my.exposure.services.accounted = lib.mkIf cfg.exposure.enable {
+      my.endpoints.services.accounted = lib.mkIf cfg.endpoints.enable {
         upstream = {
           host = cfg.address;
           inherit (cfg) port;
         };
-        router = {inherit (cfg.exposure.router) enable targets;};
-        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
-          inherit (cfg.exposure) domain lanOnly useWildcard extraConfig;
+        router = {inherit (cfg.endpoints.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.endpoints.domain != null) {
+          inherit (cfg.endpoints) domain lanOnly useWildcard extraConfig;
         };
       };
     };

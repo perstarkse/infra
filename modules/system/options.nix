@@ -8,22 +8,22 @@
     inherit (lib) mkIf mkMerge mkOption types;
     versions = import ../../flake/lib/versions.nix;
 
-    enabledServices = lib.filterAttrs (_: exposure: exposure.enable) config.my.exposure.services;
+    enabledServices = lib.filterAttrs (_: endpoint: endpoint.enable) config.my.endpoints.services;
 
     firewallEntries = lib.flatten (lib.mapAttrsToList (
-        name: exposure:
-          lib.optionals exposure.firewall.local.enable (map (port: {
+        name: endpoint:
+          lib.optionals endpoint.firewall.local.enable (map (port: {
               inherit name port;
               protocol = "tcp";
-              inherit (exposure.firewall.local) allowedSources;
+              inherit (endpoint.firewall.local) allowedSources;
             })
-            exposure.firewall.local.tcp
+            endpoint.firewall.local.tcp
             ++ map (port: {
               inherit name port;
               protocol = "udp";
-              inherit (exposure.firewall.local) allowedSources;
+              inherit (endpoint.firewall.local) allowedSources;
             })
-            exposure.firewall.local.udp)
+            endpoint.firewall.local.udp)
       )
       enabledServices);
 
@@ -75,16 +75,16 @@
       restrictedEntries);
 
     publicVhostViolations = lib.concatLists (lib.mapAttrsToList (
-        serviceName: exposure:
+        serviceName: endpoint:
           map (vhost: "${serviceName}: ${vhost.domain}")
-          (lib.filter (vhost: !(vhost.lanOnly || vhost.public || vhost.cloudflareProxied)) exposure.http.virtualHosts)
+          (lib.filter (vhost: !(vhost.lanOnly || vhost.public || vhost.cloudflareProxied)) endpoint.http.virtualHosts)
       )
       enabledServices);
 
     noAcmeCloudflareViolations = lib.concatLists (lib.mapAttrsToList (
-        serviceName: exposure:
+        serviceName: endpoint:
           map (vhost: "${serviceName}: ${vhost.domain}")
-          (lib.filter (vhost: vhost.noAcme && vhost.cloudflareProxied) exposure.http.virtualHosts)
+          (lib.filter (vhost: vhost.noAcme && vhost.cloudflareProxied) endpoint.http.virtualHosts)
       )
       enabledServices);
 
@@ -215,7 +215,7 @@
 
     # Public-domain registry derivation. Every public domain the fleet serves is
     # derived from the endpoints layer (non-lanOnly vhosts across enabled
-    # exposure services plus non-lanOnly router-declared vhosts) and explicit
+    # endpoints services plus non-lanOnly router-declared vhosts) and explicit
     # non-vhost public DNS records (my.publicDnsRecords). my.publicDomains is a
     # projection of this; the registry-equality lint below fails the build if
     # anyone hand-edits it. Domain -> zone by suffix; a domain with no known
@@ -230,7 +230,7 @@
     derivedPublicDomains = let
       endpointVhostDomains = lib.concatLists (lib.mapAttrsToList (_: e:
         map (v: v.domain) (lib.filter (v: !(v.lanOnly or false)) e.http.virtualHosts))
-      (lib.filterAttrs (_: e: e.enable) config.my.exposure.services));
+      (lib.filterAttrs (_: e: e.enable) config.my.endpoints.services));
       routerVhostDomains = lib.optionals (config.my ? router) (
         map (v: v.domain) (lib.filter (v: !(v.lanOnly or false)) config.my.router.nginx.virtualHosts)
       );
@@ -238,8 +238,13 @@
     in
       lib.genAttrs domains zoneForPublicDomain;
 
-    inherit ((import ../../flake/lib/exposure-options.nix {inherit lib;})) mkStandardExposureOptions basicAuthSubmodule basicAuthSecretSubmodule acmeDns01Submodule;
+    inherit ((import ../../flake/lib/endpoints-options.nix {inherit lib;})) mkStandardEndpointOptions basicAuthSubmodule basicAuthSecretSubmodule acmeDns01Submodule;
   in {
+    # Compatibility alias for the external private-infra input (arrs.nix
+    # overseerr), which still declares my.exposure.services.request. Drop once
+    # private-infra is migrated to my.endpoints.
+    imports = [(lib.mkAliasOptionModule ["my" "exposure"] ["my" "endpoints"])];
+
     options = {
       my = {
         stateVersion = mkOption {
@@ -302,18 +307,18 @@
             description = "The terminal emulator command";
           };
         };
-        exposure = {
+        endpoints = {
           localFirewall.enable = mkOption {
             type = types.bool;
             default = true;
-            description = "Apply my.exposure.services.*.firewall.local rules to this host's firewall.";
+            description = "Apply my.endpoints.services.*.firewall.local rules to this host's firewall.";
           };
 
-          routerImports = {
+          imports = {
             machines = mkOption {
               type = types.listOf types.str;
               default = [];
-              description = "Machine names whose router-enabled exposure services should be imported by this router.";
+              description = "Machine names whose router-enabled endpoints services should be imported by this router.";
             };
             routerName = mkOption {
               type = types.str;
@@ -323,7 +328,7 @@
             defaultDnsTarget = mkOption {
               type = types.nullOr types.str;
               default = null;
-              description = "Default DNS target for imported router exposure records. Null means derive the local router primary address.";
+              description = "Default DNS target for imported router endpoints records. Null means derive the local router primary address.";
             };
             vhostOverrides = mkOption {
               type = types.attrsOf (types.submodule {
@@ -356,7 +361,7 @@
                 enable = mkOption {
                   type = types.bool;
                   default = true;
-                  description = "Enable this exposure declaration.";
+                  description = "Enable this endpoints declaration.";
                 };
 
                 renderedFrom = mkOption {
@@ -367,7 +372,7 @@
                     };
                   });
                   default = null;
-                  description = "Source exposure imported and rendered by this router, if any.";
+                  description = "Source endpoints declaration imported and rendered by this router, if any.";
                 };
 
                 upstream = {
@@ -414,7 +419,7 @@
                   targets = mkOption {
                     type = types.listOf types.str;
                     default = [];
-                    description = "Router names allowed to import this exposure. Empty means any importing router may import it.";
+                    description = "Router names allowed to import this endpoints declaration. Empty means any importing router may import it.";
                   };
                   dnsTarget = mkOption {
                     type = types.nullOr types.str;
@@ -448,11 +453,11 @@
               };
 
               config = {
-                _module.args.exposureName = name;
+                _module.args.endpointName = name;
               };
             }));
             default = {};
-            description = "Service-owned network exposure declarations.";
+            description = "Service-owned network endpoints declarations.";
           };
         };
       };
@@ -460,7 +465,10 @@
 
     config = mkMerge [
       {
-        _module.args.mkStandardExposureOptions = mkStandardExposureOptions;
+        _module.args.mkStandardEndpointOptions = mkStandardEndpointOptions;
+        # Compatibility alias for the external private-infra input (overseerr),
+        # which still imports the old name. Drop once private-infra is renamed.
+        _module.args.mkStandardExposureOptions = mkStandardEndpointOptions;
         _module.args.mkRestrictedPortRules = mkRestrictedPortRules;
       }
       {
@@ -470,11 +478,11 @@
           [
             {
               assertion = publicVhostViolations == [];
-              message = "Exposure vhosts must set either lanOnly = true or public = true or cloudflareProxied = true: ${lib.concatStringsSep ", " publicVhostViolations}";
+              message = "Endpoint vhosts must set either lanOnly = true or public = true or cloudflareProxied = true: ${lib.concatStringsSep ", " publicVhostViolations}";
             }
             {
               assertion = noAcmeCloudflareViolations == [];
-              message = "Exposure vhosts with cloudflareProxied = true must not set noAcme = true (HTTPS must be served): ${lib.concatStringsSep ", " noAcmeCloudflareViolations}";
+              message = "Endpoint vhosts with cloudflareProxied = true must not set noAcme = true (HTTPS must be served): ${lib.concatStringsSep ", " noAcmeCloudflareViolations}";
             }
           ]
           # Registry lint: my.publicDomains is a derived projection of the
@@ -490,7 +498,7 @@
             }
           ];
       }
-      (mkIf config.my.exposure.localFirewall.enable (mkMerge [
+      (mkIf config.my.endpoints.localFirewall.enable (mkMerge [
         {
           networking.firewall.allowedTCPPorts = unrestrictedTcpPorts;
           networking.firewall.allowedUDPPorts = unrestrictedUdpPorts;

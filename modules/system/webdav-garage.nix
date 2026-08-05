@@ -3,7 +3,7 @@ _: {
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.webdav-garage;
@@ -70,7 +70,7 @@ _: {
         description = "Group to run rclone as";
       };
 
-      exposure = mkStandardExposureOptions {
+      endpoints = mkStandardEndpointOptions {
         subject = "WebDAV Garage";
         visibility = "internal";
         withBasicAuthSecret = true;
@@ -92,15 +92,15 @@ _: {
         }
       ];
 
-      my.exposure.services.webdav-garage = lib.mkIf cfg.exposure.enable {
+      my.endpoints.services.webdav-garage = lib.mkIf cfg.endpoints.enable {
         upstream = {
           host = config.my.listenNetworkAddress;
           inherit (cfg) port;
         };
-        router = {inherit (cfg.exposure.router) enable targets;};
-        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
-          inherit (cfg.exposure) domain;
-          inherit (cfg.exposure) lanOnly useWildcard basicAuthSecret;
+        router = {inherit (cfg.endpoints.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.endpoints.domain != null) {
+          inherit (cfg.endpoints) domain;
+          inherit (cfg.endpoints) lanOnly useWildcard basicAuthSecret;
           websockets = false;
           extraConfig = ''
             # iOS WebDAV compatibility

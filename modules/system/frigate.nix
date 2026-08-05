@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.frigate;
@@ -60,7 +60,7 @@
   in {
     options.my.frigate = {
       enable = lib.mkEnableOption "Frigate NVR";
-      exposure = mkStandardExposureOptions {
+      endpoints = mkStandardEndpointOptions {
         subject = "Frigate";
         visibility = "internal";
       };
@@ -110,14 +110,14 @@
         };
       };
 
-      my.exposure.services.frigate = lib.mkIf config.my.frigate.exposure.enable {
+      my.endpoints.services.frigate = lib.mkIf config.my.frigate.endpoints.enable {
         upstream = {
           host = config.my.listenNetworkAddress;
           port = 5000;
         };
-        http.virtualHosts = lib.optional (config.my.frigate.exposure.domain != null) {
-          inherit (config.my.frigate.exposure) domain;
-          inherit (config.my.frigate.exposure) lanOnly useWildcard;
+        http.virtualHosts = lib.optional (config.my.frigate.endpoints.domain != null) {
+          inherit (config.my.frigate.endpoints) domain;
+          inherit (config.my.frigate.endpoints) lanOnly useWildcard;
         };
       };
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Print a formatted table of exposure manifest entries."""
+"""Print a formatted table of endpoints manifest entries."""
 
 import json
 import sys
 
 
-def format_exposure_list(manifest):
+def format_endpoints_list(manifest):
     rows = []
     for kind, entries in (("export", manifest.get("exports", [])), ("rendered", manifest.get("rendered", []))):
         for entry in entries:
@@ -35,13 +35,13 @@ def format_exposure_list(manifest):
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: exposure-list.py <manifest.json>", file=sys.stderr)
+        print("Usage: endpoints-list.py <manifest.json>", file=sys.stderr)
         raise SystemExit(1)
 
     with open(sys.argv[1], "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
 
-    format_exposure_list(manifest)
+    format_endpoints_list(manifest)
 
 
 if __name__ == "__main__":

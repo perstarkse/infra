@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate exposure manifest structure and consistency."""
+"""Validate endpoints manifest structure and consistency."""
 
 import json
 import re
@@ -10,7 +10,7 @@ DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Z
 
 
 def fail(message):
-    print(f"exposure-manifest-check: {message}", file=sys.stderr)
+    print(f"endpoints-manifest-check: {message}", file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -115,12 +115,12 @@ def validate_manifest(manifest):
 
     conflicting_dns = {name: values for name, values in dns_records.items() if len({target for target, _owner in values}) > 1}
     require(not conflicting_dns, "conflicting dns records: " + ", ".join(f"{name} -> {values}" for name, values in sorted(conflicting_dns.items())))
-    print(f"validated {len(exports)} exposure exports and {len(rendered)} rendered imports")
+    print(f"validated {len(exports)} endpoints exports and {len(rendered)} rendered imports")
 
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: exposure-manifest-validator.py <manifest.json>", file=sys.stderr)
+        print("Usage: endpoints-manifest-validator.py <manifest.json>", file=sys.stderr)
         raise SystemExit(1)
 
     with open(sys.argv[1], "r", encoding="utf-8") as handle:

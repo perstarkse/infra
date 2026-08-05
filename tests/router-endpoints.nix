@@ -75,8 +75,8 @@
         extraRouterConfig;
     };
 in {
-  router-exposure-smoke = pkgs.testers.runNixOSTest {
-    name = "router-exposure-smoke";
+  router-endpoints-smoke = pkgs.testers.runNixOSTest {
+    name = "router-endpoints-smoke";
     nodes.router = mkRouterNode {extraRouterConfig.dns.profiles.default.denyDomains = [];};
     testScript = ''
       start_all()
@@ -89,11 +89,11 @@ in {
     '';
   };
 
-  router-exposure-dns-and-vhost = pkgs.testers.runNixOSTest {
-    name = "router-exposure-dns-and-vhost";
+  router-endpoints-dns-and-vhost = pkgs.testers.runNixOSTest {
+    name = "router-endpoints-dns-and-vhost";
     nodes.router = mkRouterNode {
       extraRouterConfig.dns.profiles.default.denyDomains = [];
-      extraConfig.my.exposure.services.test-svc = {
+      extraConfig.my.endpoints.services.test-svc = {
         upstream = {
           host = "10.0.0.10";
           port = 8080;
@@ -121,11 +121,11 @@ in {
     '';
   };
 
-  router-exposure-lan-only-enforcement = pkgs.testers.runNixOSTest {
-    name = "router-exposure-lan-only-enforcement";
+  router-endpoints-lan-only-enforcement = pkgs.testers.runNixOSTest {
+    name = "router-endpoints-lan-only-enforcement";
     nodes.router = mkRouterNode {
       extraRouterConfig.dns.profiles.default.denyDomains = [];
-      extraConfig.my.exposure.services.two-face = {
+      extraConfig.my.endpoints.services.two-face = {
         upstream = {
           host = "127.0.0.1";
           port = 8080;
@@ -168,11 +168,11 @@ in {
     '';
   };
 
-  router-exposure-dns-auto = pkgs.testers.runNixOSTest {
-    name = "router-exposure-dns-auto";
+  router-endpoints-dns-auto = pkgs.testers.runNixOSTest {
+    name = "router-endpoints-dns-auto";
     nodes.router = mkRouterNode {
       extraRouterConfig.dns.profiles.default.denyDomains = [];
-      extraConfig.my.exposure.services.auto-dns = {
+      extraConfig.my.endpoints.services.auto-dns = {
         upstream = {
           host = "127.0.0.1";
           port = 80;
@@ -193,11 +193,11 @@ in {
     '';
   };
 
-  router-exposure-extra-config = pkgs.testers.runNixOSTest {
-    name = "router-exposure-extra-config";
+  router-endpoints-extra-config = pkgs.testers.runNixOSTest {
+    name = "router-endpoints-extra-config";
     nodes.router = mkRouterNode {
       extraRouterConfig.dns.profiles.default.denyDomains = [];
-      extraConfig.my.exposure.services.extra-cfg = {
+      extraConfig.my.endpoints.services.extra-cfg = {
         upstream = {
           host = "127.0.0.1";
           port = 8080;
@@ -207,7 +207,7 @@ in {
             domain = "extra.lan.test";
             public = true;
             noAcme = true;
-            extraConfig = "add_header X-Exposure-Test extra-config;";
+            extraConfig = "add_header X-Endpoints-Test extra-config;";
           }
         ];
       };
@@ -224,20 +224,20 @@ in {
       result = router.succeed(
           "curl -sS -I --max-time 5 -H 'Host: extra.lan.test' http://127.0.0.1/"
       )
-      assert "x-exposure-test: extra-config" in result.lower(), f"expected X-Exposure-Test header, got: {result}"
+      assert "x-endpoints-test: extra-config" in result.lower(), f"expected X-Endpoints-Test header, got: {result}"
     '';
   };
 
-  # Regression for the ACME DNS-01 bug: an exposure vhost declaring acmeDns01
+  # Regression for the ACME DNS-01 bug: an endpoint vhost declaring acmeDns01
   # must emit a DNS-01 security.acme.certs entry. Previously the cert loop in
   # router/nginx.nix only iterated router-side vhosts, so acmeDns01 on an
-  # exposure vhost was silently dropped and the vhost fell back to the
+  # endpoint vhost was silently dropped and the vhost fell back to the
   # enableACME=true HTTP-01 default.
-  router-exposure-acme-dns01 = pkgs.testers.runNixOSTest {
-    name = "router-exposure-acme-dns01";
+  router-endpoints-acme-dns01 = pkgs.testers.runNixOSTest {
+    name = "router-endpoints-acme-dns01";
     nodes.router = mkRouterNode {
       extraRouterConfig.dns.profiles.default.denyDomains = [];
-      extraConfig.my.exposure.services.dns01-svc = {
+      extraConfig.my.endpoints.services.dns01-svc = {
         upstream = {
           host = "127.0.0.1";
           port = 8080;
@@ -265,7 +265,7 @@ in {
       # HTTP-01 fallback from enableACME=true never sets it.
       assert "EnvironmentFile=/run/secrets/acme-cloudflare-env" in unit, (
           "acmeDns01.environmentFile missing from cert unit — "
-          "exposure vhost fell back to HTTP-01 (regression)"
+          "endpoint vhost fell back to HTTP-01 (regression)"
       )
 
       # Confirm DNS-01 (lego --dns) rather than HTTP-01 (--http.webroot).

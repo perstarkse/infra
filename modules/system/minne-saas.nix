@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.minne-saas;
@@ -84,8 +84,8 @@
         description = "UDP ports to open for Minne SaaS.";
       };
 
-      exposure =
-        mkStandardExposureOptions {
+      endpoints =
+        mkStandardEndpointOptions {
           subject = "Minne SaaS";
           visibility = "public";
           withRouter = true;
@@ -94,7 +94,7 @@
           demoDomain = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;
-            description = "Optional demo redirect domain for generated Minne SaaS exposure.";
+            description = "Optional demo redirect domain for generated Minne SaaS endpoints.";
           };
         };
     };
@@ -229,18 +229,18 @@
 
       users.groups.minne-saas = {};
 
-      my.exposure.services.minne-saas = lib.mkIf cfg.exposure.enable {
+      my.endpoints.services.minne-saas = lib.mkIf cfg.endpoints.enable {
         upstream = {
           host = cfg.address;
           inherit (cfg) port;
         };
         router = {
-          inherit (cfg.exposure.router) enable targets;
+          inherit (cfg.endpoints.router) enable targets;
         };
         http.virtualHosts =
-          lib.optional (cfg.exposure.domain != null) {
-            inherit (cfg.exposure) domain;
-            inherit (cfg.exposure) public cloudflareProxied;
+          lib.optional (cfg.endpoints.domain != null) {
+            inherit (cfg.endpoints) domain;
+            inherit (cfg.endpoints) public cloudflareProxied;
             websockets = false;
             # Interactive SPA: each page load fires ~40 requests, so any
             # limit_req ceiling serializes real users. Exempt; the demo vhost
@@ -254,13 +254,13 @@
               proxy_cache off;
             '';
           }
-          ++ lib.optional (cfg.exposure.demoDomain != null) {
-            domain = cfg.exposure.demoDomain;
-            inherit (cfg.exposure) public cloudflareProxied;
+          ++ lib.optional (cfg.endpoints.demoDomain != null) {
+            domain = cfg.endpoints.demoDomain;
+            inherit (cfg.endpoints) public cloudflareProxied;
             websockets = false;
             publishDns = false;
             extraConfig = ''
-              return 301 https://${cfg.exposure.domain}$request_uri;
+              return 301 https://${cfg.endpoints.domain}$request_uri;
             '';
           };
         firewall.local = {

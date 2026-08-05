@@ -55,7 +55,7 @@
 in {
   inherit basicAuthSubmodule basicAuthSecretSubmodule acmeDns01Submodule;
 
-  mkStandardExposureOptions = {
+  mkStandardEndpointOptions = {
     subject,
     visibility,
     withRouter ? false,
@@ -66,11 +66,11 @@ in {
     withBasicAuthSecret ? false,
   }:
     {
-      enable = mkEnableOption "publish ${subject} exposure metadata";
+      enable = mkEnableOption "publish ${subject} endpoints metadata";
       domain = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Domain used for generated ${subject} reverse proxy and DNS exposure.";
+        description = "Domain used for generated ${subject} reverse proxy and DNS endpoints.";
       };
     }
     // lib.optionalAttrs (visibility == "internal") {
@@ -82,14 +82,14 @@ in {
       useWildcard = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Wildcard certificate handle for generated reverse proxy exposure.";
+        description = "Wildcard certificate handle for generated reverse proxy endpoints.";
       };
     }
     // lib.optionalAttrs (visibility == "public") {
       public = mkOption {
         type = types.bool;
         default = false;
-        description = "Mark generated ${subject} exposure as intentionally public.";
+        description = "Mark generated ${subject} endpoints as intentionally public.";
       };
       cloudflareProxied = mkOption {
         type = types.bool;
@@ -101,21 +101,21 @@ in {
       acmeDns01 = mkOption {
         type = types.nullOr acmeDns01Submodule;
         default = null;
-        description = "Per-vhost DNS-01 ACME settings for generated ${subject} exposure.";
+        description = "Per-vhost DNS-01 ACME settings for generated ${subject} endpoints.";
       };
     }
     // lib.optionalAttrs (withExtraConfigDefault != null) {
       extraConfig = mkOption {
         type = types.lines;
         default = withExtraConfigDefault;
-        description = "Extra nginx location configuration for generated ${subject} exposure.";
+        description = "Extra nginx location configuration for generated ${subject} endpoints.";
       };
     }
     // lib.optionalAttrs withBasicAuthSecret {
       basicAuthSecret = mkOption {
         type = types.nullOr basicAuthSecretSubmodule;
         default = null;
-        description = "Request router-resolved HTTP Basic Authentication for generated ${subject} exposure.";
+        description = "Request router-resolved HTTP Basic Authentication for generated ${subject} endpoints.";
       };
     }
     // lib.optionalAttrs withRouter {
@@ -124,12 +124,12 @@ in {
           enable = mkOption {
             type = types.bool;
             default = false;
-            description = "Export ${subject} exposure to router importers.";
+            description = "Export ${subject} endpoints to router importers.";
           };
           targets = mkOption {
             type = types.listOf types.str;
             default = [];
-            description = "Routers allowed to import this ${subject} exposure.";
+            description = "Routers allowed to import this ${subject} endpoints.";
           };
         }
         // lib.optionalAttrs withRouterTargetHost {

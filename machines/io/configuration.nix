@@ -5,14 +5,14 @@
   pkgs,
   ...
 }: let
-  exposureLib = ctx.flake.lib.exposure or (import ../../flake/lib/exposure.nix {inherit (pkgs) lib;});
+  endpointsLib = ctx.flake.lib.endpoints or (import ../../flake/lib/endpoints.nix {inherit (pkgs) lib;});
   keepAwakeIdentityFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
-  routerImportCfg = config.my.exposure.routerImports;
+  routerImportCfg = config.my.endpoints.imports;
   routerDefaultDnsTarget =
     if routerImportCfg.defaultDnsTarget != null
     then routerImportCfg.defaultDnsTarget
     else config.routerHelpers.primarySegment.routerIp or "10.0.0.1";
-  routerImportedExposures = exposureLib.mkRouterImportedExposures {
+  routerImportedEndpoints = endpointsLib.mkRouterImportedEndpoints {
     nixosConfigurations = ctx.flake.nixosConfigurations or {};
     inherit routerImportCfg;
     defaultDnsTarget = routerDefaultDnsTarget;
@@ -90,7 +90,7 @@ in {
   };
 
   my = {
-    wake-proxy.exposure = {
+    wake-proxy.endpoints = {
       enable = true;
       domain = "wake.stark.pub";
       public = true;
@@ -154,13 +154,13 @@ in {
       endpointUrl = "http://130.61.55.4:18080/heartbeat";
     };
 
-    frigate.exposure = {
+    frigate.endpoints = {
       enable = true;
       domain = "frigate.lan.stark.pub";
       useWildcard = "lanstark";
     };
 
-    home-assistant.exposure = {
+    home-assistant.endpoints = {
       enable = true;
       domain = "home.lan.stark.pub";
       useWildcard = "lanstark";
@@ -171,7 +171,7 @@ in {
       address = "10.0.0.1";
       baseUrl = "https://ntfy.lan.stark.pub";
       secretName = "ntfy";
-      exposure = {
+      endpoints = {
         enable = true;
         useWildcard = "lanstark";
       };
@@ -181,7 +181,7 @@ in {
       };
     };
 
-    exposure.routerImports = {
+    endpoints.imports = {
       machines = ["makemake"];
       routerName = "io";
       vhostOverrides."makemake.nous" = {
@@ -197,8 +197,8 @@ in {
       vhostOverrides."makemake.request".rateLimit = "exempt";
     };
 
-    exposure.services =
-      routerImportedExposures
+    endpoints.services =
+      routerImportedEndpoints
       // {
         unifi-router = {
           upstream = {
@@ -613,7 +613,7 @@ in {
   security.acme.certs."lan.stark.pub".extraLegoFlags = ["--dns.resolvers=1.1.1.1:53,1.0.0.1:53"];
 
   # invoices.stark.pub — public webhook endpoint for Accounted invoice-inbox
-  # (declared in my.exposure.services.invoices above; ACME DNS-01 flows from
+  # (declared in my.endpoints.services.invoices above; ACME DNS-01 flows from
   # the vhost's acmeDns01). The main accounted app remains LAN-only at
   # accounting.lan.stark.pub.
 
@@ -626,7 +626,7 @@ in {
     declaredDomains = lib.unique (
       (lib.concatLists (lib.mapAttrsToList (_: e:
         map (v: v.domain) e.http.virtualHosts)
-      (lib.filterAttrs (_: e: e.enable) config.my.exposure.services)))
+      (lib.filterAttrs (_: e: e.enable) config.my.endpoints.services)))
       ++ map (v: v.domain) config.my.router.nginx.virtualHosts
     );
     rawVhosts = lib.filterAttrs (name: _: name != "_" && !(lib.elem name declaredDomains)) config.services.nginx.virtualHosts;

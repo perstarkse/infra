@@ -3,7 +3,7 @@ _: {
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.supabase;
@@ -170,7 +170,7 @@ _: {
         description = "GoTrue DISABLE_SIGNUP.";
       };
 
-      exposure = mkStandardExposureOptions {
+      endpoints = mkStandardEndpointOptions {
         subject = "Supabase (Kong)";
         visibility = "internal";
         withRouter = true;
@@ -189,8 +189,8 @@ _: {
           message = "my.supabase requires virtualisation.docker (enable my.docker).";
         }
         {
-          assertion = cfg.exposure.enable -> cfg.exposure.domain != null;
-          message = "my.supabase.exposure.domain must be set when exposure is enabled.";
+          assertion = cfg.endpoints.enable -> cfg.endpoints.domain != null;
+          message = "my.supabase.endpoints.domain must be set when endpoints are enabled.";
         }
       ];
 
@@ -213,8 +213,8 @@ _: {
         };
         script = let
           publicUrl =
-            if cfg.exposure.domain != null
-            then "https://${cfg.exposure.domain}"
+            if cfg.endpoints.domain != null
+            then "https://${cfg.endpoints.domain}"
             else "http://127.0.0.1:${toString cfg.kongPort}";
           redirectUrls = lib.concatStringsSep "," cfg.additionalRedirectUrls;
         in ''
@@ -440,14 +440,14 @@ _: {
         };
       };
 
-      my.exposure.services.supabase = lib.mkIf cfg.exposure.enable {
+      my.endpoints.services.supabase = lib.mkIf cfg.endpoints.enable {
         upstream = {
           host = config.my.listenNetworkAddress;
           port = cfg.kongPort;
         };
-        router = {inherit (cfg.exposure.router) enable targets;};
-        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
-          inherit (cfg.exposure) domain lanOnly useWildcard extraConfig;
+        router = {inherit (cfg.endpoints.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.endpoints.domain != null) {
+          inherit (cfg.endpoints) domain lanOnly useWildcard extraConfig;
         };
       };
     };

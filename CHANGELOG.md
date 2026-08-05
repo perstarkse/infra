@@ -16,14 +16,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **"Exposure" renamed to "endpoints"** (`my.exposure` → `my.endpoints`, `<service>.exposure` → `<service>.endpoints`, `my.exposure.routerImports` → `my.endpoints.imports`, `mkStandardExposureOptions` → `mkStandardEndpointOptions`, `mkRouterImportedExposures` → `mkRouterImportedEndpoints`, `mkExposureManifest` → `mkEndpointManifest`, `exposure-manifest-check` → `endpoints-manifest-check`, `tests/router-exposure.nix` → `tests/router-endpoints.nix`). Compatibility aliases keep the external `private-infra` input (overseerr) working until it is migrated.
+- **Public-domain registry is derived, not maintained**: `my.publicDomains` is now a projection of the endpoints layer (every non-lanOnly vhost, zone-mapped by suffix) plus explicit non-vhost public records (`my.publicDnsRecords`: wg, mail, orebro.politikerstod). io's hand-maintained registry is deleted; a ddclient-scoped lint fails the build if the registry diverges from the derivation, and raw `services.nginx.virtualHosts` writes are confined to an escape hatch asserted to never listen on WAN. sedna reads io's derived registry instead of mirroring it.
+- **Rate limits live on the vhost**: a per-vhost `rateLimit` option (`null` = SPA exemption, `"strict"` = shared public zone, `{rate, burst, nodelay}` = dedicated zone) replaces the router-level `rateLimits` map. minne/nous/politikerstod declare their exemptions in their modules; request (external private-infra module) via router `vhostOverrides.rateLimit`. invoices.stark.pub migrates into the endpoints layer (was a raw nginx vhost); the nous.fyi `/app/` → `/assets/app/` rewrite moves into the nous module.
 - **Heartbeat now goes over the public internet**: io pushes to `http://130.61.55.4:18080/heartbeat` (sedna public IP, port opened in the OCI security list) instead of a ZeroTier IPv6 literal; sedna's receiver binds `0.0.0.0` and the `heartbeat` secret no longer carries a target URL.
-- **Public-domain registry** (`my.publicDomains`): io's ddclient zones are derived from the registry and a build assertion requires every public vhost to be registered; sedna's failover and gatus subsets are asserted against the same registry (catching the ddclient/failover drift). `chat.stark.pub` is LAN-only (removed from the registry, `lanOnly = true`, router local DNS record); `encke.stark.pub` removed from the registry (record deleted at the DNS provider).
 - charon kernel pin moved from `builtins.getFlake` into the locked `nixpkgs-612` input (kernel 6.12.74, offline evals, flake.lock-tracked).
 - paperless backups now write to both Garage and B2 (offsite copy; `restore.backend = "garage"`).
 - OpenWebUI `autoUpdate = false` for the digest-pinned image (no more weekly no-op restart).
 - ariel: dropped the dead wpa_supplicant/`generate-wpa-conf` path and broken `wifi-psk` generator — Wi-Fi is handled by NetworkManager.
 - `subagentOverrides` on charon generated from one `lib.genAttrs` template instead of six copy-pasted blocks.
-- Restricted-port firewall logic consolidated into one `mkRestrictedPortRules` helper (exposure options, politikerstod DB proxy, charon 8504).
+- Restricted-port firewall logic consolidated into one `mkRestrictedPortRules` helper (endpoints options, politikerstod DB proxy, charon 8504).
 - unbound `num-threads` 1 → 2 on the router.
 - Attic push failures are logged to `/var/log/attic-push.log` instead of silently swallowed; restic backup timers get `RandomizedDelaySec` jitter.
 - Workstations charon + ariel stream journals to io's mTLS journal-remote so sshd fail2ban covers them.

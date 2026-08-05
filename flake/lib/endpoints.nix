@@ -1,36 +1,36 @@
 {lib}: let
-  enabledExposuresFor = machineName: machineConfig: let
-    exposures = machineConfig.config.my.exposure.services or {};
-    enabled = lib.filterAttrs (_: exposure: exposure.enable) exposures;
+  enabledEndpointsFor = machineName: machineConfig: let
+    endpoints = machineConfig.config.my.endpoints.services or {};
+    enabled = lib.filterAttrs (_: endpoint: endpoint.enable) endpoints;
   in
-    lib.mapAttrsToList (serviceName: exposure: {
+    lib.mapAttrsToList (serviceName: endpoint: {
       machine = machineName;
       service = serviceName;
-      inherit (exposure) upstream;
-      inherit (exposure) http;
-      inherit (exposure) dns;
-      inherit (exposure) router;
-      inherit (exposure) firewall;
-      inherit (exposure) renderedFrom;
+      inherit (endpoint) upstream;
+      inherit (endpoint) http;
+      inherit (endpoint) dns;
+      inherit (endpoint) router;
+      inherit (endpoint) firewall;
+      inherit (endpoint) renderedFrom;
     })
     enabled;
 
-  mkExposureManifest = nixosConfigurations: let
-    entries = lib.flatten (lib.mapAttrsToList enabledExposuresFor nixosConfigurations);
+  mkEndpointManifest = nixosConfigurations: let
+    entries = lib.flatten (lib.mapAttrsToList enabledEndpointsFor nixosConfigurations);
   in {
     exports = lib.filter (entry: entry.renderedFrom == null) entries;
     rendered = lib.filter (entry: entry.renderedFrom != null) entries;
   };
 
-  mkRouterImportedExposures = {
+  mkRouterImportedEndpoints = {
     nixosConfigurations,
     routerImportCfg,
     defaultDnsTarget,
     routerName ? routerImportCfg.routerName or "",
     resolveBasicAuthSecret ? (_: null),
   }: let
-    routerTargetAllowed = exposure:
-      exposure.router.targets == [] || lib.elem routerName exposure.router.targets;
+    routerTargetAllowed = endpoint:
+      endpoint.router.targets == [] || lib.elem routerName endpoint.router.targets;
 
     applyVhostOverride = machineName: serviceName: vhost: let
       override = routerImportCfg.vhostOverrides."${machineName}.${serviceName}" or {};
@@ -56,8 +56,8 @@
           else overrideRateLimit;
       };
 
-    mkImportedExposure = machineName: serviceName: exposure: let
-      importedVhosts = map (applyVhostOverride machineName serviceName) exposure.http.virtualHosts;
+    mkImportedEndpoint = machineName: serviceName: endpoint: let
+      importedVhosts = map (applyVhostOverride machineName serviceName) endpoint.http.virtualHosts;
     in {
       name = "${machineName}-${serviceName}";
       value = {
@@ -66,36 +66,36 @@
           service = serviceName;
         };
         upstream =
-          exposure.upstream
+          endpoint.upstream
           // {
             host =
-              if exposure.router.targetHost != null
-              then exposure.router.targetHost
+              if endpoint.router.targetHost != null
+              then endpoint.router.targetHost
               else machineName;
           };
         http.virtualHosts = importedVhosts;
         dns.records =
-          exposure.dns.records
+          endpoint.dns.records
           ++ map (vhost: {
             name = vhost.domain;
             target =
-              if exposure.router.dnsTarget != null
-              then exposure.router.dnsTarget
+              if endpoint.router.dnsTarget != null
+              then endpoint.router.dnsTarget
               else defaultDnsTarget;
           })
           (lib.filter (vhost: vhost.publishDns) importedVhosts);
-        inherit (exposure) firewall;
+        inherit (endpoint) firewall;
       };
     };
 
     importsForMachine = machineName: let
       machineConfig = nixosConfigurations.${machineName}.config or {};
-      exposures = machineConfig.my.exposure.services or {};
-      routerExposures = lib.filterAttrs (_: exposure: exposure.enable && exposure.router.enable && routerTargetAllowed exposure) exposures;
+      endpoints = machineConfig.my.endpoints.services or {};
+      routerEndpoints = lib.filterAttrs (_: endpoint: endpoint.enable && endpoint.router.enable && routerTargetAllowed endpoint) endpoints;
     in
-      lib.mapAttrsToList (mkImportedExposure machineName) routerExposures;
+      lib.mapAttrsToList (mkImportedEndpoint machineName) routerEndpoints;
   in
     lib.listToAttrs (lib.concatMap importsForMachine routerImportCfg.machines);
 in {
-  inherit enabledExposuresFor mkExposureManifest mkRouterImportedExposures;
+  inherit enabledEndpointsFor mkEndpointManifest mkRouterImportedEndpoints;
 }

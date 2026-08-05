@@ -11,24 +11,24 @@
     segments = helpers.segments or [];
     routerIp = helpers.primaryRouterIp;
     inherit (cfg) services;
-    exposureServices = lib.filterAttrs (_: exposure: exposure.enable) (config.my.exposure.services or {});
-    exposureDnsRecords = lib.concatLists (lib.mapAttrsToList (_name: exposure:
-      exposure.dns.records
+    endpointServices = lib.filterAttrs (_: endpoint: endpoint.enable) (config.my.endpoints.services or {});
+    endpointDnsRecords = lib.concatLists (lib.mapAttrsToList (_name: endpoint:
+      endpoint.dns.records
       ++ map (vhost: {
         name = vhost.domain;
         target =
           if vhost.targetHost != null
           then vhost.targetHost
-          else exposure.upstream.host;
+          else endpoint.upstream.host;
       })
       (lib.filter (
           vhost:
             vhost.publishDns
-            && !(lib.any (record: record.name == vhost.domain) exposure.dns.records)
+            && !(lib.any (record: record.name == vhost.domain) endpoint.dns.records)
         )
-        exposure.http.virtualHosts))
-    exposureServices);
-    allServices = services ++ exposureDnsRecords;
+        endpoint.http.virtualHosts))
+    endpointServices);
+    allServices = services ++ endpointDnsRecords;
     listenerIps = map (segment: segment.routerIp) segments;
     enabled = cfg.enable && dnsCfg.enable;
     normalizeZone = z:

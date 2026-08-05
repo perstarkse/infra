@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.nous;
@@ -92,8 +92,8 @@
         description = "Open firewall for Nous port";
       };
 
-      exposure =
-        mkStandardExposureOptions {
+      endpoints =
+        mkStandardEndpointOptions {
           subject = "Nous";
           visibility = "public";
           withRouter = true;
@@ -202,15 +202,15 @@
         "d ${cfg.dataDir} 0755 nous nous -"
       ];
 
-      my.exposure.services.nous = lib.mkIf cfg.exposure.enable {
+      my.endpoints.services.nous = lib.mkIf cfg.endpoints.enable {
         upstream = {
           host = cfg.address;
           inherit (cfg) port;
         };
-        router = {inherit (cfg.exposure.router) enable targets;};
-        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
-          inherit (cfg.exposure) domain;
-          inherit (cfg.exposure) public cloudflareProxied extraConfig;
+        router = {inherit (cfg.endpoints.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.endpoints.domain != null) {
+          inherit (cfg.endpoints) domain;
+          inherit (cfg.endpoints) public cloudflareProxied extraConfig;
           websockets = false;
           # Interactive SPA: exempt from limit_req (page loads fire ~40
           # requests; fail2ban still blunts path-based scanners).

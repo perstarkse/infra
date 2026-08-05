@@ -19,7 +19,7 @@
     # vars/per-machine/<machine>/state-version/version/value on every
     # `clan machines update` for no functional benefit in this fleet.
     # Lives in `shared` (not `options`) so offline NixOS tests that import
-    # `options` for `my.exposure`/`my.stateVersion` but stub out `shared`
+    # `options` for `my.endpoints`/`my.stateVersion` but stub out `shared`
     # don't evaluate a `clan.core.settings.*` option that only clan-core
     # (nixos class) declares.
     clan.core.settings.state-version.enable = false;

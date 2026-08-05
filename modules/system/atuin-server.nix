@@ -2,7 +2,7 @@ _: {
   config.flake.nixosModules.atuin-server = {
     config,
     lib,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.atuin-server;
@@ -28,7 +28,7 @@ _: {
         description = "Open firewall for Atuin server port";
       };
 
-      exposure = mkStandardExposureOptions {
+      endpoints = mkStandardEndpointOptions {
         subject = "Atuin server";
         visibility = "internal";
         withRouter = true;
@@ -46,15 +46,15 @@ _: {
         };
       };
 
-      my.exposure.services.atuin-server = lib.mkIf cfg.exposure.enable {
+      my.endpoints.services.atuin-server = lib.mkIf cfg.endpoints.enable {
         upstream = {
           host = cfg.address;
           inherit (cfg) port;
         };
-        router = {inherit (cfg.exposure.router) enable targets;};
-        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
-          inherit (cfg.exposure) domain;
-          inherit (cfg.exposure) lanOnly useWildcard;
+        router = {inherit (cfg.endpoints.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.endpoints.domain != null) {
+          inherit (cfg.endpoints) domain;
+          inherit (cfg.endpoints) lanOnly useWildcard;
         };
         firewall.local = {
           enable = cfg.openFirewall;

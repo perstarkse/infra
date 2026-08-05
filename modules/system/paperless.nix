@@ -3,7 +3,7 @@ _: {
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.paperless;
@@ -131,7 +131,7 @@ _: {
         };
       };
 
-      exposure = mkStandardExposureOptions {
+      endpoints = mkStandardEndpointOptions {
         subject = "Paperless";
         visibility = "internal";
         withRouter = true;
@@ -335,15 +335,15 @@ _: {
         ];
       };
 
-      my.exposure.services.paperless = {
+      my.endpoints.services.paperless = {
         upstream = {
           host = cfg.address;
           inherit (cfg) port;
         };
-        router = {inherit (cfg.exposure.router) enable targets targetHost dnsTarget;};
-        http.virtualHosts = lib.optionals cfg.exposure.enable (lib.optional (cfg.exposure.domain != null) {
-          inherit (cfg.exposure) domain;
-          inherit (cfg.exposure) lanOnly useWildcard extraConfig;
+        router = {inherit (cfg.endpoints.router) enable targets targetHost dnsTarget;};
+        http.virtualHosts = lib.optionals cfg.endpoints.enable (lib.optional (cfg.endpoints.domain != null) {
+          inherit (cfg.endpoints) domain;
+          inherit (cfg.endpoints) lanOnly useWildcard extraConfig;
           websockets = true;
         });
         firewall.local = {

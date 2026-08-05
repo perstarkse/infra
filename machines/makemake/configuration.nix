@@ -77,6 +77,7 @@
     };
 
     privateInfra.overseerr.exposure = {
+      # external private-infra module owns this option name
       enable = true;
       domain = "request.stark.pub";
       public = true;
@@ -228,7 +229,7 @@
       enable = true;
       port = 8322;
       address = "10.0.0.10";
-      exposure = {
+      endpoints = {
         enable = true;
         domain = "vault.lan.stark.pub";
         useWildcard = "lanstark";
@@ -250,7 +251,7 @@
       image = "ghcr.io/open-webui/open-webui@sha256:6a773e5c3a246b65cbe74ce942b294292c0e5f81c138f703d111bc162f7d7c3d";
       autoUpdate = false;
       updateSchedule = "weekly";
-      exposure = {
+      endpoints = {
         enable = true;
         domain = "chat.stark.pub";
         lanOnly = true;
@@ -291,7 +292,7 @@
         "/waitlist"
         "/waitlist/"
       ];
-      exposure = {
+      endpoints = {
         enable = true;
         domain = "minne.stark.pub";
         demoDomain = "minne-demo.stark.pub";
@@ -324,7 +325,7 @@
       bindAddress = "10.0.0.10";
       port = 8081;
       htpasswdFile = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
-      exposure = {
+      endpoints = {
         enable = true;
         domain = "webdav.lan.stark.pub";
         useWildcard = "lanstark";
@@ -341,10 +342,10 @@
     };
 
     # Restrict WebDAV to the router's nginx only (io proxies
-    # webdav.lan.stark.pub → 10.0.0.10:8081). The exposure module emits the
+    # webdav.lan.stark.pub → 10.0.0.10:8081). The endpoints module emits the
     # dual-backend firewall rules (nft extraInputRules + iptables
     # extraCommands) and excludes 8081 from allowedTCPPorts.
-    exposure.services.webdav-garage.firewall.local.allowedSources = ["10.0.0.1"];
+    endpoints.services.webdav-garage.firewall.local.allowedSources = ["10.0.0.1"];
 
     # Nous burnout prevention app
     nous = {
@@ -354,7 +355,7 @@
       dataDir = "/var/lib/nous";
       host = "https://nous.fyi";
       logLevel = "info";
-      exposure = {
+      endpoints = {
         enable = true;
         public = true;
         domain = "nous.fyi";
@@ -390,7 +391,7 @@
           port = 5150;
           host = "https://politikerstod.stark.pub";
           openFirewall = true;
-          exposure = {
+          endpoints = {
             enable = true;
             domain = "politikerstod.stark.pub";
             public = true;
@@ -436,7 +437,7 @@
           port = 5151;
           host = "https://orebro.politikerstod.stark.pub";
           openFirewall = true;
-          exposure = {
+          endpoints = {
             enable = true;
             domain = "orebro.politikerstod.stark.pub";
             public = true;
@@ -481,7 +482,7 @@
       enable = true;
       port = 8888;
       openFirewall = true;
-      exposure = {
+      endpoints = {
         enable = true;
         domain = "atuin.lan.stark.pub";
         useWildcard = "lanstark";
@@ -525,7 +526,7 @@
         };
       };
       tika.enable = true;
-      exposure = {
+      endpoints = {
         enable = true;
         domain = "dokument.lan.stark.pub";
         useWildcard = "lanstark";
@@ -569,7 +570,7 @@
         endpoint = "http://10.0.0.10:3900";
         bucket = "supabase";
       };
-      exposure = {
+      endpoints = {
         enable = true;
         domain = "supabase.lan.stark.pub";
         useWildcard = "lanstark";
@@ -586,7 +587,7 @@
       port = 3050;
       address = "10.0.0.10";
       supabaseUrl = "https://supabase.lan.stark.pub";
-      exposure = {
+      endpoints = {
         enable = true;
         domain = "accounting.lan.stark.pub";
         useWildcard = "lanstark";

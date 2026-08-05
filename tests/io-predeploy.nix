@@ -193,7 +193,7 @@
                 flake = {
                   nixosModules = testNixosModules;
                   lib = {
-                    exposure = import ../flake/lib/exposure.nix {inherit (pkgs) lib;};
+                    endpoints = import ../flake/lib/endpoints.nix {inherit (pkgs) lib;};
                   };
                 };
                 inputs = {

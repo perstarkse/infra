@@ -3,14 +3,14 @@
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.home-assistant;
   in {
     options.my.home-assistant = {
       enable = lib.mkEnableOption "Home Assistant container";
-      exposure = mkStandardExposureOptions {
+      endpoints = mkStandardEndpointOptions {
         subject = "Home Assistant";
         visibility = "internal";
       };
@@ -76,14 +76,14 @@
       };
       hardware.bluetooth.enable = true;
 
-      my.exposure.services.home-assistant = lib.mkIf config.my.home-assistant.exposure.enable {
+      my.endpoints.services.home-assistant = lib.mkIf config.my.home-assistant.endpoints.enable {
         upstream = {
           host = config.my.listenNetworkAddress;
           port = 8123;
         };
-        http.virtualHosts = lib.optional (config.my.home-assistant.exposure.domain != null) {
-          inherit (config.my.home-assistant.exposure) domain;
-          inherit (config.my.home-assistant.exposure) lanOnly useWildcard;
+        http.virtualHosts = lib.optional (config.my.home-assistant.endpoints.domain != null) {
+          inherit (config.my.home-assistant.endpoints) domain;
+          inherit (config.my.home-assistant.endpoints) lanOnly useWildcard;
         };
         firewall.local = {
           enable = true;

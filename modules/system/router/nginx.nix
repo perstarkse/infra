@@ -14,29 +14,29 @@
     internalCidrs = map (segment: segment.subnetCidr) (helpers.segments or []);
     wgSubnet = (cfg.wireguard or {}).subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/${toString ((cfg.wireguard or {}).cidrPrefix or 24)}";
-    exposureServices = lib.filterAttrs (_: exposure: exposure.enable) (config.my.exposure.services or {});
-    exposureVhosts = lib.concatLists (lib.mapAttrsToList (_name: exposure:
+    endpointServices = lib.filterAttrs (_: endpoint: endpoint.enable) (config.my.endpoints.services or {});
+    endpointVhosts = lib.concatLists (lib.mapAttrsToList (_name: endpoint:
       map (vhost: {
         inherit (vhost) domain;
         target =
           if vhost.targetHost != null
           then vhost.targetHost
-          else exposure.upstream.host;
+          else endpoint.upstream.host;
         targetScheme =
           if vhost.targetScheme != null
           then vhost.targetScheme
-          else exposure.upstream.scheme;
+          else endpoint.upstream.scheme;
         port =
           if vhost.targetPort != null
           then toString vhost.targetPort
-          else if exposure.upstream.port != null
-          then toString exposure.upstream.port
+          else if endpoint.upstream.port != null
+          then toString endpoint.upstream.port
           else null;
         inherit (vhost) websockets extraConfig lanOnly cloudflareProxied noAcme useWildcard acmeDns01 basicAuth publishDns rateLimit;
       })
-      exposure.http.virtualHosts)
-    exposureServices);
-    allVirtualHosts = nginxCfg.virtualHosts ++ exposureVhosts;
+      endpoint.http.virtualHosts)
+    endpointServices);
+    allVirtualHosts = nginxCfg.virtualHosts ++ endpointVhosts;
     # Vhosts with a dedicated limit_req zone (vhost.rateLimit set to a spec)
     customRateVhosts = builtins.filter (v: (v.rateLimit or "strict") != "strict" && (v.rateLimit or null) != null) allVirtualHosts;
     # limit_req zone names must be single tokens; domains contain dots
@@ -232,7 +232,7 @@
 
                 limitReqConfig =
                   # Public vhosts are WAN-reachable (same set as the WAN port
-                  # exposure below): cap request rate to blunt brute force and
+                  # endpoints below): cap request rate to blunt brute force and
                   # scraping. LAN-only and WireGuard vhosts stay unlimited.
                   # The strict shared `public` zone keeps nodelay so probes and
                   # auth scans get dropped fast (and fail2ban sees the HTTP
@@ -315,8 +315,8 @@
       };
 
       # Emit DNS-01 certs for every vhost that declares acmeDns01, including
-      # exposure vhosts. Must iterate allVirtualHosts (router + exposure), not
-      # nginxCfg.virtualHosts alone — otherwise an exposure vhost with acmeDns01
+      # endpoint vhosts. Must iterate allVirtualHosts (router + endpoints), not
+      # nginxCfg.virtualHosts alone — otherwise an endpoint vhost with acmeDns01
       # gets enableACME=true (HTTP-01) from the rendering loop but no matching
       # security.acme.certs entry, silently downgrading DNS-01 to HTTP-01.
       security.acme.certs = lib.mkMerge (

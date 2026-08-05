@@ -3,7 +3,7 @@
     config,
     lib,
     pkgs,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.my.openwebui;
@@ -62,7 +62,7 @@
         description = "UDP ports to open for OpenWebUI.";
       };
 
-      exposure = mkStandardExposureOptions {
+      endpoints = mkStandardEndpointOptions {
         subject = "OpenWebUI";
         visibility = "internal";
         withRouter = true;
@@ -109,15 +109,15 @@
         };
       };
 
-      my.exposure.services.openwebui = lib.mkIf cfg.exposure.enable {
+      my.endpoints.services.openwebui = lib.mkIf cfg.endpoints.enable {
         upstream = {
           host = config.my.listenNetworkAddress;
           inherit (cfg) port;
         };
-        router = {inherit (cfg.exposure.router) enable targets;};
-        http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
-          inherit (cfg.exposure) domain;
-          inherit (cfg.exposure) lanOnly useWildcard;
+        router = {inherit (cfg.endpoints.router) enable targets;};
+        http.virtualHosts = lib.optional (cfg.endpoints.domain != null) {
+          inherit (cfg.endpoints) domain;
+          inherit (cfg.endpoints) lanOnly useWildcard;
         };
         firewall.local = {
           enable = cfg.firewallTcpPorts != [] || cfg.firewallUdpPorts != [];

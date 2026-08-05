@@ -2,29 +2,29 @@
   config.flake.nixosModules.wake-proxy = {
     config,
     lib,
-    mkStandardExposureOptions,
+    mkStandardEndpointOptions,
     ...
   }: let
     cfg = config.services.wakeproxy;
-    exposureCfg = config.my.wake-proxy.exposure;
+    endpointsCfg = config.my.wake-proxy.endpoints;
   in {
     imports = [inputs.wol-web-proxy.nixosModules.wake-proxy];
 
-    options.my.wake-proxy.exposure = mkStandardExposureOptions {
+    options.my.wake-proxy.endpoints = mkStandardEndpointOptions {
       subject = "wake-proxy";
       visibility = "public";
       withAcmeDns01 = true;
     };
 
-    config = lib.mkIf (cfg.enable && exposureCfg.enable) {
-      my.exposure.services.wake-proxy = {
+    config = lib.mkIf (cfg.enable && endpointsCfg.enable) {
+      my.endpoints.services.wake-proxy = {
         upstream = {
           host = cfg.listenAddress;
           inherit (cfg) port;
         };
-        http.virtualHosts = lib.optional (exposureCfg.domain != null) {
-          inherit (exposureCfg) domain;
-          inherit (exposureCfg) public cloudflareProxied acmeDns01;
+        http.virtualHosts = lib.optional (endpointsCfg.domain != null) {
+          inherit (endpointsCfg) domain;
+          inherit (endpointsCfg) public cloudflareProxied acmeDns01;
           websockets = true;
         };
       };

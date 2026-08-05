@@ -100,7 +100,7 @@
         };
         # Skip restic backends in VM (no b2/garage-s3 shared secrets).
         backup.enable = false;
-        exposure = {
+        endpoints = {
           enable = true;
           domain = "supabase.lan.stark.pub";
           useWildcard = "lanstark";
@@ -117,7 +117,7 @@
         port = 3050;
         address = "127.0.0.1";
         supabaseUrl = "https://supabase.lan.stark.pub";
-        exposure = {
+        endpoints = {
           enable = true;
           domain = "accounting.lan.stark.pub";
           useWildcard = "lanstark";
@@ -160,7 +160,7 @@ in {
       machine.wait_for_unit("docker.service")
       machine.wait_for_unit("garage.service")
 
-      # --- exposure metadata ---
+      # --- endpoints metadata ---
       machine.succeed("test -n \"$(systemctl cat supabase-stack.service)\"")
       machine.succeed("test -n \"$(systemctl cat accounted-stack.service)\"")
       machine.succeed("test -n \"$(systemctl cat accounted-migrate.service)\"")
@@ -268,7 +268,7 @@ in {
           "--services | grep -qx cron"
       )
 
-      # --- Exposure domains present in rendered runtime env ---
+      # --- Endpoints domains present in rendered runtime env ---
       machine.succeed("grep -q supabase.lan.stark.pub /var/lib/supabase/stack/.env")
       machine.succeed("grep -q accounting.lan.stark.pub /var/lib/accounted/stack/.env")
       machine.succeed(
