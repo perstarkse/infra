@@ -88,6 +88,7 @@
 
   maintenanceNode = lib.recursiveUpdate nodeBase {
     imports = [
+      nixosModules.options
       nixosModules.sedna-failover
       secretsStubModule
     ];

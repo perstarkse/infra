@@ -13,8 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Orphaned artifacts: `wallpaper-1.jpg`/`wallpaper-2.jpg` (~6.7 MB), commented swaybg/wallpaper blocks, io `secrets.declarations = []`, commented tunnel/allowReadAccess/devenv blocks, stale hw-config comments.
 - **IPv6 from the LAN**: router ULA/RA/PD advertisement, AAAA local-data, `[ula]::1` blocky listener, per-segment ip6 firewall rules, ip6 DoT upstreams, ULA64 nginx allow rules, `natV6` table, garage `s3_web` (port 3902), the IPv6 heartbeat URL normalization, and the IPv6-branch of the restricted-port firewall helper. `filterAaaa` stays on; the ip6 input table now only guards the router's own v6 (ZeroTier/link-local).
 - `my.router.ipv6.ulaPrefix` option, router compat aliases (`lanSubnet`/`lanCidr`/`routerIp`/`lanInterface`/`lanPorts`), `routerAccessLevel = "full"` alias, and the unused `dnsFailover.ioPublicIp` option.
+- kube-test.lan.stark.pub router entries on io (DNS service record + nginx vhost) — dead test-cluster vhost, nothing behind it.
+- makemake `networking.firewall.allowedTCPPorts = [8088]` — no listener on 8088 (verified via `ss` on the live machine).
+- machines/sedna heartbeat-receiver hardening override — moved into the heartbeat module (see Changed).
 
 ### Changed
+
+- **Shared systemd hardening helper** (`mkHardenedServiceConfig` via `_module.args`, options.nix): the 16-line lockdown that sedna's heartbeat-receiver and failover-check duplicated is now one function; the heartbeat receiver's hardening moved into `heartbeat.nix` where the unit is defined (machine config no longer reaches into a module-owned unit). Effective service configs byte-identical (eval-verified).
+- sedna-failover/revert scripts: the identical `--dry-run` parsing + token-loading preamble (~25 lines) is now one `scriptPreamble` string shared by both scripts; generated scripts unchanged (drill VM tests pass).
 
 - **Machine configs trimmed of set-to-default and dead values** (review-driven): io drops ~80 lines restating router-module defaults (dhcp ranges/timers, dns upstreams/profiles, wan interface, fail2ban jail defaults, zerotier access level, casting segment, empty portForwards, default dns.profiles); makemake drops ~30 lines of service-option defaults (surrealdb, minne-saas, nous, vaultwarden, garage, attic-cache, supabase, accounted, accounted-ocr, openwebui schedule); charon/ariel drop gui/auto-suspend/powerManagement/wakeOnLan defaults and stale comments; sedna drops dead failover/heartbeat options and merges duplicate read-access grants; charon disko.nix loses commented-out disk blocks. No behavior change anywhere (each deletion verified against the module default).
 

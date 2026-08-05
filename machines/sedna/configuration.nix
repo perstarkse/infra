@@ -283,32 +283,6 @@ in {
     };
   };
 
-  systemd.services.heartbeat-receiver.serviceConfig = {
-    CapabilityBoundingSet = "";
-    LockPersonality = true;
-    MemoryDenyWriteExecute = true;
-    NoNewPrivileges = true;
-    PrivateDevices = true;
-    PrivateTmp = true;
-    StateDirectory = "heartbeat";
-    StateDirectoryMode = "0755";
-    ProtectClock = true;
-    ProtectControlGroups = true;
-    ProtectHome = true;
-    ProtectHostname = true;
-    ProtectKernelLogs = true;
-    ProtectKernelModules = true;
-    ProtectKernelTunables = true;
-    ProtectSystem = "strict";
-    RestrictAddressFamilies = [
-      "AF_INET"
-    ];
-    RestrictNamespaces = true;
-    RestrictRealtime = true;
-    SystemCallArchitectures = "native";
-    UMask = "0022";
-  };
-
   # Keep failover/gatus domain subsets in sync with io's derived registry.
   assertions = [
     {

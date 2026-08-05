@@ -647,10 +647,6 @@
     '';
   };
 
-  networking = {
-    firewall.allowedTCPPorts = [8088];
-  };
-
   # Centralized logging to router for fail2ban
   # Mail brute-force protection: SMTP/IMAP terminate on makemake, so the
   # postfix/dovecot jails run here against the local journal (the router's

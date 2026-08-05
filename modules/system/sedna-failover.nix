@@ -3,6 +3,7 @@ _: {
     config,
     lib,
     pkgs,
+    mkHardenedServiceConfig,
     ...
   }: let
     cfg = config.my.sedna-failover;
@@ -10,6 +11,36 @@ _: {
     tokenFile = cfg.dnsFailover.cloudflareApiTokenFile;
     apiBaseUrl = cfg.dnsFailover.cloudflareApiBaseUrl;
     tlsTokenFile = cfg.tls.cloudflareApiTokenFile;
+
+    # Shared preamble for the failover/revert scripts: strict mode, --dry-run
+    # parsing, and token loading are identical in both.
+    scriptPreamble = ''
+      set -euo pipefail
+
+      DRY_RUN=0
+      for arg in "$@"; do
+        case "$arg" in
+          --dry-run) DRY_RUN=1 ;;
+          *)
+            echo "ERROR: unknown argument: $arg" >&2
+            exit 1
+            ;;
+        esac
+      done
+
+      CF_API_TOKEN_FILE="${tokenFile}"
+      if [ ! -f "$CF_API_TOKEN_FILE" ]; then
+        echo "ERROR: Cloudflare API token file not found at $CF_API_TOKEN_FILE" >&2
+        echo "Create the file or configure my.sedna-failover.dnsFailover.cloudflareApiTokenFile" >&2
+        exit 1
+      fi
+      CF_RAW="$(cat "$CF_API_TOKEN_FILE")"
+      # Strip KEY=VALUE prefix if present (systemd EnvironmentFile format)
+      case "$CF_RAW" in
+        *_TOKEN=*|*_KEY=*) CF_TOKEN="''${CF_RAW#*=}" ;;
+        *) CF_TOKEN="$CF_RAW" ;;
+      esac
+    '';
     allDomains = lib.concatLists (map (zone: zone.domains) cfg.dnsFailover.zones);
     uniqueZones = lib.unique (map (zone: zone.zone) cfg.dnsFailover.zones);
     domainZoneMap = lib.flatten (map (zone:
@@ -187,31 +218,7 @@ _: {
 
     # Cloudflare DNS update script (failover: point domains → Sedna)
     dnsFailoverScript = pkgs.writeShellScript "cloudflare-dns-failover" ''
-      set -euo pipefail
-
-      DRY_RUN=0
-      for arg in "$@"; do
-        case "$arg" in
-          --dry-run) DRY_RUN=1 ;;
-          *)
-            echo "ERROR: unknown argument: $arg" >&2
-            exit 1
-            ;;
-        esac
-      done
-
-      CF_API_TOKEN_FILE="${tokenFile}"
-      if [ ! -f "$CF_API_TOKEN_FILE" ]; then
-        echo "ERROR: Cloudflare API token file not found at $CF_API_TOKEN_FILE" >&2
-        echo "Create the file or configure my.sedna-failover.dnsFailover.cloudflareApiTokenFile" >&2
-        exit 1
-      fi
-      CF_RAW="$(cat "$CF_API_TOKEN_FILE")"
-      # Strip KEY=VALUE prefix if present (systemd EnvironmentFile format)
-      case "$CF_RAW" in
-        *_TOKEN=*|*_KEY=*) CF_TOKEN="''${CF_RAW#*=}" ;;
-        *) CF_TOKEN="$CF_RAW" ;;
-      esac
+      ${scriptPreamble}
       SEDNA_IP="${cfg.dnsFailover.sednaPublicIp}"
       STATE_FILE="/var/lib/sedna-failover/dns-state.json"
 
@@ -289,30 +296,7 @@ _: {
 
     # Cloudflare DNS revert script (point domains back to original IPs)
     dnsRevertScript = pkgs.writeShellScript "cloudflare-dns-revert" ''
-      set -euo pipefail
-
-      DRY_RUN=0
-      for arg in "$@"; do
-        case "$arg" in
-          --dry-run) DRY_RUN=1 ;;
-          *)
-            echo "ERROR: unknown argument: $arg" >&2
-            exit 1
-            ;;
-        esac
-      done
-
-      CF_API_TOKEN_FILE="${tokenFile}"
-      if [ ! -f "$CF_API_TOKEN_FILE" ]; then
-        echo "ERROR: Cloudflare API token file not found at $CF_API_TOKEN_FILE" >&2
-        exit 1
-      fi
-      CF_RAW="$(cat "$CF_API_TOKEN_FILE")"
-      # Strip KEY=VALUE prefix if present (systemd EnvironmentFile format)
-      case "$CF_RAW" in
-        *_TOKEN=*|*_KEY=*) CF_TOKEN="''${CF_RAW#*=}" ;;
-        *) CF_TOKEN="$CF_RAW" ;;
-      esac
+      ${scriptPreamble}
       STATE_FILE="/var/lib/sedna-failover/dns-state.json"
 
       if [ ! -f "$STATE_FILE" ]; then
@@ -674,37 +658,16 @@ _: {
           description = "Check IO heartbeat and trigger Cloudflare DNS failover if needed";
           after = ["network-online.target"];
           wants = ["network-online.target"];
-          serviceConfig = {
-            Type = "oneshot";
-            User = "failover-check";
-            Group = "failover-check";
-            StateDirectory = "sedna-failover";
-            StateDirectoryMode = "0755";
-            ExecStart = healthCheckScript;
-            CapabilityBoundingSet = "";
-            LockPersonality = true;
-            MemoryDenyWriteExecute = true;
-            NoNewPrivileges = true;
-            PrivateDevices = true;
-            PrivateTmp = true;
-            ProtectClock = true;
-            ProtectControlGroups = true;
-            ProtectHome = true;
-            ProtectHostname = true;
-            ProtectKernelLogs = true;
-            ProtectKernelModules = true;
-            ProtectKernelTunables = true;
-            ProtectSystem = "full";
-            RestrictAddressFamilies = [
-              "AF_INET"
-              "AF_INET6"
-              "AF_UNIX"
-            ];
-            RestrictNamespaces = true;
-            RestrictRealtime = true;
-            SystemCallArchitectures = "native";
-            UMask = "0077";
-          };
+          serviceConfig =
+            {
+              Type = "oneshot";
+              User = "failover-check";
+              Group = "failover-check";
+              ExecStart = healthCheckScript;
+            }
+            // mkHardenedServiceConfig {
+              stateDirectory = "sedna-failover";
+            };
         };
 
         systemd.timers.failover-check = {

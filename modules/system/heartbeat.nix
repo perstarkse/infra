@@ -3,6 +3,7 @@ _: {
     config,
     lib,
     pkgs,
+    mkHardenedServiceConfig,
     ...
   }: let
     cfg = config.my.heartbeat;
@@ -316,15 +317,22 @@ _: {
           wantedBy = ["multi-user.target"];
           after = ["network-online.target"];
           wants = ["network-online.target"];
-          serviceConfig = {
-            Type = "simple";
-            User = cfg.receiver.user;
-            Group = cfg.receiver.group;
-            EnvironmentFile = [envFile];
-            ExecStart = "${pkgs.python3}/bin/python3 ${receiverScript}";
-            Restart = "always";
-            RestartSec = "2s";
-          };
+          serviceConfig =
+            {
+              Type = "simple";
+              User = cfg.receiver.user;
+              Group = cfg.receiver.group;
+              EnvironmentFile = [envFile];
+              ExecStart = "${pkgs.python3}/bin/python3 ${receiverScript}";
+              Restart = "always";
+              RestartSec = "2s";
+            }
+            // mkHardenedServiceConfig {
+              stateDirectory = "heartbeat";
+              protectSystem = "strict";
+              restrictAddressFamilies = ["AF_INET"];
+              umask = "0022";
+            };
         };
 
         services.gatus.settings = {

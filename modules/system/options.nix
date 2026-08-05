@@ -54,6 +54,40 @@
       );
     };
 
+    # Shared systemd hardening for single-purpose service units (sedna's
+    # heartbeat receiver and failover check run the same lockdown; they differ
+    # only in StateDirectory, ProtectSystem strictness, allowed address
+    # families, and umask).
+    mkHardenedServiceConfig = {
+      stateDirectory,
+      stateDirectoryMode ? "0755",
+      protectSystem ? "full",
+      restrictAddressFamilies ? ["AF_INET" "AF_INET6" "AF_UNIX"],
+      umask ? "0077",
+    }: {
+      CapabilityBoundingSet = "";
+      LockPersonality = true;
+      MemoryDenyWriteExecute = true;
+      NoNewPrivileges = true;
+      PrivateDevices = true;
+      PrivateTmp = true;
+      StateDirectory = stateDirectory;
+      StateDirectoryMode = stateDirectoryMode;
+      ProtectClock = true;
+      ProtectControlGroups = true;
+      ProtectHome = true;
+      ProtectHostname = true;
+      ProtectKernelLogs = true;
+      ProtectKernelModules = true;
+      ProtectKernelTunables = true;
+      ProtectSystem = protectSystem;
+      RestrictAddressFamilies = restrictAddressFamilies;
+      RestrictNamespaces = true;
+      RestrictRealtime = true;
+      SystemCallArchitectures = "native";
+      UMask = umask;
+    };
+
     nftRestrictedRules = lib.concatStringsSep "\n" (map (
         entry:
           (mkRestrictedPortRules {
@@ -456,6 +490,7 @@
       {
         _module.args.mkStandardEndpointsOptions = mkStandardEndpointsOptions;
         _module.args.mkRestrictedPortRules = mkRestrictedPortRules;
+        _module.args.mkHardenedServiceConfig = mkHardenedServiceConfig;
       }
       {
         networking.enableIPv6 = true;

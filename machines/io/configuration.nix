@@ -418,10 +418,6 @@ in {
           name = "mail.stark.pub";
           target = "10.0.0.10";
         }
-        {
-          name = "kube-test.lan.stark.pub";
-          target = "10.0.0.1";
-        }
       ];
 
       dhcp = {
@@ -484,16 +480,7 @@ in {
         # Interactive SPA apps (minne, nous, politikerstod, request) declare
         # rateLimit = null on their vhosts (see the service modules); the
         # strict `public` limit_req zone applies to every other public vhost.
-        virtualHosts = [
-          {
-            domain = "kube-test.lan.stark.pub";
-            target = "10.0.0.10";
-            port = 80;
-            websockets = false;
-            useWildcard = "lanstark";
-            lanOnly = true;
-          }
-        ];
+        virtualHosts = [];
       };
 
       casting = {
