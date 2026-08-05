@@ -32,11 +32,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Sedna failover drill** (`nix run .#failover-drill`): dry-run mode simulates heartbeat loss in the `sedna-failover` NixOS test harness and shows the exact Cloudflare API sequence (record lookups + would-be PATCH payloads) with zero PATCH requests and no `dns-state.json` mutation; `--broken-token` mode verifies a missing or invalid Cloudflare token fails loudly. The failover/revert scripts gained a `--dry-run` flag (read-only: GETs only, no state writes) and the health check passes it through.
+
 - DigiKey MCP server (`digikey-mcp` flake input) wired into the charon pi-agent MCP config: product sourcing tools (search, details, pricing, substitutions, media, manufacturers, categories, plus a `build_fastadd_url` cart helper) via DigiKey API v4 two-legged OAuth. Default locale is digikey.se (`SE`/`sv`/`SEK`) — DigiKey has no cart API, so cart population goes through the site-specific FastAdd browser URL. Secrets via `vars/generators/digikey.nix` clan vars (`client_id`, `client_secret`).
 - Charon pi-agent `digikey` MCP config extended for the MyLists API v1 tools (3-legged OAuth): `DIGIKEY_CALLBACK_URL=https://localhost:8139/digikey_callback` (must match the app's registered OAuth Callback URL; app also needs a MyLists subscription) and `DIGIKEY_TOKEN_STORE=/home/p/.local/state/digikey-mcp/tokens.json` (runtime consent state, mode 0600; a one-time `mylists_authorize` consent is required before list tools work).
 - digikey-mcp `AGENTS.md` agent runbook (gateway connect via the `connect` key, the 60 s backoff, the consent flow — Cloudflare blocks automation, the account owner opens the URL in their own browser on charon — and list CRUD/secrets hygiene), plus MyLists response shapes fixed against the live API (bump to `6051fd7`).
 
 ### Fixed
+
+- sedna failover: a missing Cloudflare token file now fails the health check loudly (non-zero exit) instead of exiting 0 silently, so a secret-provisioning failure can no longer disable DNS failover during an outage without any alert.
 
 - Heartbeat receiver: timestamp file is now written atomically (temp file + rename) with a trailing newline, so concurrent pushes or a reader mid-write can never observe a torn/concatenated timestamp, and `cat` output is newline-terminated.
 - Workstation journal forwarding (charon/ariel): a first-time catch-up upload exceeds journal-remote's ~770 MiB per-session cap (`413 Payload too large`) and crash-loops the uploader. Onboard new clients by seeding `/var/lib/systemd/journal-upload/state` with the journal-tail cursor so upload starts from live entries (E6 only needs real-time visibility).

@@ -123,6 +123,73 @@
       '';
     };
 
+    # Run the sedna Cloudflare-DNS failover drill in a NixOS VM test.
+    failoverDrillScript = pkgs.writeShellApplication {
+      name = "failover-drill";
+      runtimeInputs = [pkgs.nix];
+      text = ''
+        set -euo pipefail
+
+        if [ ! -f flake.nix ]; then
+          echo "ERROR: run failover-drill from the infra repo root" >&2
+          exit 1
+        fi
+
+        MODE="dry-run"
+
+        show_usage() {
+          local exit_code="''${1:-1}"
+          echo "Usage: failover-drill [--dry-run|--broken-token]"
+          echo ""
+          echo "Run the sedna Cloudflare-DNS failover drill in a NixOS VM test."
+          echo ""
+          echo "Modes:"
+          echo "  --dry-run       Simulate heartbeat loss and show the exact Cloudflare"
+          echo "                  API sequence with --dry-run; asserts no DNS change and"
+          echo "                  no state file mutation"
+          echo "  --broken-token  Verify a broken Cloudflare token fails loudly instead of"
+          echo "                  silently (missing token file and invalid token)"
+          echo ""
+          echo "A live mode against a scratch Cloudflare zone is not wired yet: it needs a"
+          echo "scratch zone and a token scoped to it (see tests/sedna-failover.nix)."
+          exit "$exit_code"
+        }
+
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            -h|--help)
+              show_usage 0
+              ;;
+            --dry-run)
+              MODE="dry-run"
+              shift
+              ;;
+            --broken-token)
+              MODE="broken-token"
+              shift
+              ;;
+            *)
+              echo "Unknown option: $1" >&2
+              show_usage 2
+              ;;
+          esac
+        done
+
+        case "$MODE" in
+          dry-run)
+            echo "==> Failover drill: dry-run (heartbeat loss simulation, no state mutation)"
+            nix build --no-link -L "path:.#checks.${system}.sedna-failover-drill-dry-run"
+            ;;
+          broken-token)
+            echo "==> Failover drill: broken token (must fail loudly, not silently)"
+            nix build --no-link -L "path:.#checks.${system}.sedna-failover-drill-broken-token"
+            ;;
+        esac
+
+        echo "==> Failover drill passed"
+      '';
+    };
+
     localCheckTargets = {
       endpoints-manifest-check = endpointsManifestCheck;
       router-checks = mkCheckBundle "router-checks" routerChecks;
@@ -823,7 +890,14 @@
         machine-update-plan = machineUpdatePlanScript;
         machine-update = machineUpdateScript;
         endpoints-list = endpointsListScript;
+        failover-drill = failoverDrillScript;
       };
+
+    apps.failover-drill = {
+      type = "app";
+      program = "${failoverDrillScript}/bin/failover-drill";
+      meta.description = "Run the sedna Cloudflare-DNS failover drill (dry-run or broken-token) in a NixOS VM test";
+    };
 
     checks =
       {inherit endpointsManifestCheck;}

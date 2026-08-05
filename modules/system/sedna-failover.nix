@@ -189,11 +189,22 @@ _: {
     dnsFailoverScript = pkgs.writeShellScript "cloudflare-dns-failover" ''
       set -euo pipefail
 
+      DRY_RUN=0
+      for arg in "$@"; do
+        case "$arg" in
+          --dry-run) DRY_RUN=1 ;;
+          *)
+            echo "ERROR: unknown argument: $arg" >&2
+            exit 1
+            ;;
+        esac
+      done
+
       CF_API_TOKEN_FILE="${tokenFile}"
       if [ ! -f "$CF_API_TOKEN_FILE" ]; then
-        echo "ERROR: Cloudflare API token file not found at $CF_API_TOKEN_FILE"
-        echo "Create the file or configure my.sedna-failover.dnsFailover.cloudflareApiTokenFile"
-        exit 0
+        echo "ERROR: Cloudflare API token file not found at $CF_API_TOKEN_FILE" >&2
+        echo "Create the file or configure my.sedna-failover.dnsFailover.cloudflareApiTokenFile" >&2
+        exit 1
       fi
       CF_RAW="$(cat "$CF_API_TOKEN_FILE")"
       # Strip KEY=VALUE prefix if present (systemd EnvironmentFile format)
@@ -204,8 +215,10 @@ _: {
       SEDNA_IP="${cfg.dnsFailover.sednaPublicIp}"
       STATE_FILE="/var/lib/sedna-failover/dns-state.json"
 
-      mkdir -p "$(dirname "$STATE_FILE")"
-      echo "[]" > "$STATE_FILE.tmp"
+      if [ "$DRY_RUN" = "0" ]; then
+        mkdir -p "$(dirname "$STATE_FILE")"
+        echo "[]" > "$STATE_FILE.tmp"
+      fi
 
       ${lib.concatMapStringsSep "\n" ({
           zone,
@@ -238,6 +251,11 @@ _: {
               continue
             fi
 
+            if [ "$DRY_RUN" = "1" ]; then
+              echo "  [dry-run] would PATCH $domain → $SEDNA_IP (record $record_id, original $current_ip, proxied $proxied)"
+              continue
+            fi
+
             # Save original IP for revert
             ${pkgs.jq}/bin/jq --arg d "$domain" --arg ip "$current_ip" --arg prox "$proxied" \
               '. += [{"domain": $d, "original_ip": $ip, "original_proxied": $prox}]' \
@@ -261,18 +279,33 @@ _: {
         '')
         cfg.dnsFailover.zones}
 
-      mv "$STATE_FILE.tmp" "$STATE_FILE"
-      echo "=== Failover complete ==="
+      if [ "$DRY_RUN" = "1" ]; then
+        echo "=== Dry-run complete (no DNS changes made) ==="
+      else
+        mv "$STATE_FILE.tmp" "$STATE_FILE"
+        echo "=== Failover complete ==="
+      fi
     '';
 
     # Cloudflare DNS revert script (point domains back to original IPs)
     dnsRevertScript = pkgs.writeShellScript "cloudflare-dns-revert" ''
       set -euo pipefail
 
+      DRY_RUN=0
+      for arg in "$@"; do
+        case "$arg" in
+          --dry-run) DRY_RUN=1 ;;
+          *)
+            echo "ERROR: unknown argument: $arg" >&2
+            exit 1
+            ;;
+        esac
+      done
+
       CF_API_TOKEN_FILE="${tokenFile}"
       if [ ! -f "$CF_API_TOKEN_FILE" ]; then
-        echo "ERROR: Cloudflare API token file not found at $CF_API_TOKEN_FILE"
-        exit 0
+        echo "ERROR: Cloudflare API token file not found at $CF_API_TOKEN_FILE" >&2
+        exit 1
       fi
       CF_RAW="$(cat "$CF_API_TOKEN_FILE")"
       # Strip KEY=VALUE prefix if present (systemd EnvironmentFile format)
@@ -325,6 +358,11 @@ _: {
               continue
             fi
 
+            if [ "$DRY_RUN" = "1" ]; then
+              echo "  [dry-run] would revert $domain → $original_ip (record $record_id, proxied $original_proxied)"
+              continue
+            fi
+
             # Revert DNS record to original IP
             update_resp=$(${pkgs.curl}/bin/curl -fsS -X PATCH \
               -H "Authorization: Bearer $CF_TOKEN" \
@@ -342,14 +380,29 @@ _: {
         '')
         cfg.dnsFailover.zones}
 
-      # Clear state file after successful revert
-      rm -f "$STATE_FILE"
-      echo "=== Revert complete ==="
+      if [ "$DRY_RUN" = "1" ]; then
+        echo "=== Dry-run complete (no DNS changes made) ==="
+      else
+        # Clear state file after successful revert
+        rm -f "$STATE_FILE"
+        echo "=== Revert complete ==="
+      fi
     '';
 
     # Heartbeat health check script
     healthCheckScript = pkgs.writeShellScript "failover-health-check" ''
       set -euo pipefail
+
+      DRY_RUN_ARGS=""
+      for arg in "$@"; do
+        case "$arg" in
+          --dry-run) DRY_RUN_ARGS="--dry-run" ;;
+          *)
+            echo "ERROR: unknown argument: $arg" >&2
+            exit 1
+            ;;
+        esac
+      done
 
       STATE_FILE="/var/lib/sedna-failover/dns-state.json"
       HEARTBEAT_TIMEOUT_SECONDS=$(( ${toString cfg.dnsFailover.heartbeatTimeoutMinutes} * 60 ))
@@ -374,11 +427,13 @@ _: {
         if cfg.dnsFailover.skipDnsRevert
         then ''
           echo "skipDnsRevert enabled: clearing failover state, letting ddclient on IO restore DNS."
-          rm -f "$STATE_FILE"
+          if [ -z "$DRY_RUN_ARGS" ]; then
+            rm -f "$STATE_FILE"
+          fi
         ''
         else ''
           echo "Reverting DNS to original IPs..."
-          exec ${dnsRevertScript}
+          exec ${dnsRevertScript} $DRY_RUN_ARGS
         ''
       }
           else
@@ -387,7 +442,7 @@ _: {
         else
           echo "IO heartbeat lost! Triggering failover..."
           if [ "$IN_FAILOVER" = "false" ]; then
-            exec ${dnsFailoverScript}
+            exec ${dnsFailoverScript} $DRY_RUN_ARGS
           else
             echo "Already in failover mode. Nothing to do."
           fi
@@ -396,7 +451,7 @@ _: {
         echo "WARNING: Heartbeat timestamp file not found at $TIMESTAMP_FILE"
         echo "No heartbeat ever recorded. Assuming IO is down."
         if [ "$IN_FAILOVER" = "false" ]; then
-          exec ${dnsFailoverScript}
+          exec ${dnsFailoverScript} $DRY_RUN_ARGS
         else
           echo "Already in failover mode. Nothing to do."
         fi
