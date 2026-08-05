@@ -515,6 +515,14 @@ in {
     };
   };
 
+  # Headless router: no local console, and the privileged UniFi container
+  # shares the host /dev/tty1 device node (the UniFi image's systemd touches
+  # it during boot, killing the host agetty). Without getty there is no
+  # restart loop and no spurious degraded state. Both getty@tty1 and the
+  # systemd autovt wrapper need disabling.
+  systemd.services."getty@tty1".enable = false;
+  systemd.services."autovt@tty1".enable = false;
+
   # Wildcard *.lan.stark.pub ACME renewal: the router's own resolver
   # (blocky→unbound, lan.stark.pub is a static local zone) answers NODATA for
   # _acme-challenge.lan.stark.pub, so lego's DNS-01 propagation check would

@@ -48,6 +48,7 @@ _: {
     runtimeUnitName = "unifi-os-runtime";
     updaterUnitName = "uosserver-updater";
     prepareUnitName = "unifi-os-prepare";
+    recoverUnitName = "unifi-os-recover";
     networkUnitName = "unifi-os-macvlan-network";
     discoveryHelperBridgeUnitName = "unifi-os-discovery-helper-bridge";
     supervisorBridgeUnitName = "unifi-os-supervisor-bridge";
@@ -763,6 +764,14 @@ _: {
             path = runtimePath;
             serviceConfig = {
               ExecStart = "${cfg.runtimeDir}/uosserver-service";
+              # The UniFi container ignores SIGTERM, so a plain unit stop would
+              # hang until the SIGKILL timeout and leave podman's state stale
+              # (conmon dies before reporting the exit — the "Up" zombie).
+              # podman stop manages the state transition instead: the container
+              # is SIGKILLed after 30s but marked Exited cleanly, so the
+              # supervisor can restart it. Failure is tolerated (the container
+              # may already be gone).
+              ExecStop = "-/usr/bin/podman stop --time 30 ${lib.escapeShellArg cfg.container.name}";
               Restart = "always";
               RestartSec = 2;
               User = "root";
@@ -771,7 +780,55 @@ _: {
               Environment = runtimeEnvironment;
             };
           };
+
+          ${recoverUnitName} = {
+            description = "Recreate UniFi OS container from stale runtime state";
+            path = runtimePath ++ [pkgs.systemd pkgs.coreutils];
+            serviceConfig = {
+              Type = "oneshot";
+            };
+            script = ''
+              set -euo pipefail
+
+              # Nothing to do when the container does not exist; unifi-os-prepare
+              # creates it at boot and the runtime supervisor starts it.
+              if ! /usr/bin/podman container exists ${lib.escapeShellArg cfg.container.name} 2>/dev/null; then
+                exit 0
+              fi
+
+              # Nothing to do while the container is healthy or still booting.
+              health="$(/usr/bin/podman inspect --format '{{.State.Health.Status}}' ${lib.escapeShellArg cfg.container.name} 2>/dev/null || true)"
+              if [[ "$health" == "healthy" || "$health" == "starting" ]]; then
+                exit 0
+              fi
+
+              # Unhealthy with a live main process is a real UniFi problem, not
+              # a stale podman state — leave it alone.
+              pid="$(/usr/bin/podman inspect --format '{{.State.Pid}}' ${lib.escapeShellArg cfg.container.name} 2>/dev/null || true)"
+              if [[ -n "$pid" && "$pid" != "0" ]] && kill -0 "$pid" 2>/dev/null; then
+                exit 0
+              fi
+
+              # Zombie: podman believes the container is running but the main
+              # process is gone (typically conmon was killed before it could
+              # report the exit). Recreate the container and let the runtime
+              # supervisor start it.
+              echo "unifi-os-recover: recreating zombie container ${cfg.container.name} (health=$health, pid=$pid)"
+              /usr/bin/podman rm -f ${lib.escapeShellArg cfg.container.name} || true
+              systemctl restart ${prepareUnitName}.service
+              systemctl restart ${runtimeUnitName}.service
+            '';
+          };
         };
+
+      systemd.timers.${recoverUnitName} = {
+        description = "Periodically recover the UniFi OS container from stale state";
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnBootSec = "5min";
+          OnUnitActiveSec = "5min";
+        };
+      };
 
       users.users.${cfg.serviceUser.name} = {
         isSystemUser = true;
