@@ -59,18 +59,12 @@
       environment = {
         systemPackages = [pkgs.nvidia-vaapi-driver];
 
-        sessionVariables = lib.mkIf guiCfg.enable (
-          {
-            GBM_BACKEND = "nvidia-drm";
-            __GLX_VENDOR_LIBRARY_NAME = "nvidia";
-            LIBVA_DRIVER_NAME = "nvidia";
-            NVD_BACKEND = "direct";
-          }
-          // lib.optionalAttrs config.my.vfio.enable {
-            # needed for Looking Glass
-            __NV_DISABLE_EXPLICIT_SYNC = "1";
-          }
-        );
+        sessionVariables = lib.mkIf guiCfg.enable {
+          GBM_BACKEND = "nvidia-drm";
+          __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+          LIBVA_DRIVER_NAME = "nvidia";
+          NVD_BACKEND = "direct";
+        };
 
         etc = lib.mkIf guiCfg.enable {
           "nvidia/nvidia-application-profiles-rc.d/50-limit-free-buffer-pool.json".text = builtins.toJSON {

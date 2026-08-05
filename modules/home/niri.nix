@@ -54,7 +54,6 @@
         niri msg action focus-workspace ${lib.escapeShellArg firstWorkspace} >/dev/null 2>&1 || true
       fi
     '';
-    # wallpaper = ../../wallpaper-2.jpg;
   in {
     options.my.niri = {
       workspaceNames = lib.mkOption {
@@ -112,21 +111,6 @@
           )
           config.my.niri.extraSpawnAtStartup
         );
-
-      # systemd.user.services.swaybg = {
-      #   Unit = {
-      #     Description = "Set wallpaper via swaybg for the Niri session";
-      #     PartOf = ["graphical-session.target"];
-      #     After = ["graphical-session.target"];
-      #   };
-      #   Install = {
-      #     WantedBy = ["graphical-session.target"];
-      #   };
-      #   Service = {
-      #     ExecStart = "${pkgs.swaybg}/bin/swaybg -i ${wallpaper} -m fill";
-      #     Restart = "on-failure";
-      #   };
-      # };
     };
   };
 }

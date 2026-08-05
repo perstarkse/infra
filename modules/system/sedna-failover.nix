@@ -473,11 +473,6 @@ _: {
       dnsFailover = {
         enable = lib.mkEnableOption "heartbeat-driven Cloudflare DNS failover";
 
-        ioPublicIp = lib.mkOption {
-          type = lib.types.str;
-          description = "IO's current public IP. The failover script saves the actual DNS value before switching, so this is only used for verification.";
-        };
-
         sednaPublicIp = lib.mkOption {
           type = lib.types.str;
           description = "Sedna's public IP address where traffic should be redirected during failover.";

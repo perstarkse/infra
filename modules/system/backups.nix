@@ -335,7 +335,15 @@
                           extraBackupArgs =
                             (map (p: "--include=" + p) backup.include)
                             ++ (map (p: "--exclude=" + p) backup.exclude);
-                          timerConfig.OnCalendar = backup.frequency;
+                          timerConfig = {
+                            OnCalendar = backup.frequency;
+                            # Stagger job starts so daily restic runs don't pile
+                            # onto attic GC or each other on makemake.
+                            RandomizedDelaySec =
+                              if backup.frequency == "hourly"
+                              then "5m"
+                              else "1h";
+                          };
                           inherit (backup) pruneOpts;
                         }
                         // lib.optionalAttrs (backup.backupPrepareCommand != null) {

@@ -23,7 +23,7 @@
       printf 'CONTEXT7_API_KEY=%s\n' "$(cat "$_prompts_dir/api_key")" > "$out/env"
     '';
     meta = {
-      tags = ["openchamber" "api-key" "dev"];
+      tags = ["context7" "api-key" "dev"];
     };
   };
 }

@@ -18,9 +18,7 @@
       vaultwarden
       openwebui
       surrealdb
-      minne
       minne-saas
-      minecraft
       backups
       garage
       nous
@@ -109,24 +107,16 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["makemake" "minne" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords"];
+        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords"];
       };
 
       generateManifest = false;
 
       allowReadAccess = [
-        # {
-        #   readers = ["minne"];
-        #   path = config.my.secrets.getPath "minne-env" "env";
-        # }
         {
           readers = ["nous"];
           path = config.my.secrets.getPath "nous" "env";
         }
-        # {
-        #   readers = ["garage"];
-        #   path = config.my.secrets.getPath "garage" "env";
-        # }
         {
           readers = ["politikerstod-lekeberg"];
           path = config.my.secrets.getPath "politikerstod-lekeberg" "env";
@@ -143,10 +133,6 @@
           readers = ["root"];
           path = config.my.secrets.getPath "db-passwords" "paperless.env";
         }
-        # {
-        #   readers = ["politikerstod-orebro"];
-        #   path = config.my.secrets.getPath "politikerstod-orebro" "env";
-        # }
         {
           readers = ["root"];
           path = config.my.secrets.getPath "journal-upload" "client.key";
@@ -215,9 +201,18 @@
         enable = true;
         path = config.my.paperless.dataDir;
         frequency = "daily";
-        backend = {
-          type = "garage-s3";
+        # Documents are the most irreplaceable data on this box; keep a copy
+        # in Garage (same-house replication) and offsite on B2.
+        backends = {
+          garage = {
+            type = "garage-s3";
+          };
+          b2 = {
+            type = "b2";
+            lifecycleKeepPriorVersionsDays = 30;
+          };
         };
+        restore.backend = "garage";
         backupPrepareCommand = ''
           PGPASSWORD=$(cat ${config.my.secrets.getPath "db-passwords" "paperless"}) \
           ${pkgs.postgresql}/bin/pg_dump \
@@ -249,14 +244,16 @@
       enable = true;
       port = 8080;
       dataDir = "/storage/.state/openwebui";
+      # Digest-pinned image: autoUpdate's `podman pull <sha256>` is a no-op,
+      # yet the timer would restart the container weekly for zero change.
+      # Bump the digest explicitly to update.
       image = "ghcr.io/open-webui/open-webui@sha256:6a773e5c3a246b65cbe74ce942b294292c0e5f81c138f703d111bc162f7d7c3d";
-      autoUpdate = true;
+      autoUpdate = false;
       updateSchedule = "weekly";
       exposure = {
         enable = true;
         domain = "chat.stark.pub";
-        public = true;
-        cloudflareProxied = true;
+        lanOnly = true;
         router = {
           enable = true;
           targets = ["io"];
@@ -270,30 +267,6 @@
       host = "127.0.0.1";
       port = 8220;
       dataDir = "/var/lib/surrealdb";
-    };
-
-    # Minne configuration
-    minne = {
-      enable = false;
-      port = 3000;
-      address = "10.0.0.10";
-      dataDir = "/var/lib/minne";
-
-      surrealdb = {
-        host = "127.0.0.1";
-        port = 8220;
-      };
-
-      logLevel = "debug";
-      exposure = {
-        enable = true;
-        domain = "minne.lan.stark.pub";
-        useWildcard = "lanstark";
-        router = {
-          enable = true;
-          targets = ["io"];
-        };
-      };
     };
 
     # Minne SaaS configuration
@@ -380,7 +353,7 @@
       address = "10.0.0.10";
       dataDir = "/var/lib/nous";
       host = "https://nous.fyi";
-      logLevel = "info"; # Temporarily debug to diagnose mail issues
+      logLevel = "info";
       exposure = {
         enable = true;
         public = true;
@@ -640,66 +613,6 @@
         igpu = true; # Uses Intel UHD Graphics via Vulkan
       };
     };
-
-    minecraft = {
-      enable = false;
-      eula = true;
-      openFirewall = true;
-      servers = {
-        berget-2 = {
-          enable = false;
-          package = pkgs.fabricServers."fabric-1_21_1";
-          openFirewall = true;
-          mods = [
-            {
-              name = "FabricAPI";
-              url = "https://cdn.modrinth.com/data/P7dR8mSH/versions/qKPgBeHl/fabric-api-0.104.0%2B1.21.1.jar";
-              sha512 = "B3P0XTZLUGtOWwJKqPHUmJAPzwoCDSAlFU4WPlCg7u4bgpa/KcId9c7UISbtRmNeXtCU3yV5bsVS63Y5lDjn5w==";
-            }
-            {
-              name = "Lithium";
-              url = "https://cdn.modrinth.com/data/gvQqBUqZ/versions/5szYtenV/lithium-fabric-mc1.21.1-0.13.0.jar";
-              sha512 = "1L2anMN9qtiCiqT6nKIOT4nRDjDPba9FRu9M9KaEuiHqCGWpwjzvnR9DSOm6SsqarKPbn5lTT8YQ+nilygvxUQ==";
-            }
-            {
-              name = "Collective";
-              url = "https://cdn.modrinth.com/data/e0M1UDsY/versions/13do3Fe4/collective-1.21.1-7.84.jar";
-              sha512 = "K81i8rdKELYD5oeG22aarqo0mOrHZv0giFHiT1gHov2VE1oP7CtjCPZJMSdaQSMQFmQnOQ1/ylE6aBHmpMXpaQ==";
-            }
-            {
-              name = "VillageSpawnPoint";
-              url = "https://cdn.modrinth.com/data/KplTt9Ku/versions/Vl3DreYU/villagespawnpoint-1.21.1-4.4.jar";
-              sha512 = "iPOh4iTxfTSToZPZbnH+kyWg33INWDAciCc8uJ/MAKWMyNiftdTX5tefkNka1YWcxwTIQ4YD+4tomTRclpwCtg==";
-            }
-            {
-              name = "Tectonic";
-              url = "https://cdn.modrinth.com/data/lWDHr9jE/versions/mSYrCaov/tectonic-fabric-1.21.1-2.4.1a.jar";
-              sha512 = "qd2k6xkSpyTh7/ZMpwvp8WX5dD6TbccDxC6+LstM/Rpmpowiqv7wipXIMs6ezPfPg2jG5FV1b5pQV1Ug3UgZGw==";
-            }
-            {
-              name = "Terralith";
-              url = "https://cdn.modrinth.com/data/8oi3bsk5/versions/lQreFvOm/Terralith_1.21.x_v2.5.7.jar";
-              sha512 = "Q9QL/o3OYDt8nr63LbOJ4nfNMFVBRik1DyiDpsdkcqiHrDUKldnsVcKK7BZd7nc2QEYstnTNxMPvswCZ80Y7cg==";
-            }
-            {
-              name = "Chunky";
-              url = "https://cdn.modrinth.com/data/fALzjamp/versions/dPliWter/Chunky-1.4.16.jar";
-              sha512 = "foYvTbVju7XPqLwMJgyal7dmLyjQ+EBTVcM9e0EAzgU3izntN8XXXSkZpAwkSjARu0umP51T8Q1QsRsyZW6jlQ==";
-            }
-          ];
-          serverProperties = {
-            difficulty = 1;
-            gamemode = 0;
-            max-players = 2;
-            motd = "välkommen till långberget-2";
-            server-port = 56000;
-            view-distance = 15;
-            tick-distance = 3;
-            enable-rcon = false;
-          };
-        };
-      };
-    };
   };
 
   services.indicator-alert-daemon = {
@@ -772,7 +685,6 @@
   environment.systemPackages = with pkgs; [
     mergerfs
     unrar
-    # devenv
   ];
 
   programs.fuse.userAllowOther = true;

@@ -18,7 +18,6 @@
       nvidia
       fonts
       niri
-      vfio
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
@@ -133,7 +132,6 @@
   environment.systemPackages = with pkgs; [
     devenv
     localsend
-    iwd
     steam
     moonlight-qt
   ];
@@ -168,7 +166,7 @@
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "openai" "openrouter" "user" "b2" "wifi"];
+        includeTags = ["aws" "openai" "openrouter" "user" "b2" "journal-upload"];
       };
 
       exposeUserSecrets = [
@@ -229,41 +227,30 @@
 
   users.users.p.extraGroups = ["networkmanager"];
 
+  # Stream the journal to io's mTLS journal-remote so sshd fail2ban on the
+  # router also covers this workstation.
+  services.journald.upload = {
+    enable = true;
+    settings = {
+      Upload = {
+        URL = "https://10.0.0.1:19532";
+        ServerKeyFile = toString (config.my.secrets.getPath "journal-upload" "client.key");
+        ServerCertificateFile = toString (config.my.secrets.getPath "journal-upload" "client.pem");
+        TrustedCertificateFile = toString (config.my.secrets.getPath "journal-upload" "ca.pem");
+      };
+    };
+  };
+
+  # The mTLS client key is root-only; run the uploader as root.
+  systemd.services.systemd-journal-upload.serviceConfig = {
+    DynamicUser = lib.mkForce false;
+    User = lib.mkForce "root";
+  };
+
   networking = {
     # Allow localsend receive port
     firewall.allowedTCPPorts = [53317];
     firewall.trustedInterfaces = ["zt+"];
     networkmanager.enable = lib.mkForce true;
-
-    # wpa_supplicant managed at runtime to keep PSK out of Nix store
-    # Force the NetworkManager-side `wireless.enable = true` back off so the
-    # declarative wpa_supplicant path stays the single owner of Wi-Fi.
-    wireless.enable = lib.mkForce false;
-  };
-
-  # Generate wpa_supplicant.conf at runtime from secrets
-  systemd.services.generate-wpa-conf = {
-    description = "Generate wpa_supplicant.conf from secrets";
-    wantedBy = ["multi-user.target"];
-    before = ["wpa-supplicant.service"];
-    script = ''
-      PSK=$(cat ${config.my.secrets.getPath "wifi-psk" "psk"})
-      cat > /etc/wpa_supplicant.conf <<EOF
-      ctrl_interface=/run/wpa_supplicant
-      update_config=1
-      network={
-        ssid="g\xe5rdestorp"
-        psk="$PSK"
-        priority=10
-      }
-      network={
-        ssid="g\xe5rdestorp-2"
-        psk="$PSK"
-        priority=5
-      }
-      EOF
-      chmod 600 /etc/wpa_supplicant.conf
-    '';
-    serviceConfig.Type = "oneshot";
   };
 }

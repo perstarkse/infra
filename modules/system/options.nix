@@ -31,30 +31,48 @@
     unrestrictedUdpPorts = map (entry: entry.port) (lib.filter (entry: entry.protocol == "udp" && entry.allowedSources == []) firewallEntries);
     restrictedEntries = lib.filter (entry: entry.allowedSources != []) firewallEntries;
 
-    mkNftRule = entry: source:
-      if builtins.match ".*:.*" source != null
-      then "ip6 saddr ${source} ${entry.protocol} dport ${toString entry.port} accept"
-      else "ip saddr ${source} ${entry.protocol} dport ${toString entry.port} accept";
+    # Shared generator for "port reachable only from these sources" firewall
+    # rules: nft (extraInputRules) + iptables/ip6tables fallback (extraCommands,
+    # live on non-router machines where nftables is off). The v6 DROP stays
+    # even though the LAN is IPv4-only so a v6 link-local peer cannot reach a
+    # restricted port on this host.
+    mkRestrictedPortRules = {
+      port,
+      allowedSources,
+      protocol ? "tcp",
+    }: {
+      nft = lib.concatStringsSep "\n" (
+        (map (source: "ip saddr ${source} ${protocol} dport ${toString port} accept") allowedSources)
+        ++ ["${protocol} dport ${toString port} drop"]
+      );
+      iptables = lib.concatStringsSep "\n" (
+        (map (source: "${pkgs.iptables}/bin/iptables -A nixos-fw -p ${protocol} -s ${source} --dport ${toString port} -j ACCEPT") allowedSources)
+        ++ [
+          "${pkgs.iptables}/bin/iptables -A nixos-fw -p ${protocol} --dport ${toString port} -j DROP"
+          "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p ${protocol} --dport ${toString port} -j DROP"
+        ]
+      );
+    };
 
-    nftRestrictedRules =
-      lib.concatMapStringsSep "\n" (entry: ''
-        ${lib.concatMapStringsSep "\n" (mkNftRule entry) entry.allowedSources}
-        ${entry.protocol} dport ${toString entry.port} drop
-      '')
-      restrictedEntries;
+    nftRestrictedRules = lib.concatStringsSep "\n" (map (
+        entry:
+          (mkRestrictedPortRules {
+            inherit (entry) port;
+            inherit (entry) allowedSources;
+            inherit (entry) protocol;
+          }).nft
+      )
+      restrictedEntries);
 
-    mkIptablesRule = entry: source:
-      if builtins.match ".*:.*" source != null
-      then "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p ${entry.protocol} -s ${source} --dport ${toString entry.port} -j ACCEPT"
-      else "${pkgs.iptables}/bin/iptables -A nixos-fw -p ${entry.protocol} -s ${source} --dport ${toString entry.port} -j ACCEPT";
-
-    iptablesRestrictedRules =
-      lib.concatMapStringsSep "\n" (entry: ''
-        ${lib.concatMapStringsSep "\n" (mkIptablesRule entry) entry.allowedSources}
-        ${pkgs.iptables}/bin/iptables -A nixos-fw -p ${entry.protocol} --dport ${toString entry.port} -j DROP
-        ${pkgs.iptables}/bin/ip6tables -A nixos-fw -p ${entry.protocol} --dport ${toString entry.port} -j DROP
-      '')
-      restrictedEntries;
+    iptablesRestrictedRules = lib.concatStringsSep "\n" (map (
+        entry:
+          (mkRestrictedPortRules {
+            inherit (entry) port;
+            inherit (entry) allowedSources;
+            inherit (entry) protocol;
+          }).iptables
+      )
+      restrictedEntries);
 
     publicVhostViolations = lib.concatLists (lib.mapAttrsToList (
         serviceName: exposure:
@@ -69,58 +87,6 @@
           (lib.filter (vhost: vhost.noAcme && vhost.cloudflareProxied) exposure.http.virtualHosts)
       )
       enabledServices);
-
-    basicAuthSubmodule = types.submodule {
-      options = {
-        realm = mkOption {
-          type = types.str;
-          default = "Restricted";
-          description = "Authentication realm shown to users.";
-        };
-        htpasswdFile = mkOption {
-          type = types.path;
-          description = "Path to htpasswd file for basic authentication.";
-        };
-      };
-    };
-
-    basicAuthSecretSubmodule = types.submodule {
-      options = {
-        realm = mkOption {
-          type = types.str;
-          default = "Restricted";
-          description = "Authentication realm shown to users.";
-        };
-        name = mkOption {
-          type = types.str;
-          description = "Clan vars secret name resolved by the importing router.";
-        };
-        file = mkOption {
-          type = types.str;
-          default = "htpasswd";
-          description = "File inside the Clan vars secret.";
-        };
-      };
-    };
-
-    acmeDns01Submodule = types.submodule {
-      options = {
-        dnsProvider = mkOption {
-          type = types.str;
-          description = "lego DNS provider name.";
-        };
-        environmentFile = mkOption {
-          type = types.nullOr types.path;
-          default = null;
-          description = "Path to an EnvironmentFile exporting provider variables.";
-        };
-        group = mkOption {
-          type = types.str;
-          default = "nginx";
-          description = "Group that should own read access to issued certificates.";
-        };
-      };
-    };
 
     vhostSubmodule = types.submodule {
       options = {
@@ -214,7 +180,7 @@
       };
     };
 
-    inherit ((import ../../flake/lib/exposure-options.nix {inherit lib;})) mkStandardExposureOptions;
+    inherit ((import ../../flake/lib/exposure-options.nix {inherit lib;})) mkStandardExposureOptions basicAuthSubmodule basicAuthSecretSubmodule acmeDns01Submodule;
   in {
     options = {
       my = {
@@ -245,11 +211,20 @@
           default = "0.0.0.0";
           description = "The network address to listen on.";
         };
+        publicDomains = lib.mkOption {
+          type = lib.types.attrsOf lib.types.str;
+          default = {};
+          description = ''
+            Registry of public domains (domain -> DNS zone) served by this
+            fleet. Single source of truth that ddclient, ACME vhosts, DNS
+            failover and gatus consumers derive from or validate against.
+          '';
+        };
         gui = {
           enable = lib.mkEnableOption "Enable GUI session management";
           session = lib.mkOption {
-            type = lib.types.enum ["hyprland" "sway" "niri"];
-            default = "sway";
+            type = lib.types.enum ["niri"];
+            default = "niri";
             description = "The Wayland session type to use";
           };
           terminal = lib.mkOption {
@@ -259,7 +234,7 @@
           };
           _terminalCommand = lib.mkOption {
             type = lib.types.str;
-            default = "kitty";
+            default = "${pkgs.kitty}/bin/kitty";
             description = "The terminal emulator command";
           };
         };
@@ -417,13 +392,9 @@
     config = mkMerge [
       {
         _module.args.mkStandardExposureOptions = mkStandardExposureOptions;
+        _module.args.mkRestrictedPortRules = mkRestrictedPortRules;
       }
       {
-        my.gui._terminalCommand =
-          if config.my.gui.terminal == "kitty"
-          then "${pkgs.kitty}/bin/kitty"
-          else "${pkgs.kitty}/bin/kitty";
-
         networking.enableIPv6 = true;
 
         assertions = [

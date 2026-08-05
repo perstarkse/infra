@@ -3,7 +3,48 @@
   config,
   lib,
   ...
-}: {
+}: let
+  # Public-domain registry (mirror of io's my.publicDomains): every public
+  # domain the fleet serves. Failover and gatus consume explicit subsets of
+  # it; the assertions at the bottom keep those subsets in sync with the
+  # registry so a forgotten domain fails the build instead of silently
+  # skipping failover/gatus coverage.
+  publicDomains = {
+    "minne.stark.pub" = "stark.pub";
+    "request.stark.pub" = "stark.pub";
+    "encke.stark.pub" = "stark.pub";
+    "minne-demo.stark.pub" = "stark.pub";
+    "mail.stark.pub" = "stark.pub";
+    "politikerstod.stark.pub" = "stark.pub";
+    "orebro.politikerstod.stark.pub" = "stark.pub";
+    "wake.stark.pub" = "stark.pub";
+    "wg.stark.pub" = "stark.pub";
+    "invoices.stark.pub" = "stark.pub";
+    "nous.fyi" = "nous.fyi";
+  };
+  # Domains that should repoint to sedna's maintenance page during an io outage.
+  failoverDomains = [
+    "minne.stark.pub"
+    "minne-demo.stark.pub"
+    "request.stark.pub"
+    "politikerstod.stark.pub"
+    "orebro.politikerstod.stark.pub"
+    "wake.stark.pub"
+    "nous.fyi"
+  ];
+  # Domains that answer HTTPS on io and get active health checks from gatus.
+  httpMonitoredDomains = [
+    "request.stark.pub"
+    "minne.stark.pub"
+    "nous.fyi"
+    "politikerstod.stark.pub"
+    "wake.stark.pub"
+  ];
+  zoneIds = {
+    "stark.pub" = "5b35b4cd4229d502a964e052f18dd650";
+    "nous.fyi" = "88916637654e3923f7669c7fd59ca76a";
+  };
+in {
   imports =
     (with ctx.flake.nixosModules; [
       options
@@ -79,25 +120,10 @@
         skipDnsRevert = true;
         cloudflareApiTokenFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
 
-        zones = [
-          {
-            zone = "stark.pub";
-            zoneId = "5b35b4cd4229d502a964e052f18dd650";
-            domains = [
-              "minne.stark.pub"
-              "minne-demo.stark.pub"
-              "request.stark.pub"
-              "politikerstod.stark.pub"
-              "orebro.politikerstod.stark.pub"
-              "wake.stark.pub"
-            ];
-          }
-          {
-            zone = "nous.fyi";
-            zoneId = "88916637654e3923f7669c7fd59ca76a";
-            domains = ["nous.fyi"];
-          }
-        ];
+        zones = lib.mapAttrsToList (zone: domains: {
+          inherit zone domains;
+          zoneId = zoneIds.${zone};
+        }) (lib.groupBy (d: publicDomains.${d}) failoverDomains);
       };
 
       tls = {
@@ -143,13 +169,8 @@
                   "send-on-resolved" = true;
                 }
               ];
-            }) [
-              "request.stark.pub"
-              "minne.stark.pub"
-              "nous.fyi"
-              "politikerstod.stark.pub"
-              "wake.stark.pub"
-            ])
+            })
+            httpMonitoredDomains)
           ++ [
             {
               name = "minne-demo.stark.pub";
@@ -234,7 +255,7 @@
       enable = true;
       user = "heartbeat";
       group = "heartbeat";
-      listenAddress = "::";
+      listenAddress = "0.0.0.0";
       port = 18080;
       externalEndpointName = "io-heartbeat";
       deadmanInterval = "15m";
@@ -302,11 +323,22 @@
     ProtectSystem = "strict";
     RestrictAddressFamilies = [
       "AF_INET"
-      "AF_INET6"
     ];
     RestrictNamespaces = true;
     RestrictRealtime = true;
     SystemCallArchitectures = "native";
     UMask = "0022";
   };
+
+  # Keep failover/gatus domain subsets in sync with the public-domain registry.
+  assertions = [
+    {
+      assertion = lib.all (d: publicDomains ? ${d}) failoverDomains;
+      message = "dnsFailover domains not in my.publicDomains registry: ${lib.concatStringsSep ", " (lib.filter (d: !(publicDomains ? ${d})) failoverDomains)}";
+    }
+    {
+      assertion = lib.all (d: publicDomains ? ${d}) httpMonitoredDomains;
+      message = "gatus-monitored domains not in my.publicDomains registry: ${lib.concatStringsSep ", " (lib.filter (d: !(publicDomains ? ${d})) httpMonitoredDomains)}";
+    }
+  ];
 }

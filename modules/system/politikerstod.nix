@@ -4,27 +4,16 @@
     lib,
     pkgs,
     mkStandardExposureOptions,
+    mkRestrictedPortRules,
     ...
   }: let
     appPkg = inputs.politikerstod.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
-    mkFirewallExtraCommands = port: sources: let
-      allowRules =
-        map (
-          source:
-            if builtins.match ".*:.*" source != null
-            then "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp -s ${source} --dport ${toString port} -j ACCEPT"
-            else "${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp -s ${source} --dport ${toString port} -j ACCEPT"
-        )
-        sources;
-    in
-      lib.concatStringsSep "\n" (
-        allowRules
-        ++ [
-          "${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp --dport ${toString port} -j DROP"
-          "${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp --dport ${toString port} -j DROP"
-        ]
-      );
+    mkFirewallExtraCommands = port: sources:
+      (mkRestrictedPortRules {
+        inherit port;
+        allowedSources = sources;
+      }).iptables;
 
     enabledInstances = lib.filterAttrs (_: i: i.enable) config.my.politikerstod.instances;
 
@@ -46,16 +35,13 @@
       )
       enabledInstances;
 
-    mkDbProxyNftRules = lib.concatMapStringsSep "\n" ({value, ...}: let
-      mkSourceRule = source:
-        if builtins.match ".*:.*" source != null
-        then "ip6 saddr ${source} tcp dport 5432 accept"
-        else "ip saddr ${source} tcp dport 5432 accept";
-      sources = value.database.allowedHosts or [];
-    in ''
-      ${lib.concatMapStringsSep "\n" mkSourceRule sources}
-      tcp dport 5432 drop
-    '') (lib.attrsToList dbProxyInstances);
+    mkDbProxyNftRules = lib.concatMapStringsSep "\n" ({value, ...}:
+      (mkRestrictedPortRules {
+        port = 5432;
+        protocol = "tcp";
+        allowedSources = value.database.allowedHosts or [];
+      }).nft)
+    (lib.attrsToList dbProxyInstances);
 
     mkDbProxyIptablesRules = lib.concatMapStringsSep "\n" ({value, ...}: let
       sources = value.database.allowedHosts or [];

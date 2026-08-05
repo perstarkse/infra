@@ -140,7 +140,9 @@
       );
 
     inputInternalRulesV4 = lib.concatStringsSep "\n" (map mkRouterInputRulesV4 internalZones);
-    inputInternalRulesV6 = lib.concatStringsSep "\n" (map mkRouterInputRulesV6 internalZones);
+    # LAN segments carry no IPv6 (link-local only); the ip6 input table only
+    # needs the special zones (zerotier, wireguard, cni, libvirt).
+    inputInternalRulesV6 = lib.concatStringsSep "\n" (map mkRouterInputRulesV6 (lib.filter (zone: zone.kind != "segment") internalZones));
 
     dropLanBridgeTaggedDhcpRules =
       if primaryZoneInterface != null && primaryZoneInterface != helpers.lanBridge
@@ -227,23 +229,10 @@
         if target == null || !rule.icmp
         then []
         else ["iifname \"${sourceZone.interface}\" oifname \"${target.interface}\" ip protocol icmp accept"];
-      v6 =
-        if target == null || !rule.icmp
-        then []
-        else [
-          ''
-            iifname "${sourceZone.interface}" oifname "${target.interface}" icmpv6 type {
-              destination-unreachable, packet-too-big, time-exceeded,
-              parameter-problem, nd-router-solicit, nd-router-advert,
-              nd-neighbor-solicit, nd-neighbor-advert, echo-request, echo-reply
-            } accept
-          ''
-        ];
     in {
       inherit target;
       common = lib.filter (line: line != "") common;
       v4 = lib.filter (line: line != "") v4;
-      v6 = lib.filter (line: line != "") v6;
     };
 
     explicitReachPairs =
@@ -282,10 +271,6 @@
         pair: (mkReachRule pair.source pair.rule).v4
       )
       allReachPairs);
-    forwardZoneAllowRulesV6 = lib.concatStringsSep "\n" (lib.concatMap (
-        pair: (mkReachRule pair.source pair.rule).v6
-      )
-      allReachPairs);
     segmentMssClampRules = lib.concatStringsSep "\n" (map (
         segment:
           lib.optionalString (segment.tcpMssClamp != null) ''iifname "${segment.interface}" tcp flags syn tcp option maxseg size set ${toString segment.tcpMssClamp}''
@@ -319,19 +304,6 @@
       ''
       else "";
 
-    bridgeLanForwardCompatRulesV6 =
-      if primaryZoneInterface != null && primaryZoneInterface != helpers.lanBridge
-      then let
-        primaryRuleObjects = map (rule: mkReachRule {interface = helpers.lanBridge;} rule) (primarySegment.reachRules or []);
-        primaryRules = lib.concatStringsSep "\n" (lib.concatMap (obj: obj.common ++ obj.v6) primaryRuleObjects);
-      in ''
-        iifname "${helpers.lanBridge}" oifname "${helpers.lanBridge}" accept
-        ${lib.optionalString (primarySegment != null && (primarySegment.internet or false)) "iifname \"${helpers.lanBridge}\" oifname \"${wan}\" accept"}
-        iifname "${wan}" oifname "${helpers.lanBridge}" ct state established,related accept
-        ${primaryRules}
-      ''
-      else "";
-
     forwardCommonRulesV4 = ''
       ct state established,related accept
       tcp flags syn tcp option maxseg size set rt mtu
@@ -346,18 +318,10 @@
       ${forwardZoneAllowRulesV4}
     '';
 
+    # LAN segments are IPv4-only; the ip6 table only guards the router's own
+    # v6 (link-local + ZeroTier) so the forward chain stays a bare deny.
     forwardCommonRulesV6 = ''
       ct state established,related accept
-      tcp flags syn tcp option maxseg size set rt mtu
-      ${segmentMssClampRules}
-      ${forwardSameZoneRules}
-      ${dohTransportBlockRules}
-      ${castingRulesCommon}
-      ${forwardWanEgressRules}
-      ${forwardWanReturnRules}
-      ${bridgeLanForwardCompatRulesV6}
-      ${forwardZoneAllowRulesCommon}
-      ${forwardZoneAllowRulesV6}
     '';
   in {
     config = lib.mkIf cfg.enable {
@@ -405,15 +369,6 @@
               }
             '';
           };
-          natV6 = {
-            family = "ip6";
-            content = ''
-              chain prerouting {
-                type nat hook prerouting priority -100;
-                ${dnsRedirectPreroutingRules}
-              }
-            '';
-          };
           filterV6 = {
             family = "ip6";
             content = ''
@@ -421,17 +376,13 @@
                 type filter hook input priority 0; policy drop;
                 iifname "lo" accept
                 ct state established,related accept
-                ${bridgeLanInputCompatRule}
-                ${unifiDiscoveryInputRule}
                 ${inputInternalRulesV6}
-                ${wgLanInputRule}
                 iifname "${wan}" ct state established,related accept
                 iifname "${wan}" icmpv6 type {
                   destination-unreachable, packet-too-big, time-exceeded,
                   parameter-problem, nd-router-advert, nd-neighbor-solicit,
                   nd-neighbor-advert
                 } accept
-                iifname "${wan}" udp dport dhcpv6-client udp sport dhcpv6-server accept
                 ${lib.optionalString wgEnabled "iifname \"${wan}\" udp dport ${wgPort} accept"}
               }
               chain forward {

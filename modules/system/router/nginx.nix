@@ -12,7 +12,6 @@
     machineMap = helpers.machineMap or {};
     enabled = cfg.enable && nginxCfg.enable;
     internalCidrs = map (segment: segment.subnetCidr) (helpers.segments or []);
-    ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     wgSubnet = (cfg.wireguard or {}).subnet or "10.6.0";
     wgCidr = "${wgSubnet}.0/${toString ((cfg.wireguard or {}).cidrPrefix or 24)}";
     exposureServices = lib.filterAttrs (_: exposure: exposure.enable) (config.my.exposure.services or {});
@@ -44,7 +43,6 @@
     sanitizeZoneName = domain: lib.replaceStrings ["." "-"] ["_" "_"] domain;
     cfNeeded = lib.any (v: (v.cloudflareProxied or false)) allVirtualHosts;
     cfDir = "/var/lib/cloudflare-ips";
-    cfAllow = "${cfDir}/allow.conf";
     cfRealip = "${cfDir}/realip.conf";
     cfGeo = "${cfDir}/edge-geo.conf";
 
@@ -153,11 +151,10 @@
               include ${cfGeo};
             }
 
-            # LAN + ULA64 + WireGuard membership based on (possibly realip) $remote_addr
+            # LAN + WireGuard membership based on (possibly realip) $remote_addr
             geo $lan_wg {
               default 0;
               ${lib.concatMapStringsSep "\n            " (cidr: "${cidr} 1;") internalCidrs}
-              ${ulaPrefix}::/64 1;
               ${wgCidr} 1;
             }
 
@@ -212,7 +209,6 @@
 
                 lanAllow = ''
                   ${lib.concatMapStringsSep "\n" (cidr: "allow ${cidr};") internalCidrs}
-                  allow ${ulaPrefix}::/64;
                   allow ${wgCidr};
                 '';
 
@@ -361,7 +357,6 @@
       systemd = {
         tmpfiles.rules = lib.mkIf cfNeeded [
           "d ${cfDir} 0755 root root - -"
-          "f ${cfAllow} 0644 root root - -"
           "f ${cfRealip} 0644 root root - -"
           "f ${cfGeo} 0644 root root - -"
         ];
@@ -388,12 +383,6 @@
                   ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v4 > "$tmp/ips-v4"
                   ${pkgs.curl}/bin/curl -fsS https://www.cloudflare.com/ips-v6 > "$tmp/ips-v6"
 
-                  # Access module style allow list (kept for reference)
-                  {
-                    while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v4"
-                    while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'allow %s;\n' "$cidr"; done < "$tmp/ips-v6"
-                  } > "$tmp/allow.conf"
-
                   # Real IP trust
                   {
                     while IFS= read -r cidr; do [ -n "$cidr" ] && printf 'set_real_ip_from %s;\n' "$cidr"; done < "$tmp/ips-v4"
@@ -409,7 +398,7 @@
                   } > "$tmp/edge-geo.conf"
 
                   changed=0
-                  for f in allow.conf realip.conf edge-geo.conf; do
+                  for f in realip.conf edge-geo.conf; do
                     if ! ${pkgs.diffutils}/bin/cmp -s "$tmp/$f" "$dir/$f"; then
                       ${pkgs.coreutils}/bin/install -m 0644 -D "$tmp/$f" "$dir/$f"
                       changed=1

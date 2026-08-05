@@ -5,6 +5,13 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     "nixpkgs-unstable".url = "github:NixOS/nixpkgs/nixos-unstable";
 
+    # Kernel branch pinned for charon's Battlemage GPU-init support
+    # (see machines/charon/configuration.nix). Locked here so eval does not
+    # depend on an out-of-lockfile getFlake fetch.
+    "nixpkgs-612" = {
+      url = "github:NixOS/nixpkgs/afbbf774e2087c3d734266c22f96fca2e78d3620";
+    };
+
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
     };
@@ -30,34 +37,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    hyprland = {
-      url = "github:hyprwm/Hyprland/v0.50.0?submodules=1";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    hyprland-plugins = {
-      url = "github:hyprwm/hyprland-plugins";
-      inputs.hyprland.follows = "hyprland";
-    };
-
-    hyprnstack = {
-      url = "github:perstarkse/hyprNStack";
-      inputs.hyprland.follows = "hyprland";
-    };
-
-    hy3 = {
-      url = "github:outfoxxed/hy3?ref=hl0.50.0";
-      inputs.hyprland.follows = "hyprland";
-    };
-
     private-infra = {
       url = "git+ssh://git@github.com/perstarkse/private-infra.git";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs."nixpkgs-stable".follows = "nixpkgs";
       inputs."simple-nixos-mailserver".inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    minne = {
-      url = "github:perstarkse/minne";
     };
 
     saas-minne = {
@@ -76,18 +60,8 @@
       inputs.flake-parts.follows = "flake-parts";
     };
 
-    sway-focus-flash = {
-      url = "github:perstarkse/sway-focus-flash";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     niri-focus-flash = {
       url = "github:perstarkse/niri-focus-flash";
-    };
-
-    nix-minecraft = {
-      url = "github:Infinidoge/nix-minecraft";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     treefmt-nix = {

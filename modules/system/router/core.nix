@@ -12,11 +12,6 @@
     isIPv4Base = s: builtins.match "^${ipv4OctetPattern}(\\.${ipv4OctetPattern}){2}$" s != null;
     isMacAddress = s: builtins.match "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$" s != null;
     reservedZoneNames = ["wan" "wireguard" "zerotier" "cni" "libvirt"];
-    normalizeRouterAccessLevel = level:
-      if level == "full"
-      then "admin"
-      else level;
-
     reservationSubmodule = types.submodule {
       options = {
         name = mkOption {
@@ -226,9 +221,9 @@
             description = "Block forwarding between clients within the same segment";
           };
           routerAccessLevel = mkOption {
-            type = types.nullOr (types.enum ["none" "infra" "admin" "full"]);
+            type = types.nullOr (types.enum ["none" "infra" "admin"]);
             default = null;
-            description = "Router-host access profile; defaults to admin for the primary segment and infra for others. full is kept as a compatibility alias for admin.";
+            description = "Router-host access profile; defaults to admin for the primary segment and infra for others.";
           };
           routerAllowedTcpPorts = mkOption {
             type = types.listOf types.int;
@@ -330,7 +325,7 @@
         primarySegment = mkOption {
           type = types.str;
           default = "trusted";
-          description = "Primary internal segment used for router identity, IPv6 ULA, and defaults";
+          description = "Primary internal segment used for router identity and defaults";
         };
 
         ports = mkOption {
@@ -361,12 +356,6 @@
             default = [];
             description = "Additional UDP ports to allow from WAN to the router";
           };
-        };
-
-        ipv6.ulaPrefix = mkOption {
-          type = types.str;
-          default = "fd00:711a:edcd:7e75";
-          description = "ULA prefix for IPv6 on the primary segment";
         };
 
         machines = mkOption {
@@ -417,8 +406,6 @@
             default = [
               "1.1.1.1@853#cloudflare-dns.com"
               "1.0.0.1@853#cloudflare-dns.com"
-              "2606:4700:4700::1111@853#cloudflare-dns.com"
-              "2606:4700:4700::1001@853#cloudflare-dns.com"
             ];
             description = "Upstream DNS servers with TLS";
           };
@@ -821,7 +808,7 @@
             description = "ZeroTier interface name or nftables glob pattern";
           };
           routerAccessLevel = mkOption {
-            type = types.enum ["none" "infra" "admin" "full"];
+            type = types.enum ["none" "infra" "admin"];
             default = "infra";
             description = "Router-host access profile for ZeroTier peers";
           };
@@ -1249,7 +1236,7 @@
             segment.dhcp.reservations;
           routerAccessLevel =
             if segment.policy.routerAccessLevel != null
-            then normalizeRouterAccessLevel segment.policy.routerAccessLevel
+            then segment.policy.routerAccessLevel
             else if name == cfg.primarySegment
             then "admin"
             else "infra";
@@ -1349,7 +1336,7 @@
           routerIp = null;
           internet = false;
           isolateClients = true;
-          routerAccessLevel = normalizeRouterAccessLevel (ztCfg.routerAccessLevel or "infra");
+          routerAccessLevel = ztCfg.routerAccessLevel or "infra";
           routerAllowedTcpPorts = [];
           routerAllowedUdpPorts = [];
           reachRules = map normalizeReachRule (ztCfg.canReach or []);
@@ -1419,14 +1406,6 @@
         inherit machineMap;
         machineList = machineHelpers;
         zones = orderedSegments ++ wgZone ++ ztZone ++ cniZone ++ [libvirtZone] ++ [wanZone];
-        inherit (cfg.ipv6) ulaPrefix;
-
-        # Compatibility aliases for modules still transitioning internally.
-        lanSubnet = primarySegment.subnet;
-        lanCidr = primarySegment.subnetCidr;
-        inherit (primarySegment) routerIp;
-        lanInterface = primarySegment.interface;
-        lanPorts = map (port: port.name) portHelpers;
       };
     };
   };

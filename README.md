@@ -6,7 +6,7 @@ A reproducible homelab/infra setup managing a router, server, and workstation wi
 - **Secrets**: Clan automated secrets + vars-helper for ACLs and access ergonomics
 - **Pattern**: Dendritic (every file is a flake-parts module)
 - **Key modules**:
-  - Router abstraction (routing, DHCP, DNS, WireGuard, nginx, monitoring)
+  - Router abstraction (routing, DHCP, DNS, WireGuard, nginx)
   - Backups abstraction (restic to B2/S3, auto bucket bootstrap, restore mode)
 
 ### References
@@ -49,13 +49,13 @@ Example usage in `machines/makemake/configuration.nix`:
 my.secrets.discover = {
   enable = true;
   dir = ../../vars/generators;
-  includeTags = ["makemake" "minne" "surrealdb"  "b2"];
+  includeTags = ["makemake" "nous" "surrealdb" "b2"];
 };
 
 my.secrets.allowReadAccess = [
   {
-    readers = ["minne"];
-    path = config.my.secrets.getPath "minne-env" "env";
+    readers = ["nous"];
+    path = config.my.secrets.getPath "nous" "env";
   }
   {
     readers = ["surrealdb"];
@@ -66,10 +66,11 @@ my.secrets.allowReadAccess = [
 
 ## Machines
 
-- `machines/io`: Router (LAN bridge, DHCP, DNS, WireGuard, nginx, monitoring)
-- `machines/makemake`: Server (Vaultwarden, OpenWebUI, SurrealDB, Minne, Supabase, Accounted)
-- `machines/charon`: Workstation (Worker of distributed services)
-- `machines/sedna`: External monitor
+- `machines/io`: Router (LAN bridge, DHCP, DNS, WireGuard, nginx)
+- `machines/makemake`: Server (Vaultwarden, OpenWebUI, SurrealDB, minne-saas, Supabase, Accounted, Paperless)
+- `machines/charon`: Workstation (primary build host, distributed-service worker)
+- `machines/ariel`: Workstation
+- `machines/sedna`: External monitor + DNS failover
 
 Each machine imports shared modules via flake-parts, follows consistent patterns, and consumes secrets declaratively.
 
@@ -294,13 +295,6 @@ Configuration options are self-documented in `modules/system/router/core.nix` vi
 
 ```nix
 my.backups = {
-  minne = {
-    enable = true;
-    path = config.my.minne.dataDir;
-    frequency = "daily";
-    backend = { type = "b2"; bucket = null; lifecycleKeepPriorVersionsDays = 30; };
-  };
-
   vaultwarden = {
     enable = true;
     path = config.my.vaultwarden.backupDir;
@@ -314,6 +308,17 @@ my.backups = {
     frequency = "daily";
     backend = { type = "b2"; bucket = null; lifecycleKeepPriorVersionsDays = 30; };
   };
+
+  paperless = {
+    enable = true;
+    path = config.my.paperless.dataDir;
+    frequency = "daily";
+    backends = {
+      garage = { type = "garage-s3"; };
+      b2 = { type = "b2"; lifecycleKeepPriorVersionsDays = 30; };
+    };
+    restore.backend = "garage";
+  };
 };
 ```
 
@@ -322,7 +327,7 @@ my.backups = {
 To restore, switch a job into restore mode and choose a snapshot:
 
 ```nix
-my.backups.minne.restore = {
+my.backups.vaultwarden.restore = {
   enable = true;
   snapshot = "latest"; # or a specific snapshot ID
 };

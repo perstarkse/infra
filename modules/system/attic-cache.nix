@@ -72,7 +72,7 @@
       export HOME=${lib.escapeShellArg cfg.client.stateDir}
       export XDG_CONFIG_HOME=${lib.escapeShellArg "${cfg.client.stateDir}/.config"}
 
-      printf '%s\n' $OUT_PATHS | ${pkgs.attic-client}/bin/attic push --stdin ${lib.escapeShellArg "${cfg.client.serverName}:${cfg.client.cacheName}"} || true
+      printf '%s\n' $OUT_PATHS | ${pkgs.attic-client}/bin/attic push --stdin ${lib.escapeShellArg "${cfg.client.serverName}:${cfg.client.cacheName}"} || { echo "$(date -Is): attic push failed for: $OUT_PATHS" >> /var/log/attic-push.log; }
     '';
 
     bootstrapServerCache = pkgs.writeShellScriptBin "attic-cache-bootstrap" ''

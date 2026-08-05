@@ -9,9 +9,7 @@
     helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     zones = helpers.zones or [];
     segments = helpers.segments or [];
-    primarySegment = helpers.primarySegment or null;
     routerIp = helpers.primaryRouterIp;
-    ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     inherit (cfg) services;
     exposureServices = lib.filterAttrs (_: exposure: exposure.enable) (config.my.exposure.services or {});
     exposureDnsRecords = lib.concatLists (lib.mapAttrsToList (_name: exposure:
@@ -107,19 +105,10 @@
       {upstream = "1.0.0.1";}
     ];
 
-    blockyPorts =
-      {
-        dns = map (ip: "${ip}:${toString blockyPort}") listenerIps ++ ["127.0.0.1:${toString blockyPort}"];
-        http = ["127.0.0.1:${toString blockyHttpPort}"];
-      }
-      // lib.optionalAttrs (primarySegment != null) {
-        dns =
-          map (ip: "${ip}:${toString blockyPort}") listenerIps
-          ++ [
-            "127.0.0.1:${toString blockyPort}"
-            "[${ulaPrefix}::1]:${toString blockyPort}"
-          ];
-      };
+    blockyPorts = {
+      dns = map (ip: "${ip}:${toString blockyPort}") listenerIps ++ ["127.0.0.1:${toString blockyPort}"];
+      http = ["127.0.0.1:${toString blockyHttpPort}"];
+    };
     dnsServicePorts = lib.optionals enabled [
       {
         access = "infra";
@@ -152,7 +141,9 @@
             "do-tcp" = true;
             "do-udp" = true;
             prefetch = true;
-            "num-threads" = 1;
+            # N100 has 4 cores; 2 threads leave headroom for blocky + nginx
+            # while doubling DoT/validation parallelism vs 1.
+            "num-threads" = 2;
             "so-reuseport" = true;
             "local-zone" = map (z: "\"${z}\" static") localZones;
             "local-data" =
@@ -161,7 +152,6 @@
                 lz:
                   [
                     "\"${cfg.hostname}.${lz} IN A ${routerIp}\""
-                    "\"${cfg.hostname}.${lz} IN AAAA ${ulaPrefix}::1\""
                   ]
                   ++ lib.concatMap (
                     zone:

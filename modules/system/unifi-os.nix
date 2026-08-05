@@ -54,7 +54,7 @@ _: {
     discoveryTargetBridgeUnitName = "unifi-os-discovery-target-bridge";
 
     parentNetworkUnitName =
-      if networkCfg.parentInterface == (routerHelpers.lanInterface or null)
+      if networkCfg.parentInterface == (routerHelpers.primaryInterface or null)
       then "40-${networkCfg.parentInterface}"
       else "10-${networkCfg.parentInterface}";
 
@@ -447,22 +447,22 @@ _: {
 
         parentInterface = mkOption {
           type = types.nullOr types.str;
-          default = routerHelpers.lanInterface or (routerHelpers.lanBridge or null);
-          defaultText = literalExpression "config.routerHelpers.lanInterface or (config.routerHelpers.lanBridge or null)";
+          default = routerHelpers.primaryInterface or (routerHelpers.lanBridge or null);
+          defaultText = literalExpression "config.routerHelpers.primaryInterface or (config.routerHelpers.lanBridge or null)";
           description = "Parent interface or bridge for the UniFi macvlan network.";
         };
 
         subnet = mkOption {
           type = types.nullOr types.str;
-          default = routerHelpers.lanCidr or null;
-          defaultText = literalExpression "config.routerHelpers.lanCidr or null";
+          default = routerHelpers.primaryCidr or null;
+          defaultText = literalExpression "config.routerHelpers.primaryCidr or null";
           description = "IPv4 subnet assigned to the UniFi macvlan network.";
         };
 
         gateway = mkOption {
           type = types.nullOr types.str;
-          default = routerHelpers.routerIp or null;
-          defaultText = literalExpression "config.routerHelpers.routerIp or null";
+          default = routerHelpers.primaryRouterIp or null;
+          defaultText = literalExpression "config.routerHelpers.primaryRouterIp or null";
           description = "IPv4 gateway assigned to the UniFi macvlan network.";
         };
 

@@ -15,6 +15,7 @@
           inherit (inputs) nous voxtype indicator-alert-daemon;
           agentTooling = inputs."agent-tooling";
           digikeyMcp = inputs."digikey-mcp";
+          nixpkgs612 = inputs."nixpkgs-612";
         };
       };
     };

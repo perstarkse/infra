@@ -103,6 +103,23 @@ in {
 
     listenNetworkAddress = "10.0.0.1"; # Internal LAN IP
 
+    # Public-domain registry: single source of truth for ddclient zones below
+    # and for the ACME/vhost coverage assertion. Keep every public domain here;
+    # sedna's failover/gatus subsets are validated against the same list.
+    publicDomains = {
+      "minne.stark.pub" = "stark.pub";
+      "request.stark.pub" = "stark.pub";
+      "encke.stark.pub" = "stark.pub";
+      "minne-demo.stark.pub" = "stark.pub";
+      "mail.stark.pub" = "stark.pub";
+      "politikerstod.stark.pub" = "stark.pub";
+      "orebro.politikerstod.stark.pub" = "stark.pub";
+      "wake.stark.pub" = "stark.pub";
+      "wg.stark.pub" = "stark.pub";
+      "invoices.stark.pub" = "stark.pub";
+      "nous.fyi" = "nous.fyi";
+    };
+
     attic-cache.client = {
       enable = true;
       endpoint = "http://10.0.0.10:8092";
@@ -139,7 +156,10 @@ in {
     heartbeat.push = {
       enable = true;
       schedule = "*:0/5";
-      endpointUrl = "http://[fd77:a57c:f840:b526:8299:93f5:160:8bb0]:18080/heartbeat";
+      # sedna's heartbeat receiver over the public internet (port 18080 opened
+      # in sedna's WAN firewall). Previously a ZeroTier IPv6 literal that
+      # silently died if sedna's ZT address changed.
+      endpointUrl = "http://130.61.55.4:18080/heartbeat";
     };
 
     frigate.exposure = {
@@ -223,9 +243,6 @@ in {
           path = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
         }
       ];
-
-      declarations = [
-      ];
     };
 
     router = {
@@ -259,7 +276,7 @@ in {
               end = 200;
             };
           };
-          policy.routerAllowedTcpPorts = [3900 3901 3902];
+          policy.routerAllowedTcpPorts = [3900 3901];
         };
         iot = {
           vlan.id = 20;
@@ -364,7 +381,6 @@ in {
           then [config.services.zerotierone.port]
           else [];
       };
-      ipv6.ulaPrefix = "fd00:711a:edcd:7e75";
 
       zerotier = {
         enable = true;
@@ -429,10 +445,6 @@ in {
       ];
 
       services = [
-        # {
-        #   name = "wg.stark.pub";
-        #   target = "10.0.0.1";
-        # }
         {
           name = "mail.stark.pub";
           target = "10.0.0.10";
@@ -457,8 +469,6 @@ in {
         upstreamServers = [
           "1.1.1.1@853#cloudflare-dns.com"
           "1.0.0.1@853#cloudflare-dns.com"
-          "2606:4700:4700::1111@853#cloudflare-dns.com"
-          "2606:4700:4700::1001@853#cloudflare-dns.com"
         ];
         profiles = {
           default = {};
@@ -493,32 +503,14 @@ in {
       nginx = {
         enable = true;
         acmeEmail = "services@stark.pub";
+        # ddclient zones derived from my.publicDomains so the registry is the
+        # only place a public domain is declared.
         ddclient = {
           enable = true;
-          zones = [
-            {
-              zone = "stark.pub";
-              domains = [
-                "chat.stark.pub"
-                "minne.stark.pub"
-                "request.stark.pub"
-                "encke.stark.pub"
-                "minne-demo.stark.pub"
-                "mail.stark.pub"
-                "politikerstod.stark.pub"
-                "orebro.politikerstod.stark.pub"
-                "wake.stark.pub"
-                "wg.stark.pub"
-                "invoices.stark.pub"
-              ];
-              passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
-            }
-            {
-              zone = "nous.fyi";
-              domains = ["nous.fyi"];
-              passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
-            }
-          ];
+          zones = lib.mapAttrsToList (zone: domains: {
+            inherit zone domains;
+            passwordFile = config.my.secrets.getPath "ddclient" "ddclient.conf";
+          }) (lib.groupBy (d: config.my.publicDomains.${d}) (lib.attrNames config.my.publicDomains));
         };
         wildcardCerts = [
           {
@@ -536,6 +528,7 @@ in {
             port = 80;
             websockets = false;
             useWildcard = "lanstark";
+            lanOnly = true;
           }
         ];
         # Interactive SPA apps (minne, chat, nous, …) are exempt from
@@ -545,7 +538,6 @@ in {
         # path-based scanners on these hosts.
         rateLimits = {
           "minne.stark.pub" = null;
-          "chat.stark.pub" = null;
           "nous.fyi" = null;
           "politikerstod.stark.pub" = null;
           "request.stark.pub" = null;
@@ -556,10 +548,6 @@ in {
         enable = true;
         sourceSegment = "trusted";
         targetSegments = ["iot"];
-      };
-
-      monitoring = {
-        enable = false;
       };
 
       security = {
@@ -644,4 +632,22 @@ in {
       '';
     };
   };
+
+  # Every public vhost must be declared in my.publicDomains (which drives
+  # ddclient), so a new public domain can't silently miss DDNS updates.
+  assertions = let
+    publicVhostDomains = lib.unique (
+      (lib.concatLists (lib.mapAttrsToList (_: e:
+        map (v: v.domain)
+        (lib.filter (v: !(v.lanOnly or false)) e.http.virtualHosts))
+      (lib.filterAttrs (_: e: e.enable) config.my.exposure.services)))
+      ++ map (v: v.domain) (lib.filter (v: !(v.lanOnly or false)) config.my.router.nginx.virtualHosts)
+    );
+    missing = lib.filter (d: !(config.my.publicDomains ? ${d})) publicVhostDomains;
+  in [
+    {
+      assertion = missing == [];
+      message = "Public vhosts missing from my.publicDomains registry: ${lib.concatStringsSep ", " missing}";
+    }
+  ];
 }

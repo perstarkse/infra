@@ -81,17 +81,11 @@ _: {
 
             s3_api = {
               s3_region = cfg.region;
-              api_bind_addr = "[::]:${toString cfg.s3Port}";
+              api_bind_addr = "0.0.0.0:${toString cfg.s3Port}";
               root_domain = ".s3.garage";
             };
 
-            s3_web = {
-              bind_addr = "[::]:3902";
-              root_domain = ".web.garage";
-              enabled = true;
-            };
-
-            rpc_bind_addr = "[::]:${toString cfg.rpcPort}";
+            rpc_bind_addr = "0.0.0.0:${toString cfg.rpcPort}";
             admin = {
               api_bind_addr = "127.0.0.1:3903";
             };
@@ -127,7 +121,7 @@ _: {
         ];
       };
 
-      networking.firewall.allowedTCPPorts = [cfg.s3Port cfg.rpcPort 3902];
+      networking.firewall.allowedTCPPorts = [cfg.s3Port cfg.rpcPort];
 
       users.users.garage = {
         isSystemUser = true;

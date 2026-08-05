@@ -22,7 +22,6 @@ _: {
       import http.server
       import hmac
       import os
-      import socket
       import urllib.parse
       import urllib.request
 
@@ -31,6 +30,15 @@ _: {
       PUSH_TOKEN = os.environ["HEARTBEAT_PUSH_TOKEN"]
       GATUS_URL = "http://127.0.0.1:${toString cfg.receiver.gatusPort}/api/v1/endpoints/${receiverEndpointApiId}/external?success=true&duration=1ms"
       TIMESTAMP_FILE = "${lib.optionalString (cfg.receiver.heartbeatTimestampFile != null) cfg.receiver.heartbeatTimestampFile}"
+
+
+      def _write_timestamp():
+          import time as _time
+
+          _tmp = TIMESTAMP_FILE + ".tmp"
+          with open(_tmp, "w") as _f:
+              _f.write(str(int(_time.time())) + "\n")
+          os.replace(_tmp, TIMESTAMP_FILE)
 
 
       class Handler(http.server.BaseHTTPRequestHandler):
@@ -73,10 +81,8 @@ _: {
                   return
 
               try:
-                  import time as _time
                   if TIMESTAMP_FILE:
-                      with open(TIMESTAMP_FILE, "w") as _f:
-                          _f.write(str(int(_time.time())))
+                      _write_timestamp()
               except Exception:
                   pass
 
@@ -84,13 +90,7 @@ _: {
               self.end_headers()
 
 
-      class IPv6ThreadingHTTPServer(http.server.ThreadingHTTPServer):
-          address_family = socket.AF_INET6
-
-
-      Server = IPv6ThreadingHTTPServer if ":" in LISTEN[0] else http.server.ThreadingHTTPServer
-
-      with Server(LISTEN, Handler) as httpd:
+      with http.server.ThreadingHTTPServer(LISTEN, Handler) as httpd:
           httpd.serve_forever()
     '';
 
@@ -110,35 +110,6 @@ _: {
       if [[ "$target_url" == *"change-me"* ]]; then
         echo "heartbeat-push: HEARTBEAT_URL still has placeholder value" >&2
         exit 64
-      fi
-
-      # Normalize bare IPv6 URLs like http://fdxx:...:18080/heartbeat into
-      # bracketed form expected by curl: http://[fdxx:...]:18080/heartbeat.
-      if [[ "$target_url" == http://* || "$target_url" == https://* ]]; then
-        scheme="''${target_url%%://*}"
-        rest="''${target_url#*://}"
-        authority="$rest"
-        suffix=""
-
-        if [[ "$rest" == */* ]]; then
-          authority="''${rest%%/*}"
-          suffix="/''${rest#*/}"
-        fi
-
-        if [[ "$authority" != \[*\]* && "$authority" == *:*:* ]]; then
-          host="$authority"
-          port=""
-          last_segment="''${authority##*:}"
-          prefix="''${authority%:*}"
-
-          if [[ "$last_segment" =~ ^[0-9]+$ && "$prefix" == *:* ]]; then
-            host="$prefix"
-            port=":$last_segment"
-          fi
-
-          authority="[$host]$port"
-          target_url="''${scheme}://''${authority}''${suffix}"
-        fi
       fi
 
       ${pkgs.curl}/bin/curl -fsS \

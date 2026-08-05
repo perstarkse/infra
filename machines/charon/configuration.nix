@@ -5,7 +5,10 @@
   lib,
   ...
 }: let
-  pinnedKernelPkgs = import (builtins.getFlake "github:NixOS/nixpkgs/afbbf774e2087c3d734266c22f96fca2e78d3620") {
+  # Battlemage + xe is stable on this kernel branch; newer 6.12.x regressed GPU init.
+  # Pinned via the locked `nixpkgs-612` input instead of builtins.getFlake so
+  # evals work offline and the pin stays in flake.lock.
+  pinnedKernelPkgs = import ctx.inputs.nixpkgs612 {
     localSystem = {inherit (pkgs.stdenv.hostPlatform) system;};
     config = {
       allowUnfree = true;
@@ -25,7 +28,6 @@ in {
       terminal
       greetd
       ledger
-      vfio
       libvirt
       fonts
       intel-gpu
@@ -37,8 +39,6 @@ in {
       backups
       sunshine
       atuin
-      codenomad
-      openchamber
       sccache-daemon
       rclone-s3
       wake-proxy
@@ -71,7 +71,6 @@ in {
         zellij
         starship
         qutebrowser
-        looking-glass-client
         bitwarden-client
         blinkstick
         mail
@@ -123,7 +122,6 @@ in {
       fish.enable = true;
       git.enable = true;
       local-ai.enable = true;
-      looking-glass-client.enable = true;
       ncspot.enable = true;
       nix-scaffold.enable = true;
       node.enable = true;
@@ -181,50 +179,13 @@ in {
               }
             ];
           };
-          subagentOverrides = {
-            scout = {
-              model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = ["deepseek/deepseek-v4-flash"];
-              defaultContext = "fresh";
-              systemPromptMode = "append";
-              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
-            };
-            context-builder = {
-              model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = ["deepseek/deepseek-v4-flash"];
-              defaultContext = "fresh";
-              systemPromptMode = "append";
-              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
-            };
-            planner = {
-              model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = ["deepseek/deepseek-v4-flash"];
-              defaultContext = "fresh";
-              systemPromptMode = "append";
-              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
-            };
-            researcher = {
-              model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = ["deepseek/deepseek-v4-flash"];
-              defaultContext = "fresh";
-              systemPromptMode = "append";
-              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
-            };
-            reviewer = {
-              model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = ["deepseek/deepseek-v4-flash"];
-              defaultContext = "fresh";
-              systemPromptMode = "append";
-              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
-            };
-            delegate = {
-              model = "opencode/deepseek-v4-flash-free";
-              fallbackModels = ["deepseek/deepseek-v4-flash"];
-              defaultContext = "fresh";
-              systemPromptMode = "append";
-              systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
-            };
-          };
+          subagentOverrides = lib.genAttrs ["scout" "context-builder" "planner" "researcher" "reviewer" "delegate"] (_: {
+            model = "opencode/deepseek-v4-flash-free";
+            fallbackModels = ["deepseek/deepseek-v4-flash"];
+            defaultContext = "fresh";
+            systemPromptMode = "append";
+            systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
+          });
           mcpServers = {
             accounted = {
               url = "https://accounting.lan.stark.pub/api/extensions/ext/mcp-server/mcp?client=pi-code";
@@ -329,7 +290,7 @@ in {
       discover = {
         enable = true;
         dir = ../../vars/generators;
-        includeTags = ["aws" "charon" "openai" "openrouter" "openchamber" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload"];
       };
 
       exposeUserSecrets = [
@@ -521,13 +482,6 @@ in {
       ];
     };
 
-    vfio = {
-      enable = false;
-      # gpuIds = "10de:1b81,10de:10f0";
-      hugepages = 20;
-      kvmfrStaticSizeMb = 128;
-    };
-
     greetd = {
       enable = true;
       greeting = "Enter the heliosphere via charon!";
@@ -540,20 +494,6 @@ in {
     };
 
     atuin.enable = true;
-
-    codenomad = {
-      enable = false;
-      runAsMainUser = true;
-      listenAddress = "0.0.0.0";
-      port = 9898;
-      skipAuth = true;
-      unrestrictedRoot = false;
-      workspaceRoot = "/home/p/repos";
-      manageWorkspaceRoot = false;
-      openFirewall = true;
-    };
-
-    openchamber.enable = false;
 
     sccache-daemon = {
       enable = true;
@@ -610,9 +550,6 @@ in {
         genome-worktree-zenith = {
           activationPolicy = "manual"; # systemctl start wg-tunnel-genome-worktree-zenith
         };
-        # nebula-crystal-forge = {
-        #   activationPolicy = "up";  # Auto-start at boot
-        # };
       };
     };
 
@@ -687,15 +624,17 @@ in {
     # Allow 3000/1 and 5000/1 for dev server and tooling
     firewall.allowedTCPPorts = [53317 3001 5000 5001];
     # PI WEB for wakeproxy upstream (io only)
-    firewall.extraInputRules = lib.mkAfter ''
-      ip saddr 10.0.0.1 tcp dport 8504 accept
-      tcp dport 8504 drop
-    '';
-    firewall.extraCommands = lib.mkIf (!config.networking.nftables.enable) (lib.mkAfter ''
-      ${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp -s 10.0.0.1 --dport 8504 -j ACCEPT
-      ${pkgs.iptables}/bin/iptables -A nixos-fw -p tcp --dport 8504 -j DROP
-      ${pkgs.iptables}/bin/ip6tables -A nixos-fw -p tcp --dport 8504 -j DROP
-    '');
+    firewall.extraInputRules =
+      lib.mkAfter
+      (config._module.args.mkRestrictedPortRules {
+        port = 8504;
+        allowedSources = ["10.0.0.1"];
+      }).nft;
+    firewall.extraCommands = lib.mkIf (!config.networking.nftables.enable) (lib.mkAfter
+      (config._module.args.mkRestrictedPortRules {
+        port = 8504;
+        allowedSources = ["10.0.0.1"];
+      }).iptables);
   };
 
   hardware.bluetooth = {
@@ -750,5 +689,25 @@ in {
   };
   users.users.p = {
     extraGroups = ["dialout"];
+  };
+
+  # Stream the journal to io's mTLS journal-remote so sshd fail2ban on the
+  # router also covers this workstation.
+  services.journald.upload = {
+    enable = true;
+    settings = {
+      Upload = {
+        URL = "https://10.0.0.1:19532";
+        ServerKeyFile = toString (config.my.secrets.getPath "journal-upload" "client.key");
+        ServerCertificateFile = toString (config.my.secrets.getPath "journal-upload" "client.pem");
+        TrustedCertificateFile = toString (config.my.secrets.getPath "journal-upload" "ca.pem");
+      };
+    };
+  };
+
+  # The mTLS client key is root-only; run the uploader as root.
+  systemd.services.systemd-journal-upload.serviceConfig = {
+    DynamicUser = lib.mkForce false;
+    User = lib.mkForce "root";
   };
 }

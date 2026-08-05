@@ -64,7 +64,7 @@
 
       exposure = mkStandardExposureOptions {
         subject = "OpenWebUI";
-        visibility = "public";
+        visibility = "internal";
         withRouter = true;
       };
     };
@@ -117,7 +117,7 @@
         router = {inherit (cfg.exposure.router) enable targets;};
         http.virtualHosts = lib.optional (cfg.exposure.domain != null) {
           inherit (cfg.exposure) domain;
-          inherit (cfg.exposure) public cloudflareProxied;
+          inherit (cfg.exposure) lanOnly useWildcard;
         };
         firewall.local = {
           enable = cfg.firewallTcpPorts != [] || cfg.firewallUdpPorts != [];

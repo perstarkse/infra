@@ -10,7 +10,6 @@
     bridgePorts = helpers.bridgePorts or [];
     lanBridge = helpers.lanBridge or "br-lan";
     segments = helpers.segments or [];
-    ulaPrefix = helpers.ulaPrefix or cfg.ipv6.ulaPrefix;
     routedInterfaces = map (segment: segment.interface) segments;
     bridgeSelfVlanMembership = map (segment: {VLAN = segment.vlanId;}) segments;
   in {
@@ -27,11 +26,6 @@
           )
           segments)
         // {
-          "net.ipv6.conf.all.forwarding" = true;
-          "net.ipv6.conf.all.accept_ra" = 0;
-          "net.ipv6.conf.all.autoconf" = 0;
-          "net.ipv6.conf.all.use_tempaddr" = 0;
-
           # Hard-hang mitigations (io Jul 2026): reboot after panic; panic on
           # detectable lockups so RuntimeWatchdog / panic= can recover the box.
           "kernel.panic" = 10;
@@ -112,10 +106,7 @@
               networkConfig = {
                 DHCP = "yes";
                 IPv4Forwarding = true;
-                IPv6Forwarding = true;
-                IPv6AcceptRA = true;
               };
-              dhcpV6Config.WithoutRA = "solicit";
               linkConfig.RequiredForOnline = "routable";
             };
 
@@ -151,25 +142,6 @@
                   }
                   // lib.optionalAttrs (segment.linkMtu != null) {
                     linkConfig.MTUBytes = toString segment.linkMtu;
-                  }
-                  // lib.optionalAttrs segment.isPrimary {
-                    address = [
-                      "${segment.routerIp}/${toString segment.cidrPrefix}"
-                      "${ulaPrefix}::1/64"
-                    ];
-                    networkConfig = {
-                      ConfigureWithoutCarrier = true;
-                      DHCPPrefixDelegation = true;
-                      IPv6SendRA = true;
-                      IPv6AcceptRA = false;
-                    };
-                    ipv6Prefixes = [
-                      {
-                        AddressAutoconfiguration = true;
-                        OnLink = true;
-                        Prefix = "${ulaPrefix}::/64";
-                      }
-                    ];
                   })
             )
             segments);
