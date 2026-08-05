@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - **Heartbeat now goes over the public internet**: io pushes to `http://130.61.55.4:18080/heartbeat` (sedna public IP, port opened in the OCI security list) instead of a ZeroTier IPv6 literal; sedna's receiver binds `0.0.0.0` and the `heartbeat` secret no longer carries a target URL.
-- **Public-domain registry** (`my.publicDomains`): io's ddclient zones are derived from the registry and a build assertion requires every public vhost to be registered; sedna's failover and gatus subsets are asserted against the same registry (catching the ddclient/failover drift). `chat.stark.pub` is LAN-only (removed from the registry, `lanOnly = true`, router local DNS record).
+- **Public-domain registry** (`my.publicDomains`): io's ddclient zones are derived from the registry and a build assertion requires every public vhost to be registered; sedna's failover and gatus subsets are asserted against the same registry (catching the ddclient/failover drift). `chat.stark.pub` is LAN-only (removed from the registry, `lanOnly = true`, router local DNS record); `encke.stark.pub` removed from the registry (record deleted at the DNS provider).
 - charon kernel pin moved from `builtins.getFlake` into the locked `nixpkgs-612` input (kernel 6.12.74, offline evals, flake.lock-tracked).
 - paperless backups now write to both Garage and B2 (offsite copy; `restore.backend = "garage"`).
 - OpenWebUI `autoUpdate = false` for the digest-pinned image (no more weekly no-op restart).

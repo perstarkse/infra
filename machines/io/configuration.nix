@@ -109,7 +109,6 @@ in {
     publicDomains = {
       "minne.stark.pub" = "stark.pub";
       "request.stark.pub" = "stark.pub";
-      "encke.stark.pub" = "stark.pub";
       "minne-demo.stark.pub" = "stark.pub";
       "mail.stark.pub" = "stark.pub";
       "politikerstod.stark.pub" = "stark.pub";
