@@ -10,6 +10,8 @@
     system.stateVersion = config.my.stateVersion;
     clan.core.networking.forwardAgent = true;
 
+    time.timeZone = "Europe/Stockholm";
+
     # Opt out of the clan-core state-version vars generator.
     # The fleet's single source of truth is `my.stateVersion` (defaulting from
     # flake/lib/versions.nix), which this module wires into
@@ -132,5 +134,52 @@
         "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
       ];
     };
+
+    # Fleet-wide secrets wiring (options come from the external vars-helper
+    # input): the generators dir and no-manifest mode are the same on every
+    # machine, and the main-user key/ACL grants are the same on every
+    # workstation.
+    my.secrets = lib.mkMerge [
+      {
+        discover.dir = lib.mkDefault ../../vars/generators;
+        generateManifest = lib.mkDefault false;
+      }
+      (lib.mkIf config.my.mainUser.enable {
+        exposeUserSecrets = [
+          {
+            enable = true;
+            secretName = "user-ssh-key";
+            file = "key";
+            user = config.my.mainUser.name;
+            dest = "/home/${config.my.mainUser.name}/.ssh/id_ed25519";
+          }
+          {
+            enable = true;
+            secretName = "user-age-key";
+            file = "key";
+            user = config.my.mainUser.name;
+            dest = "/home/${config.my.mainUser.name}/.config/sops/age/keys.txt";
+          }
+        ];
+        allowReadAccess = [
+          {
+            readers = [config.my.mainUser.name];
+            path = config.my.secrets.getPath "api-key-openai" "api_key";
+          }
+          {
+            readers = [config.my.mainUser.name];
+            path = config.my.secrets.getPath "api-key-openrouter" "api_key";
+          }
+          {
+            readers = [config.my.mainUser.name];
+            path = config.my.secrets.getPath "api-key-aws-access" "aws_access_key_id";
+          }
+          {
+            readers = [config.my.mainUser.name];
+            path = config.my.secrets.getPath "api-key-aws-secret" "aws_secret_access_key";
+          }
+        ];
+      })
+    ];
   };
 }

@@ -13,15 +13,6 @@
     kernelModules = ["kvm-intel" "vfio-pci" "iommu"];
     kernelParams = ["intel_iommu=on" "iommu=pt"];
 
-    # boot.postBootCommands = ''
-    #   DEVS="0000:02:00.0 0000:03:00.0 0000:04:00.0"
-
-    #   for DEV in $DEVS; do
-    #     echo "vfio-pci" > /sys/bus/pci/devices/$DEV/driver_override
-    #   done
-    #   modprobe -i vfio-pci
-    # '';
-
     extraModulePackages = [];
     swraid = {
       enable = true;
@@ -48,13 +39,11 @@
     "/mnt/18tb" = {
       device = "/dev/disk/by-uuid/937c61e1-9f1c-4d56-8984-5888236ab762";
       fsType = "xfs";
-      # options = ["noatime"];
     };
 
     "/mnt/4tb" = {
       device = "/dev/disk/by-uuid/7c672abf-30ec-46be-aa0f-7931d6ba1931";
       fsType = "xfs";
-      # options = ["noatime"];
     };
 
     "/storage" = {

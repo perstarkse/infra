@@ -64,27 +64,8 @@
           type = "filesystem";
           format = "ext4";
           mountpoint = "/mnt/sdb";
-          # mountOptions = ["noatime"];
         };
       };
-
-      # ssd-intel-b = {
-      #   device = "/dev/disk/by-id/wwn-0x55cd2e415638bd82";
-      #   type = "disk";
-      #   content = {
-      #     type = "filesystem";
-      #     format = "ext4";
-      #     mountpoint = "/mnt/sdc";
-      #     # mountOptions = ["noatime"];
-      #   };
-      # };
-
-      # Windows disk (declared but completely untouched - no content specification)
-      #kingston-win = {
-      #  device = "/dev/disk/by-id/wwn-0x50026b775804823b";
-      #  type = "disk";
-      #  # No content block = disk is ignored by disko
-      #};
     };
 
     # Tmpfs for temporary files (10GB in RAM)

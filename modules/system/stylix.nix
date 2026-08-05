@@ -12,7 +12,11 @@
     ];
 
     options.my.stylix = {
-      enable = lib.mkEnableOption "Stylix theming (base16 + fonts + cursor)";
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Stylix theming (base16 + fonts + cursor)";
+      };
     };
 
     # Upstream stylix (>= 718c14e) sets services.kmscon.config, which nixpkgs

@@ -35,6 +35,7 @@ in {
       bluetooth-resume
       docker
       attic-cache
+      journal-upload
       steam
       backups
       sunshine
@@ -264,12 +265,9 @@ in {
   };
 
   my = {
-    listenNetworkAddress = "10.0.0.15";
-
     stylix.enable = true;
 
     docker.enable = true;
-    interception-tools.enable = true;
     fonts.enable = true;
     intel-gpu.enable = true;
     sound.enable = true;
@@ -289,44 +287,10 @@ in {
     secrets = {
       discover = {
         enable = true;
-        dir = ../../vars/generators;
         includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload"];
       };
 
-      exposeUserSecrets = [
-        {
-          enable = true;
-          secretName = "user-ssh-key";
-          file = "key";
-          user = config.my.mainUser.name;
-          dest = "/home/${config.my.mainUser.name}/.ssh/id_ed25519";
-        }
-        {
-          enable = true;
-          secretName = "user-age-key";
-          file = "key";
-          user = config.my.mainUser.name;
-          dest = "/home/${config.my.mainUser.name}/.config/sops/age/keys.txt";
-        }
-      ];
-
       allowReadAccess = [
-        {
-          readers = [config.my.mainUser.name];
-          path = config.my.secrets.getPath "api-key-openai" "api_key";
-        }
-        {
-          readers = [config.my.mainUser.name];
-          path = config.my.secrets.getPath "api-key-openrouter" "api_key";
-        }
-        {
-          readers = [config.my.mainUser.name];
-          path = config.my.secrets.getPath "api-key-aws-access" "aws_access_key_id";
-        }
-        {
-          readers = [config.my.mainUser.name];
-          path = config.my.secrets.getPath "api-key-aws-secret" "aws_secret_access_key";
-        }
         {
           readers = [config.my.mainUser.name];
           path = config.my.secrets.getPath "z-ai-env" "env";
@@ -489,8 +453,6 @@ in {
 
     gui = {
       enable = true;
-      session = "niri";
-      terminal = "kitty";
     };
 
     atuin.enable = true;
@@ -510,9 +472,7 @@ in {
     auto-suspend = {
       enable = true;
       checkIntervalMinutes = 6;
-      requiredIdleChecks = 3;
       loadThreshold = "6.0";
-      userIdleSeconds = 600;
     };
 
     # Remote worker for politikerstod OCR/embeddings processing
@@ -582,8 +542,6 @@ in {
 
   zramSwap.enable = true;
 
-  time.timeZone = "Europe/Stockholm";
-
   environment.systemPackages = with pkgs; [
     unstable.code-cursor-fhs
     devenv
@@ -618,7 +576,6 @@ in {
   };
 
   networking = {
-    interfaces.enp4s0.wakeOnLan.enable = lib.mkForce false;
     firewall.allowPing = true;
     # Allow localsend receive port
     # Allow 3000/1 and 5000/1 for dev server and tooling
@@ -674,8 +631,6 @@ in {
 
   hardware.cpu.amd.updateMicrocode = true;
 
-  powerManagement.enable = true;
-
   services.power-profiles-daemon.enable = true;
   services.upower.enable = true;
 
@@ -691,23 +646,5 @@ in {
     extraGroups = ["dialout"];
   };
 
-  # Stream the journal to io's mTLS journal-remote so sshd fail2ban on the
-  # router also covers this workstation.
-  services.journald.upload = {
-    enable = true;
-    settings = {
-      Upload = {
-        URL = "https://10.0.0.1:19532";
-        ServerKeyFile = toString (config.my.secrets.getPath "journal-upload" "client.key");
-        ServerCertificateFile = toString (config.my.secrets.getPath "journal-upload" "client.pem");
-        TrustedCertificateFile = toString (config.my.secrets.getPath "journal-upload" "ca.pem");
-      };
-    };
-  };
-
-  # The mTLS client key is root-only; run the uploader as root.
-  systemd.services.systemd-journal-upload.serviceConfig = {
-    DynamicUser = lib.mkForce false;
-    User = lib.mkForce "root";
-  };
+  my.journalUpload.enable = true;
 }

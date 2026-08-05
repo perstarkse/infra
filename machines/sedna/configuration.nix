@@ -60,7 +60,6 @@ in {
     secrets = {
       discover = {
         enable = true;
-        dir = ../../vars/generators;
         includeTags = [
           "gatus"
           "heartbeat"
@@ -68,15 +67,9 @@ in {
         ];
       };
 
-      generateManifest = false;
-
       allowReadAccess = [
         {
-          readers = ["failover-check"];
-          path = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
-        }
-        {
-          readers = ["nginx"];
+          readers = ["failover-check" "nginx"];
           path = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
         }
       ];
@@ -105,8 +98,8 @@ in {
       dnsFailover = {
         enable = true;
         sednaPublicIp = "130.61.55.4";
-        heartbeatTimeoutMinutes = 5;
-        skipDnsRevert = true;
+        # skipDnsRevert defaults to true: ddclient on IO restores DNS after the
+        # outage, avoiding split-brain if IO's public IP changed meanwhile.
         cloudflareApiTokenFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
 
         zones = lib.mapAttrsToList (zone: domains: {
@@ -245,7 +238,6 @@ in {
       user = "heartbeat";
       group = "heartbeat";
       listenAddress = "0.0.0.0";
-      port = 18080;
       externalEndpointName = "io-heartbeat";
       deadmanInterval = "15m";
       deadmanAlert.description = "io heartbeat missing";
@@ -274,8 +266,6 @@ in {
   };
 
   networking.firewall.allowedTCPPorts = [
-    80
-    443
     2222
   ];
 

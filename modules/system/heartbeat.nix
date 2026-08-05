@@ -172,7 +172,9 @@ _: {
 
         gatusPort = lib.mkOption {
           type = lib.types.port;
-          default = 8080;
+          # Track the Gatus API port so the deadman callback cannot silently
+          # diverge from where Gatus actually listens (both defaults were 8080).
+          default = (config.my.remote-monitoring or {}).webPort or 8080;
           description = "Local Gatus API port.";
         };
 

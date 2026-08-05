@@ -7,7 +7,11 @@
   }: let
     cfg = config.my.interception-tools;
   in {
-    options.my.interception-tools.enable = lib.mkEnableOption "interception-tools caps2esc key remapping";
+    options.my.interception-tools.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "interception-tools caps2esc key remapping";
+    };
     config = lib.mkIf cfg.enable {
       services.interception-tools = {
         enable = true;

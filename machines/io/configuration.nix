@@ -11,7 +11,7 @@
   routerDefaultDnsTarget =
     if routerImportCfg.defaultDnsTarget != null
     then routerImportCfg.defaultDnsTarget
-    else config.routerHelpers.primarySegment.routerIp or "10.0.0.1";
+    else config.routerHelpers.primarySegment.routerIp;
   routerImportedEndpoints = endpointsLib.mkRouterImportedEndpoints {
     nixosConfigurations = ctx.flake.nixosConfigurations or {};
     inherit routerImportCfg;
@@ -49,8 +49,6 @@ in {
       agent-microvm
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default]);
-
-  time.timeZone = "Europe/Stockholm";
 
   services.wakeproxy = {
     enable = true;
@@ -124,9 +122,6 @@ in {
       name = "p";
     };
 
-    stylix.enable = true;
-
-    interception-tools.enable = true;
     frigate.enable = true;
     home-assistant.enable = true;
 
@@ -246,11 +241,9 @@ in {
     secrets = {
       discover = {
         enable = true;
-        dir = ../../vars/generators;
         includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload" "frigate"];
       };
 
-      generateManifest = false;
       allowReadAccess = [
         {
           readers = ["wake-proxy"];
@@ -299,17 +292,8 @@ in {
         iot = {
           vlan.id = 20;
           subnet = "10.0.20";
-          dhcp = {
-            range = {
-              start = 10;
-              end = 200;
-            };
-          };
           dns.profile = "iot";
           policy = {
-            internet = true;
-            isolateClients = false;
-            canReach = [];
             canBeReachedFrom = [
               {
                 segment = "trusted";
@@ -323,15 +307,7 @@ in {
         work = {
           vlan.id = 60;
           subnet = "10.0.60";
-          dhcp = {
-            range = {
-              start = 10;
-              end = 200;
-            };
-          };
           policy = {
-            internet = true;
-            isolateClients = false;
             tcpMssClamp = 1280;
           };
         };
@@ -339,34 +315,15 @@ in {
         kids = {
           vlan.id = 40;
           subnet = "10.0.40";
-          dhcp = {
-            range = {
-              start = 10;
-              end = 200;
-            };
-          };
           dns.profile = "kids";
-          policy = {
-            internet = true;
-            isolateClients = false;
-            canReach = [];
-          };
         };
 
         guests = {
           vlan.id = 50;
           subnet = "10.0.50";
-          dhcp = {
-            range = {
-              start = 10;
-              end = 200;
-            };
-          };
           dns.profile = "guests";
           policy = {
-            internet = true;
             isolateClients = true;
-            canReach = [];
           };
         };
 
@@ -388,12 +345,10 @@ in {
           };
           policy = {
             internet = false;
-            canReach = [];
           };
         };
       };
       wan = {
-        interface = "enp1s0";
         allowedUdpPorts =
           if config.services.zerotierone.enable
           then [config.services.zerotierone.port]
@@ -402,7 +357,6 @@ in {
 
       zerotier = {
         enable = true;
-        routerAccessLevel = "infra";
       };
 
       wireguard = {
@@ -423,19 +377,16 @@ in {
           name = "charon";
           ip = "15";
           mac = "f0:2f:74:de:91:0a";
-          portForwards = [];
         }
         {
           name = "unifi-switch";
           ip = "20";
           mac = "84:78:48:6a:f9:f0";
-          portForwards = [];
         }
         {
           name = "ariel";
           ip = "25";
           mac = "a0:88:69:af:a7:f3";
-          portForwards = [];
         }
         {
           name = "makemake";
@@ -475,21 +426,13 @@ in {
 
       dhcp = {
         enable = true;
-        validLifetime = 86400;
-        renewTimer = 43200;
-        rebindTimer = 75600;
         domainName = "lan.stark.pub";
       };
 
       dns = {
         enable = true;
         localZones = ["lan." "lan.stark.pub."];
-        upstreamServers = [
-          "1.1.1.1@853#cloudflare-dns.com"
-          "1.0.0.1@853#cloudflare-dns.com"
-        ];
         profiles = {
-          default = {};
           iot = {
             blocklistSources = [
               "https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt"
@@ -520,7 +463,6 @@ in {
 
       nginx = {
         enable = true;
-        acmeEmail = "services@stark.pub";
         # ddclient zones derived from my.publicDomains so the registry is the
         # only place a public domain is declared.
         ddclient = {
@@ -556,30 +498,15 @@ in {
 
       casting = {
         enable = true;
-        sourceSegment = "trusted";
         targetSegments = ["iot"];
       };
 
       security = {
         enable = true;
         fail2ban = {
-          enable = true;
+          # LAN-fleet ban policy: 30m is a deliberate override of the 10m
+          # module default (fail2ban restarts are cheap, 2am breakage is not).
           banTime = "30m";
-          maxRetry = 5;
-          jails = {
-            sshd.enable = true;
-            nginx = {
-              urlProbe.enable = true;
-              botsearch.enable = true;
-            };
-            mail = {
-              # SMTP/IMAP terminate on makemake, where the postfix/dovecot
-              # jails run against its local journal (io's copies read remote
-              # forwarded journals and never fire).
-              postfix.enable = false;
-              dovecot.enable = false;
-            };
-          };
         };
         journalReceiver.enable = true;
       };
@@ -606,11 +533,6 @@ in {
   # _acme-challenge.lan.stark.pub, so lego's DNS-01 propagation check would
   # fail. Query public resolvers for the challenge TXT record instead.
   security.acme.certs."lan.stark.pub".extraLegoFlags = ["--dns.resolvers=1.1.1.1:53,1.0.0.1:53"];
-
-  # invoices.stark.pub — public webhook endpoint for Accounted invoice-inbox
-  # (declared in my.endpoints.services.invoices above; ACME DNS-01 flows from
-  # the vhost's acmeDns01). The main accounted app remains LAN-only at
-  # accounting.lan.stark.pub.
 
   # Escape hatch: raw services.nginx.virtualHosts writes must not introduce
   # new WAN-listening vhosts outside the endpoints layer. Every public domain

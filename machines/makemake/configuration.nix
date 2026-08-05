@@ -35,6 +35,7 @@
       supabase
       accounted
       accounted-ocr
+      journal-upload
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
@@ -50,11 +51,6 @@
   my = {
     attic-cache.server = {
       enable = true;
-      listenAddress = "10.0.0.10";
-      port = 8092;
-      stateDir = "/var/lib/atticd";
-      storageDir = "/storage/attic/storage";
-      cacheName = "heliosphere";
       retentionPeriod = "1 months";
     };
 
@@ -63,10 +59,7 @@
       name = "p";
     };
 
-    stylix.enable = true;
-
     docker.enable = true;
-    interception-tools.enable = true;
 
     listenNetworkAddress = "10.0.0.10";
 
@@ -106,11 +99,8 @@
     secrets = {
       discover = {
         enable = true;
-        dir = ../../vars/generators;
         includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords"];
       };
-
-      generateManifest = false;
 
       allowReadAccess = [
         {
@@ -226,8 +216,6 @@
 
     vaultwarden = {
       enable = true;
-      port = 8322;
-      address = "10.0.0.10";
       endpoints = {
         enable = true;
         domain = "vault.lan.stark.pub";
@@ -249,7 +237,6 @@
       # Bump the digest explicitly to update.
       image = "ghcr.io/open-webui/open-webui@sha256:6a773e5c3a246b65cbe74ce942b294292c0e5f81c138f703d111bc162f7d7c3d";
       autoUpdate = false;
-      updateSchedule = "weekly";
       endpoints = {
         enable = true;
         domain = "chat.stark.pub";
@@ -264,25 +251,13 @@
     # SurrealDB configuration
     surrealdb = {
       enable = true;
-      host = "127.0.0.1";
-      port = 8220;
-      dataDir = "/var/lib/surrealdb";
     };
 
     # Minne SaaS configuration
     minne-saas = {
       enable = true;
       port = 3001;
-      address = "10.0.0.10";
-      dataDir = "/var/lib/minne-saas";
 
-      surrealdb = {
-        host = "127.0.0.1";
-        port = 8221;
-        dataDir = "/var/lib/surrealdb-saas";
-      };
-
-      logLevel = "info";
       demoMode = true;
       demoAllowedMutatingPaths = [
         "/signin"
@@ -307,10 +282,7 @@
     # Garage S3-compatible storage (clustered with io)
     garage = {
       enable = true;
-      dataDir = "/var/lib/garage/data";
       metaDir = "/var/lib/garage/meta";
-      s3Port = 3900;
-      region = "garage";
       replicationMode = 2;
       rpcPublicAddr = "10.0.0.10:3901";
       zone = "makemake";
@@ -349,11 +321,6 @@
     # Nous burnout prevention app
     nous = {
       enable = true;
-      port = 3002;
-      address = "10.0.0.10";
-      dataDir = "/var/lib/nous";
-      host = "https://nous.fyi";
-      logLevel = "info";
       endpoints = {
         enable = true;
         public = true;
@@ -368,17 +335,6 @@
       database = {
         name = "nous_prod";
         user = "nous";
-      };
-
-      s3 = {
-        endpoint = "http://127.0.0.1:3900";
-        bucket = "nous-backups";
-        region = "garage";
-      };
-
-      smtp = {
-        host = "mail-eu.smtp2go.com";
-        port = 587;
       };
     };
 
@@ -554,21 +510,10 @@
     # Self-hosted Supabase + Accounted (LAN-only via io)
     supabase = {
       enable = true;
-      siteUrl = "https://accounting.lan.stark.pub";
       additionalRedirectUrls = [
         "https://accounting.lan.stark.pub/auth/callback"
         "https://accounting.lan.stark.pub/api/auth/callback"
       ];
-      smtp = {
-        host = "mail-eu.smtp2go.com";
-        port = 587;
-        adminEmail = "noreply@stark.pub";
-        senderName = "Accounted";
-      };
-      storage = {
-        endpoint = "http://10.0.0.10:3900";
-        bucket = "supabase";
-      };
       endpoints = {
         enable = true;
         domain = "supabase.lan.stark.pub";
@@ -583,8 +528,6 @@
 
     accounted = {
       enable = true;
-      port = 3050;
-      address = "10.0.0.10";
       supabaseUrl = "https://supabase.lan.stark.pub";
       endpoints = {
         enable = true;
@@ -607,11 +550,6 @@
 
     accounted-ocr = {
       enable = true;
-      backend = "local";
-      llm.ollama = {
-        model = "qwen2.5:3b"; # 3B is snappy on N100; try 7B if you have patience
-        igpu = true; # Uses Intel UHD Graphics via Vulkan
-      };
     };
   };
 
@@ -671,8 +609,6 @@
       }
     ];
   };
-
-  time.timeZone = "Europe/Stockholm";
 
   services.deleterr.enable = true;
 
@@ -764,24 +700,7 @@
 
   # Centralized logging to router for fail2ban — mTLS with the router's
   # journal-remote listener (client cert signed by journal-upload ca.pem).
-  services.journald.upload = {
-    enable = true;
-    settings = {
-      Upload = {
-        URL = "https://10.0.0.1:19532";
-        ServerKeyFile = toString (config.my.secrets.getPath "journal-upload" "client.key");
-        ServerCertificateFile = toString (config.my.secrets.getPath "journal-upload" "client.pem");
-        TrustedCertificateFile = toString (config.my.secrets.getPath "journal-upload" "ca.pem");
-      };
-    };
-  };
-
-  # The mTLS client key is root-only; run the uploader as root (the module
-  # defaults to a DynamicUser that cannot read it).
-  systemd.services.systemd-journal-upload.serviceConfig = {
-    DynamicUser = lib.mkForce false;
-    User = lib.mkForce "root";
-  };
+  my.journalUpload.enable = true;
 
   # indicator-alert-daemon publishes to a write-protected ntfy topic; the app
   # has no auth support, so wrap its config: ntfy accepts the token in the
