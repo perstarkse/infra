@@ -99,6 +99,9 @@
           withRouter = true;
           withExtraConfigDefault = ''
             client_max_body_size 55M;
+            # The app serves /app/* assets from /assets/app/* (the old io-side
+            # /app/ location rewrite, now declared with the service).
+            rewrite ^/app/(.*)$ /assets/app/$1 break;
           '';
         }
         // {
@@ -209,6 +212,9 @@
           inherit (cfg.exposure) domain;
           inherit (cfg.exposure) public cloudflareProxied extraConfig;
           websockets = false;
+          # Interactive SPA: exempt from limit_req (page loads fire ~40
+          # requests; fail2ban still blunts path-based scanners).
+          rateLimit = null;
         };
         firewall.local = {
           enable = cfg.openFirewall;

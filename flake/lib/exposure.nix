@@ -36,6 +36,7 @@
       override = routerImportCfg.vhostOverrides."${machineName}.${serviceName}" or {};
       overrideBasicAuth = override.basicAuth or null;
       overrideAcmeDns01 = override.acmeDns01 or null;
+      overrideRateLimit = override.rateLimit or "keep";
       secretBasicAuth =
         if vhost.basicAuthSecret != null
         then resolveBasicAuthSecret vhost.basicAuthSecret
@@ -47,7 +48,13 @@
     in
       vhost
       // lib.optionalAttrs (basicAuth != null) {inherit basicAuth;}
-      // lib.optionalAttrs (overrideAcmeDns01 != null) {acmeDns01 = overrideAcmeDns01;};
+      // lib.optionalAttrs (overrideAcmeDns01 != null) {acmeDns01 = overrideAcmeDns01;}
+      // lib.optionalAttrs (overrideRateLimit != "keep") {
+        rateLimit =
+          if overrideRateLimit == "exempt"
+          then null
+          else overrideRateLimit;
+      };
 
     mkImportedExposure = machineName: serviceName: exposure: let
       importedVhosts = map (applyVhostOverride machineName serviceName) exposure.http.virtualHosts;

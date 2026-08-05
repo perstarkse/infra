@@ -242,6 +242,10 @@
             inherit (cfg.exposure) domain;
             inherit (cfg.exposure) public cloudflareProxied;
             websockets = false;
+            # Interactive SPA: each page load fires ~40 requests, so any
+            # limit_req ceiling serializes real users. Exempt; the demo vhost
+            # below (redirect-only) stays on the strict shared zone.
+            rateLimit = null;
             extraConfig = ''
               proxy_set_header Connection "close";
               proxy_http_version 1.1;

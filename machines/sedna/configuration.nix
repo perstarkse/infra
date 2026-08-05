@@ -4,23 +4,13 @@
   lib,
   ...
 }: let
-  # Public-domain registry (mirror of io's my.publicDomains): every public
-  # domain the fleet serves. Failover and gatus consume explicit subsets of
-  # it; the assertions at the bottom keep those subsets in sync with the
-  # registry so a forgotten domain fails the build instead of silently
-  # skipping failover/gatus coverage.
-  publicDomains = {
-    "minne.stark.pub" = "stark.pub";
-    "request.stark.pub" = "stark.pub";
-    "minne-demo.stark.pub" = "stark.pub";
-    "mail.stark.pub" = "stark.pub";
-    "politikerstod.stark.pub" = "stark.pub";
-    "orebro.politikerstod.stark.pub" = "stark.pub";
-    "wake.stark.pub" = "stark.pub";
-    "wg.stark.pub" = "stark.pub";
-    "invoices.stark.pub" = "stark.pub";
-    "nous.fyi" = "nous.fyi";
-  };
+  # Public-domain registry is derived on io (my.publicDomains is a projection
+  # of the endpoints layer — see modules/system/options.nix), so there is no
+  # mirror to drift. Failover and gatus consume explicit subsets of it; the
+  # assertions at the bottom keep those subsets in sync with the registry so a
+  # forgotten domain fails the build instead of silently skipping
+  # failover/gatus coverage.
+  publicDomains = ctx.flake.nixosConfigurations.io.config.my.publicDomains;
   # Domains that should repoint to sedna's maintenance page during an io outage.
   failoverDomains = [
     "minne.stark.pub"
@@ -329,7 +319,7 @@ in {
     UMask = "0022";
   };
 
-  # Keep failover/gatus domain subsets in sync with the public-domain registry.
+  # Keep failover/gatus domain subsets in sync with io's derived registry.
   assertions = [
     {
       assertion = lib.all (d: publicDomains ? ${d}) failoverDomains;

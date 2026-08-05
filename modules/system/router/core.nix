@@ -649,37 +649,39 @@
                   default = null;
                   description = "Enable HTTP Basic Authentication for this vhost";
                 };
+                rateLimit = mkOption {
+                  type = types.nullOr (types.either (types.enum ["strict"]) (types.submodule {
+                    options = {
+                      rate = mkOption {
+                        type = types.str;
+                        default = "60r/m";
+                        description = "Sustained request rate for this vhost's dedicated limit_req zone.";
+                      };
+                      burst = mkOption {
+                        type = types.int;
+                        default = 120;
+                        description = "Burst capacity for this vhost's dedicated limit_req zone (excess requests are queued, not dropped).";
+                      };
+                      nodelay = mkOption {
+                        type = types.bool;
+                        default = false;
+                        description = "Use nodelay with the dedicated zone (drop excess requests instead of queueing).";
+                      };
+                    };
+                  }));
+                  default = "strict";
+                  description = ''
+                    HTTP rate limiting for this vhost. "strict" (default) uses the
+                    shared `public` zone (10r/m, burst 20, nodelay); null exempts
+                    the vhost from limit_req entirely (interactive SPAs); a
+                    {rate, burst, nodelay} spec gives the vhost a dedicated zone.
+                    LAN-only vhosts are never rate limited.
+                  '';
+                };
               };
             });
             default = [];
             description = "List of virtual hosts to configure";
-          };
-          rateLimits = mkOption {
-            type = types.attrsOf (types.nullOr (types.submodule {
-              options = {
-                rate = mkOption {
-                  type = types.str;
-                  default = "60r/m";
-                  description = "Sustained request rate for this vhost's dedicated limit_req zone.";
-                };
-                burst = mkOption {
-                  type = types.int;
-                  default = 120;
-                  description = "Burst capacity for this vhost's dedicated limit_req zone (excess requests are queued, not dropped).";
-                };
-              };
-            }));
-            default = {};
-            description = ''
-              Per-vhost limit_req overrides keyed by domain. Public vhosts not
-              listed here share the strict `public` zone (10r/m, burst 20,
-              nodelay). Listed vhosts get their own zone (queued, no nodelay)
-              so JS-heavy apps (minne, chat, …) no longer starve each other
-              or get 503s on normal page loads.
-              A domain set to `null` opts out of limit_req entirely (rely on
-              fail2ban to blunt scanners) — the right choice for interactive
-              SPA apps whose request pattern is indistinguishable from scraping.
-            '';
           };
         };
 

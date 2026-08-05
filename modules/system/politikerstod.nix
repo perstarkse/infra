@@ -441,6 +441,9 @@
                 public = instance.exposure.public or false;
                 cloudflareProxied = instance.exposure.cloudflareProxied or false;
                 websockets = false;
+                # Politikerstöd is an interactive SPA: exempt from limit_req (same
+                # rationale as the router's old rateLimits exemption).
+                rateLimit = null;
               };
               firewall.local = {
                 enable = (instance.openFirewall or true) || (instance.allowedFirewallSources or []) != [];

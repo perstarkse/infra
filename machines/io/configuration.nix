@@ -103,21 +103,14 @@ in {
 
     listenNetworkAddress = "10.0.0.1"; # Internal LAN IP
 
-    # Public-domain registry: single source of truth for ddclient zones below
-    # and for the ACME/vhost coverage assertion. Keep every public domain here;
-    # sedna's failover/gatus subsets are validated against the same list.
-    publicDomains = {
-      "minne.stark.pub" = "stark.pub";
-      "request.stark.pub" = "stark.pub";
-      "minne-demo.stark.pub" = "stark.pub";
-      "mail.stark.pub" = "stark.pub";
-      "politikerstod.stark.pub" = "stark.pub";
-      "orebro.politikerstod.stark.pub" = "stark.pub";
-      "wake.stark.pub" = "stark.pub";
-      "wg.stark.pub" = "stark.pub";
-      "invoices.stark.pub" = "stark.pub";
-      "nous.fyi" = "nous.fyi";
-    };
+    # Public-domain registry is derived, not maintained (see options.nix):
+    # every non-lanOnly vhost across the endpoints layer plus the explicit
+    # non-vhost public records below. ddclient zones flow from the result.
+    publicDnsRecords = [
+      "wg.stark.pub" # WireGuard endpoint — public A record, no vhost
+      "mail.stark.pub" # SMTP/IMAP on makemake — public A record, no nginx vhost
+      "orebro.politikerstod.stark.pub" # parked politikerstod instance — public A record, no vhost
+    ];
 
     attic-cache.client = {
       enable = true;
@@ -197,6 +190,11 @@ in {
           environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
         };
       };
+      # request.stark.pub (Overseerr) is an interactive SPA declared by the
+      # external private-infra module, which cannot express the limit_req
+      # exemption itself; apply it router-side (same effect as the old
+      # rateLimits."request.stark.pub" = null).
+      vhostOverrides."makemake.request".rateLimit = "exempt";
     };
 
     exposure.services =
@@ -219,6 +217,32 @@ in {
             {
               name = "unifi.lan.stark.pub";
               target = "10.0.0.1";
+            }
+          ];
+        };
+        # invoices.stark.pub — public webhook endpoint for Accounted
+        # invoice-inbox (migrated from raw services.nginx.virtualHosts). Only
+        # the Resend inbound email webhook path proxies to accounted on
+        # makemake; everything else returns 444 like the `_` default server.
+        invoices = {
+          upstream = {
+            host = "10.0.0.10";
+            port = 3050;
+          };
+          http.virtualHosts = [
+            {
+              domain = "invoices.stark.pub";
+              public = true;
+              websockets = false;
+              acmeDns01 = {
+                dnsProvider = "cloudflare";
+                environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+              };
+              extraConfig = ''
+                if ($uri !~ ^/api/extensions/ext/invoice-inbox/inbound) {
+                  return 444;
+                }
+              '';
             }
           ];
         };
@@ -520,6 +544,9 @@ in {
             group = "nginx";
           }
         ];
+        # Interactive SPA apps (minne, nous, politikerstod, request) declare
+        # rateLimit = null on their vhosts (see the service modules); the
+        # strict `public` limit_req zone applies to every other public vhost.
         virtualHosts = [
           {
             domain = "kube-test.lan.stark.pub";
@@ -530,17 +557,6 @@ in {
             lanOnly = true;
           }
         ];
-        # Interactive SPA apps (minne, chat, nous, …) are exempt from
-        # limit_req entirely: each page load fires ~40 requests, and any
-        # rate ceiling (even 60r/m) serializes them to ~1 req/s — the cause of
-        # the 10s+ page loads. fail2ban (url-probe/botsearch) still blunts
-        # path-based scanners on these hosts.
-        rateLimits = {
-          "minne.stark.pub" = null;
-          "nous.fyi" = null;
-          "politikerstod.stark.pub" = null;
-          "request.stark.pub" = null;
-        };
       };
 
       casting = {
@@ -597,56 +613,28 @@ in {
   security.acme.certs."lan.stark.pub".extraLegoFlags = ["--dns.resolvers=1.1.1.1:53,1.0.0.1:53"];
 
   # invoices.stark.pub — public webhook endpoint for Accounted invoice-inbox
-  # Only exposes the Resend inbound email webhook path; everything else returns 444.
-  # The main accounted app remains LAN-only at accounting.lan.stark.pub.
-  security.acme.certs."invoices.stark.pub" = {
-    domain = "invoices.stark.pub";
-    dnsProvider = "cloudflare";
-    environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
-    group = "nginx";
-    webroot = null;
-  };
-  services.nginx.virtualHosts."invoices.stark.pub" = {
-    serverName = "invoices.stark.pub";
-    enableACME = true;
-    forceSSL = true;
-    locations."/api/extensions/ext/invoice-inbox/inbound" = {
-      proxyPass = "http://10.0.0.10:3050";
-      recommendedProxySettings = true;
-      extraConfig = "limit_req zone=public burst=20 nodelay;";
-    };
-    locations."/" = {
-      return = "444";
-    };
-  };
+  # (declared in my.exposure.services.invoices above; ACME DNS-01 flows from
+  # the vhost's acmeDns01). The main accounted app remains LAN-only at
+  # accounting.lan.stark.pub.
 
-  # Custom nginx location for nous.fyi /app/ -> /assets/app/ rewrite
-  services.nginx.virtualHosts."nous.fyi".locations = {
-    "/app/" = {
-      proxyPass = "http://10.0.0.10:3002/assets/app/";
-      recommendedProxySettings = true;
-      extraConfig = ''
-        client_max_body_size 55M;
-        if ($cf_access_ok = 0) { return 403; }
-      '';
-    };
-  };
-
-  # Every public vhost must be declared in my.publicDomains (which drives
-  # ddclient), so a new public domain can't silently miss DDNS updates.
+  # Escape hatch: raw services.nginx.virtualHosts writes must not introduce
+  # new WAN-listening vhosts outside the endpoints layer. Every public domain
+  # flows through the derived my.publicDomains registry (ddclient zones), so a
+  # raw public vhost would silently miss DDNS updates. Internal raw vhosts
+  # (e.g. journal-upload, which binds 10.0.0.1) are unaffected.
   assertions = let
-    publicVhostDomains = lib.unique (
+    declaredDomains = lib.unique (
       (lib.concatLists (lib.mapAttrsToList (_: e:
-        map (v: v.domain)
-        (lib.filter (v: !(v.lanOnly or false)) e.http.virtualHosts))
+        map (v: v.domain) e.http.virtualHosts)
       (lib.filterAttrs (_: e: e.enable) config.my.exposure.services)))
-      ++ map (v: v.domain) (lib.filter (v: !(v.lanOnly or false)) config.my.router.nginx.virtualHosts)
+      ++ map (v: v.domain) config.my.router.nginx.virtualHosts
     );
-    missing = lib.filter (d: !(config.my.publicDomains ? ${d})) publicVhostDomains;
+    rawVhosts = lib.filterAttrs (name: _: name != "_" && !(lib.elem name declaredDomains)) config.services.nginx.virtualHosts;
+    wanRawVhosts = lib.filterAttrs (_: v: lib.any (l: (l.addr or "") == "0.0.0.0") (v.listen or [])) rawVhosts;
   in [
     {
-      assertion = missing == [];
-      message = "Public vhosts missing from my.publicDomains registry: ${lib.concatStringsSep ", " missing}";
+      assertion = wanRawVhosts == {};
+      message = "Raw nginx vhosts bypassing the endpoints layer must not listen on WAN (0.0.0.0): ${lib.concatStringsSep ", " (lib.attrNames wanRawVhosts)}";
     }
   ];
 }

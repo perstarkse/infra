@@ -134,6 +134,19 @@
           default = false;
           description = "Require requests to arrive through Cloudflare edge IPs. LAN/WireGuard access remains allowed.";
         };
+        rateLimit = mkOption {
+          type = types.nullOr (types.either (types.enum ["strict"]) rateLimitSubmodule);
+          default = "strict";
+          description = ''
+            HTTP rate limiting for this virtual host. "strict" (default) uses the
+            shared `public` zone (10r/m, burst 20, nodelay) that applies to every
+            WAN-reachable vhost; null exempts the vhost from limit_req entirely
+            (an interactive SPA fires ~40 requests per page load, indistinguishable
+            from scraping — fail2ban still blunts path-based scanners); a
+            {rate, burst, nodelay} spec gives the vhost a dedicated limit_req zone.
+            LAN-only vhosts are never rate limited.
+          '';
+        };
         noAcme = mkOption {
           type = types.bool;
           default = false;
@@ -180,6 +193,51 @@
       };
     };
 
+    rateLimitSubmodule = types.submodule {
+      options = {
+        rate = mkOption {
+          type = types.str;
+          default = "60r/m";
+          description = "Sustained request rate for this vhost's dedicated limit_req zone.";
+        };
+        burst = mkOption {
+          type = types.int;
+          default = 120;
+          description = "Burst capacity for this vhost's dedicated limit_req zone (excess requests are queued, not dropped).";
+        };
+        nodelay = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Use nodelay with the dedicated zone (drop excess requests instead of queueing).";
+        };
+      };
+    };
+
+    # Public-domain registry derivation. Every public domain the fleet serves is
+    # derived from the endpoints layer (non-lanOnly vhosts across enabled
+    # exposure services plus non-lanOnly router-declared vhosts) and explicit
+    # non-vhost public DNS records (my.publicDnsRecords). my.publicDomains is a
+    # projection of this; the registry-equality lint below fails the build if
+    # anyone hand-edits it. Domain -> zone by suffix; a domain with no known
+    # zone fails loudly instead of silently missing DDNS updates.
+    zoneForPublicDomain = domain:
+      if domain == "nous.fyi" || lib.hasSuffix ".nous.fyi" domain
+      then "nous.fyi"
+      else if domain == "stark.pub" || lib.hasSuffix ".stark.pub" domain
+      then "stark.pub"
+      else throw "no DNS zone mapping for public domain '${domain}'";
+
+    derivedPublicDomains = let
+      endpointVhostDomains = lib.concatLists (lib.mapAttrsToList (_: e:
+        map (v: v.domain) (lib.filter (v: !(v.lanOnly or false)) e.http.virtualHosts))
+      (lib.filterAttrs (_: e: e.enable) config.my.exposure.services));
+      routerVhostDomains = lib.optionals (config.my ? router) (
+        map (v: v.domain) (lib.filter (v: !(v.lanOnly or false)) config.my.router.nginx.virtualHosts)
+      );
+      domains = lib.unique (endpointVhostDomains ++ routerVhostDomains ++ config.my.publicDnsRecords);
+    in
+      lib.genAttrs domains zoneForPublicDomain;
+
     inherit ((import ../../flake/lib/exposure-options.nix {inherit lib;})) mkStandardExposureOptions basicAuthSubmodule basicAuthSecretSubmodule acmeDns01Submodule;
   in {
     options = {
@@ -213,12 +271,18 @@
         };
         publicDomains = lib.mkOption {
           type = lib.types.attrsOf lib.types.str;
-          default = {};
+          default = derivedPublicDomains;
           description = ''
             Registry of public domains (domain -> DNS zone) served by this
-            fleet. Single source of truth that ddclient, ACME vhosts, DNS
-            failover and gatus consumers derive from or validate against.
+            fleet. Derived projection of the endpoints layer (every non-lanOnly
+            vhost) plus my.publicDnsRecords — do not hand-edit; the registry
+            lint in this module fails the build if it diverges.
           '';
+        };
+        publicDnsRecords = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          description = "Public DNS records that have no vhost to derive from (e.g. wg.stark.pub, mail.stark.pub). Each domain is added to the public-domain registry and zone-mapped like a vhost domain.";
         };
         gui = {
           enable = lib.mkEnableOption "Enable GUI session management";
@@ -273,6 +337,11 @@
                     type = types.nullOr acmeDns01Submodule;
                     default = null;
                     description = "Router-local DNS-01 ACME override for imported vhosts.";
+                  };
+                  rateLimit = mkOption {
+                    type = types.either (types.enum ["keep" "strict" "exempt"]) rateLimitSubmodule;
+                    default = "keep";
+                    description = "Router-local rate limit override for imported vhosts: 'keep' (default) preserves the service-declared rateLimit; 'strict' applies the shared public zone; 'exempt' disables limit_req entirely; a {rate, burst, nodelay} spec gives the vhost a dedicated zone. Used when the exporting module cannot express the setting (e.g. external inputs).";
                   };
                 };
               });
@@ -397,16 +466,29 @@
       {
         networking.enableIPv6 = true;
 
-        assertions = [
-          {
-            assertion = publicVhostViolations == [];
-            message = "Exposure vhosts must set either lanOnly = true or public = true or cloudflareProxied = true: ${lib.concatStringsSep ", " publicVhostViolations}";
-          }
-          {
-            assertion = noAcmeCloudflareViolations == [];
-            message = "Exposure vhosts with cloudflareProxied = true must not set noAcme = true (HTTPS must be served): ${lib.concatStringsSep ", " noAcmeCloudflareViolations}";
-          }
-        ];
+        assertions =
+          [
+            {
+              assertion = publicVhostViolations == [];
+              message = "Exposure vhosts must set either lanOnly = true or public = true or cloudflareProxied = true: ${lib.concatStringsSep ", " publicVhostViolations}";
+            }
+            {
+              assertion = noAcmeCloudflareViolations == [];
+              message = "Exposure vhosts with cloudflareProxied = true must not set noAcme = true (HTTPS must be served): ${lib.concatStringsSep ", " noAcmeCloudflareViolations}";
+            }
+          ]
+          # Registry lint: my.publicDomains is a derived projection of the
+          # endpoints layer (non-lanOnly vhosts) plus my.publicDnsRecords, and
+          # must not be hand-edited. Enforced where the registry is consumed
+          # (ddclient zones); unknown zones already throw when ddclient groups
+          # by zone. Reading the option elsewhere would force zone values for
+          # test-only domains (e.g. *.lan.test), so the lint is ddclient-scoped.
+          ++ lib.optionals (config.my ? router && config.my.router.nginx.ddclient.enable) [
+            {
+              assertion = config.my.publicDomains == derivedPublicDomains;
+              message = "my.publicDomains must be exactly the derived projection (non-lanOnly endpoint vhosts + my.publicDnsRecords); hand-editing the registry is not allowed.";
+            }
+          ];
       }
       (mkIf config.my.exposure.localFirewall.enable (mkMerge [
         {
