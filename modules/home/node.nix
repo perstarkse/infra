@@ -19,6 +19,10 @@
 
         file.".npmrc".text = ''
           prefix=${config.home.homeDirectory}/.npm-global
+
+          # Supply-chain gate: only install packages published strictly more
+          # than 7 days ago (npm 11.3+).
+          min-release-age=7
         '';
 
         file.".config/fish/conf.d/10-npm-global.fish".text = ''

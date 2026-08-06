@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- **npm 7-day release-age gate for pi extensions and all global npm installs** (`modules/home/node.nix`): the managed `~/.npmrc` now sets `min-release-age=7`, so npm refuses any package published strictly more-recently than 7 days ago. 
+
 ### Removed
 
 - **Non-pi agent harnesses deprecated**: the `opencode` daemon service (systemd `opencode-daemon`, agent-tooling `nixosModules.opencode-daemon` export, `oc-attach`/`oc-omo-attach` fish functions), the `llm-agents` flake input + overlay (removed `pkgs.llm-agents`), the `llm-agents-cli` home module, and the now-abandoned CLI harnesses it installed (opencode, codex, claude-code, amp; ariel's `z-claude` launcher too). `agent-browser` is kept, re-homed to `pkgs.agent-browser` from nixpkgs on charon. The inert `sandboxed-binaries` home module and `sandboxed-binaries` import are gone; codex/sandbox references trimmed from sccache docs. `agent-microvm` is kept.
