@@ -12,6 +12,14 @@
     routerIp = helpers.primaryRouterIp;
     inherit (cfg) services;
     endpointServices = lib.filterAttrs (_: endpoint: endpoint.enable) (config.my.endpoints.services or {});
+    # Split-horizon DNS: this unbound serves the *internal* horizon only. Every
+    # service resolves to a LAN address (the router LAN IP, or the direct
+    # upstream for non-HTTP services like mail) so LAN clients never use the
+    # public/WAN IP. NAT hairpin is impossible on io: the DNAT rules are
+    # WAN-ingress-only (`iifname wan` in firewall.nix) and the WAN runs strict
+    # rp_filter=2 (network.nix), so a LAN packet sent to the public IP egresses
+    # via WAN and never loops back. The external horizon (same names → public
+    # IP) is maintained separately by ddclient from `my.publicDomains`.
     endpointDnsRecords = lib.concatLists (lib.mapAttrsToList (_name: endpoint:
       endpoint.dns.records
       ++ map (vhost: {

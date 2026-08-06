@@ -22,6 +22,9 @@
     rendered = lib.filter (entry: entry.renderedFrom != null) entries;
   };
 
+  # Split-horizon DNS (see dns.nix for the hairpin rationale): imported vhosts
+  # resolve on the internal horizon to `defaultDnsTarget` — the router LAN IP —
+  # so LAN clients hit the router's reverse proxy instead of the public IP.
   mkRouterImportedEndpoints = {
     nixosConfigurations,
     routerImportCfg,

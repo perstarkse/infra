@@ -185,6 +185,14 @@ in {
           environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
         };
       };
+      # invoices.stark.pub is a public webhook (not under a wildcard cert), so
+      # it needs DNS-01 ACME at the router, same as nous.
+      vhostOverrides."makemake.accounted-invoice" = {
+        acmeDns01 = {
+          dnsProvider = "cloudflare";
+          environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
+        };
+      };
     };
 
     endpoints.services =
@@ -211,31 +219,12 @@ in {
           ];
         };
         # invoices.stark.pub — public webhook endpoint for Accounted
-        # invoice-inbox (migrated from raw services.nginx.virtualHosts). Only
-        # the Resend inbound email webhook path proxies to accounted on
-        # makemake; everything else returns 444 like the `_` default server.
-        invoices = {
-          upstream = {
-            host = "10.0.0.10";
-            port = 3050;
-          };
-          http.virtualHosts = [
-            {
-              domain = "invoices.stark.pub";
-              public = true;
-              websockets = false;
-              acmeDns01 = {
-                dnsProvider = "cloudflare";
-                environmentFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
-              };
-              extraConfig = ''
-                if ($uri !~ ^/api/extensions/ext/invoice-inbox/inbound) {
-                  return 444;
-                }
-              '';
-            }
-          ];
-        };
+        # invoice-inbox. Declared on the service (my.accounted.invoiceWebhook on
+        # makemake) and imported here; the internal split-horizon DNS record
+        # derives to the router LAN IP automatically and the 444 gating lives
+        # with the service. Only the Resend inbound email webhook path proxies
+        # to accounted on makemake; everything else returns 444 like the `_`
+        # default server.
       };
 
     secrets = {

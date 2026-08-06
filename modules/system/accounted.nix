@@ -87,6 +87,27 @@ _: {
         withRouter = true;
         withExtraConfigDefault = "";
       };
+
+      # Public Resend inbound webhook for the invoice-inbox extension. Declared
+      # on the service (not the router) like the main app: io imports it via
+      # my.endpoints.imports, which derives the internal split-horizon DNS
+      # record (router LAN IP) and the ddclient/Cloudflare public record.
+      invoiceWebhook = lib.mkOption {
+        type = lib.types.nullOr (lib.types.submodule {
+          options = mkStandardEndpointsOptions {
+            subject = "Accounted invoice-inbox webhook";
+            visibility = "public";
+            withRouter = true;
+            withExtraConfigDefault = ''
+              if ($uri !~ ^/api/extensions/ext/invoice-inbox/inbound) {
+                return 444;
+              }
+            '';
+          };
+        });
+        default = null;
+        description = "Publish the invoice-inbox webhook endpoint (only the inbound path is proxied; everything else returns 444).";
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -266,6 +287,21 @@ _: {
         http.virtualHosts = lib.optional (cfg.endpoints.domain != null) {
           inherit (cfg.endpoints) domain lanOnly useWildcard extraConfig;
         };
+      };
+
+      my.endpoints.services.accounted-invoice = lib.mkIf (cfg.invoiceWebhook != null && cfg.invoiceWebhook.enable && cfg.invoiceWebhook.domain != null) {
+        upstream = {
+          host = cfg.address;
+          inherit (cfg) port;
+        };
+        router = {inherit (cfg.invoiceWebhook.router) enable targets;};
+        http.virtualHosts = [
+          {
+            inherit (cfg.invoiceWebhook) domain public cloudflareProxied extraConfig;
+            # Webhook receiver: no WebSocket upgrade needed.
+            websockets = false;
+          }
+        ];
       };
     };
   };

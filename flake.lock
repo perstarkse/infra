@@ -1589,11 +1589,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1785995236,
-        "narHash": "sha256-Wdq9aRslwZdCBH5FHxHNYD7I24p/acnA7ckaT9V5+/w=",
+        "lastModified": 1785996390,
+        "narHash": "sha256-jAg14Vilrs5xCH7lQhbW/WxsI126diZrMbyo/AQ4+qM=",
         "ref": "refs/heads/main",
-        "rev": "3b9bebe04b884db2ec9d132b6d71c1cf55402727",
-        "revCount": 79,
+        "rev": "ca4525c0ebbea900356b776ff50a07a657d302f2",
+        "revCount": 80,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },

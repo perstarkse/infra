@@ -114,6 +114,11 @@
         text = passwordHash;
       };
 
+      "test-secrets/mail/stark/noreply_crypt" = {
+        mode = "0400";
+        text = passwordHash;
+      };
+
       "test-secrets/mail/postfix_sasl_passwd" = {
         mode = "0400";
         text = "[mail.smtp2go.com]:465 test-user:test-password";

@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **invoices.stark.pub webhook declared on the service (split-horizon DNS)**: the Accounted invoice-inbox endpoint moved from a hand-written io-side `my.endpoints.services` block (with a manual `dns.records` target) into `my.accounted.invoiceWebhook` on makemake. io imports it like other makemake services, so the internal DNS record auto-derives to the router LAN IP (`10.0.0.1`) via `defaultDnsTarget`, the public record flows into the derived `my.publicDomains` registry, and the 444 webhook gating now lives with the service. The router needs a single `vhostOverrides."makemake.accounted-invoice"` DNS-01 ACME override (mirroring nous); nginx vhost is byte-equivalent (listens 0.0.0.0, proxy → 10.0.0.10:3050, strict public rate zone, `dnsProvider=cloudflare`). Router internal/DNS comment now uses the canonical **split-horizon DNS** term and documents the no-hairpin rationale (WAN-only DNAT + strict rp_filter in dns.nix/endpoints.nix).
+
 - **Shared systemd hardening helper** (`mkHardenedServiceConfig` via `_module.args`, options.nix): the 16-line lockdown that sedna's heartbeat-receiver and failover-check duplicated is now one function; the heartbeat receiver's hardening moved into `heartbeat.nix` where the unit is defined (machine config no longer reaches into a module-owned unit). Effective service configs byte-identical (eval-verified).
 - sedna-failover/revert scripts: the identical `--dry-run` parsing + token-loading preamble (~25 lines) is now one `scriptPreamble` string shared by both scripts; generated scripts unchanged (drill VM tests pass).
 

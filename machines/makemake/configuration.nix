@@ -546,6 +546,17 @@
           targets = ["io"];
         };
       };
+      # Public Resend webhook for the invoice-inbox extension; the 444 gating
+      # and upstream live in the accounted module, io imports the endpoint.
+      invoiceWebhook = {
+        enable = true;
+        domain = "invoices.stark.pub";
+        public = true;
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
     };
 
     accounted-ocr = {
