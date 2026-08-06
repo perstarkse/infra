@@ -6,8 +6,8 @@
     ...
   }: let
     cfg = config.my.sccache;
-    # Shared with modules/system/sccache-daemon.nix so devshell cargo builds,
-    # the bubblewrap codex sandbox, and nix flake check all hit one cache.
+    # Shared with modules/system/sccache-daemon.nix so devshell cargo builds
+    # and nix flake check all hit one cache.
     sccacheDir = "/var/cache/sccache-daemon";
   in {
     options.my.sccache.enable = lib.mkEnableOption "sccache wrapper for rust dev";

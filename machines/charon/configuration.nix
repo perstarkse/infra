@@ -50,8 +50,7 @@ in {
       vpn-browser
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
-    ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service])
-    ++ (with ctx.inputs.agentTooling.nixosModules; [opencode-daemon]);
+    ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
 
   home-manager.users.${config.my.mainUser.name} = {
     imports = with ctx.flake.homeModules;
@@ -84,8 +83,6 @@ in {
         node
         voxtype
         wtp
-        llm-agents-cli
-        sandboxed-binaries
         local-ai
         swayidle
         wow-launcher
@@ -100,6 +97,11 @@ in {
         pi-web
         shared-skills
       ]);
+
+    home.packages = [
+      pkgs.agent-browser
+    ];
+
     my = {
       programs = {
         rbw = {
@@ -244,17 +246,6 @@ in {
       enable = true;
       enableFishIntegration = true;
       enableFishCdWrapper = true;
-    };
-
-    my.llm-agents-cli = {
-      enable = true;
-      packages = [
-        "opencode"
-        "codex"
-        "claude-code"
-        "amp"
-        "agent-browser"
-      ];
     };
 
     my.swayidle = {
@@ -459,13 +450,6 @@ in {
 
     sccache-daemon = {
       enable = true;
-    };
-
-    agentTooling = {
-      opencode-daemon = {
-        enable = true;
-        environmentFile = config.my.secrets.getPath "context7" "env";
-      };
     };
 
     # Auto-suspend when system is idle (load < threshold + no user input)

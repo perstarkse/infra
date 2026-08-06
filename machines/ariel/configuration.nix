@@ -48,7 +48,6 @@
         xdg-mimeapps
         firefox
         node
-        llm-agents-cli
       ]
       ++ (with ctx.inputs.varsHelper.homeModules; [default])
       ++ (with ctx.inputs.privateInfra.homeModules; [
@@ -112,20 +111,7 @@
         secretPath = config.my.secrets.getPath "api-key-openai" "api_key";
         useSystemdRun = true;
       }
-      {
-        name = "z-claude";
-        title = "z-claude";
-        setTerminalTitle = true;
-        command = "claude";
-        environmentFile = config.my.secrets.getPath "z-ai-env" "env";
-        useSystemdRun = false;
-      }
     ];
-
-    my.llm-agents-cli = {
-      enable = true;
-      packages = ["claude-code"];
-    };
   };
 
   environment.systemPackages = with pkgs; [

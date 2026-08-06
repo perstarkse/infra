@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Removed
 
+- **Non-pi agent harnesses deprecated**: the `opencode` daemon service (systemd `opencode-daemon`, agent-tooling `nixosModules.opencode-daemon` export, `oc-attach`/`oc-omo-attach` fish functions), the `llm-agents` flake input + overlay (removed `pkgs.llm-agents`), the `llm-agents-cli` home module, and the now-abandoned CLI harnesses it installed (opencode, codex, claude-code, amp; ariel's `z-claude` launcher too). `agent-browser` is kept, re-homed to `pkgs.agent-browser` from nixpkgs on charon. The inert `sandboxed-binaries` home module and `sandboxed-binaries` import are gone; codex/sandbox references trimmed from sccache docs. `agent-microvm` is kept.
+
 - Dead WM/display stack: `hyprland`, `sway`, `steam-gamescope` system modules, home `hyprland`/`sway` modules, and their flake inputs (`hyprland`, `hyprland-plugins`, `hy3`, `hyprnstack`, `sway-focus-flash`). `my.gui.session` is now niri-only; greetd and waybar branches trimmed.
 - Dead infra/app modules and config blocks: `k3s`, `unifi-controller`, `minecraft` (+ `nix-minecraft` input + makemake berget-2 block), `minne` (+ input + generator), `codenomad` (+ `pkgs-update` script + `pkgs/codenomad`), `openchamber` (+ `pkgs/openchamber`), `vfio`, home `looking-glass-client`, `vars/generators/k3s-token.nix` and `minne-env.nix`.
 - Orphaned artifacts: `wallpaper-1.jpg`/`wallpaper-2.jpg` (~6.7 MB), commented swaybg/wallpaper blocks, io `secrets.declarations = []`, commented tunnel/allowReadAccess/devenv blocks, stale hw-config comments.

@@ -1,8 +1,7 @@
 _: let
   # Unified sccache cache directory. Bind-mounted into Nix build sandboxes
   # via nix.settings.extra-sandbox-paths and shared with devshell cargo builds
-  # (modules/home/sccache.nix) and the bubblewrap codex sandbox
-  # (modules/home/sandboxed-binaries.nix). sccache compiles through (caching
+  # (modules/home/sccache.nix). sccache compiles through (caching
   # skipped) if this is ever unavailable, so no wrapper fallback is needed.
   defaultCacheDir = "/var/cache/sccache-daemon";
   defaultCacheSize = "150G";
@@ -74,7 +73,7 @@ in {
         description = ''
           Cache directory bind-mounted into Nix build sandboxes via
           nix.settings.extra-sandbox-paths. Kept in sync with
-          modules/home/sccache.nix and modules/home/sandboxed-binaries.nix.
+          modules/home/sccache.nix.
         '';
       };
 
@@ -100,8 +99,7 @@ in {
       # no longer matches the altered drv hash) and forces local rebuilds of
       # bat/ripgrep/etc. that can't even use sccache inside the sandbox. The
       # Nix binary cache is the cache for nixpkgs Rust packages; sccache is
-      # only for non-Nix builds (devshell cargo, codex bubblewrap sandbox,
-      # opt-in project flakes).
+      # only for non-Nix builds (devshell cargo, opt-in project flakes).
       nix.settings.extra-sandbox-paths = [cfg.cacheDir];
     };
   };

@@ -35,7 +35,6 @@
           };
         };
       })
-      inputs.llm-agents.overlays.default
     ];
 
     # electron 39.8.10 is EOL in nixpkgs 26.05; bitwarden-desktop pins to it.
