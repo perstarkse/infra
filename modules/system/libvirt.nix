@@ -580,6 +580,27 @@
         path = [pkgs.libvirt];
       };
 
+      # NixVirt 0.6.0 has no pool autostart support (the pool XML carries no
+      # autostart flag and the helper never calls virsh pool-autostart), so a
+      # dir-backed pool would come up inactive after reboot until NixVirt
+      # redefines it — a boot-order race with libvirtd for any autostart VM.
+      systemd.services."libvirt-pool-autostart" = lib.mkIf (cfg.pools != []) {
+        description = "Mark libvirt storage pools as autostart";
+        after = ["libvirtd.service"];
+        wants = ["libvirtd.service"];
+        wantedBy = ["multi-user.target"];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "libvirt-pool-autostart" ''
+            set -euo pipefail
+            for pool in ${lib.concatStringsSep " " (map (p: p.name) cfg.pools)}; do
+              virsh pool-autostart "$pool" || true
+            done
+          '';
+        };
+        path = [pkgs.libvirt];
+      };
+
       # Firewall configuration for networks: forward rules to the VM subnet,
       # not host INPUT ports.
       networking.firewall = {

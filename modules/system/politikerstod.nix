@@ -497,6 +497,13 @@
                   extensions = ps: [ps.pgvector];
                   enableTCPIP = true;
                   settings.listen_addresses = lib.mkForce "*";
+                  # Modest budget per politikerstod DB container; the host runs
+                  # multiple postgres servers (nous + paperless-db), so keep
+                  # each explicit instead of the 128 MB stock default.
+                  settings.shared_buffers = "256MB";
+                  settings.effective_cache_size = "1GB";
+                  settings.max_connections = 50;
+                  settings.work_mem = "16MB";
                   authentication = pkgs.lib.mkOverride 10 ''
                     host    all             all             ${hostAddress}/32       ${authMethod}
                     host    all             all             169.254.0.0/16          ${authMethod}

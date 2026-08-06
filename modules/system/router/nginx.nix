@@ -83,7 +83,10 @@
       lib.nameValuePair "ddclient-${zone.zone}.conf" {
         mode = "0600";
         text = ''
-          daemon=0
+          # No daemon= line: ddclient 4.x treats daemon=0 as "daemon with the
+          # default 60 s interval" and never exits, which hangs the oneshot
+          # service. Without it, with --foreground, ddclient runs once and
+          # exits after updating.
           protocol=cloudflare
           use=web, web=https://api.ipify.org
           ssl=yes
@@ -101,11 +104,17 @@
         after = ["network-online.target"];
         serviceConfig = {
           Type = "oneshot";
+          StateDirectory = "ddclient";
           ExecStartPre = pkgs.writeShellScript "ddclient-${zone.zone}-prepare" ''
             ${pkgs.coreutils}/bin/install -m 0600 /etc/ddclient-${zone.zone}.conf /run/ddclient-${zone.zone}.conf
             ${pkgs.gnused}/bin/sed -i "s|@PASSWORD@|$(${pkgs.coreutils}/bin/cat ${zone.passwordFile})|" /run/ddclient-${zone.zone}.conf
           '';
-          ExecStart = "${pkgs.ddclient}/bin/ddclient -verbose -noquiet -file /run/ddclient-${zone.zone}.conf";
+          # --foreground: ddclient 4.x daemonizes by default, so without it the
+          # parent exits 0 in ~150ms doing nothing and leaves a zombie daemon
+          # that never updates (nous.fyi's record stayed pointed at sedna for
+          # 2 days because of this). --cache: the store-path default cache dir
+          # is read-only. StateDirectory makes /var/lib/ddclient writable.
+          ExecStart = "${pkgs.ddclient}/bin/ddclient -verbose -noquiet --foreground --cache=/var/lib/ddclient/ddclient-${zone.zone}.cache -file /run/ddclient-${zone.zone}.conf";
           ExecStartPost = "${pkgs.coreutils}/bin/rm -f /run/ddclient-${zone.zone}.conf";
         };
       };
@@ -134,6 +143,13 @@
 
       services.nginx = {
         enable = true;
+
+        # Reverse proxy for ~19 vhosts on a 4-core router: the nginx default of
+        # a single worker (worker_processes is no longer a NixOS option in
+        # 26.05) wastes CPU parallelism — TLS handshakes, per-vhost SSL session
+        # cache and rate-limit zones serialize on one process.
+        prependConfig = "worker_processes auto;";
+        eventsConfig = "worker_connections 2048;";
 
         recommendedGzipSettings = true;
         recommendedOptimisation = true;

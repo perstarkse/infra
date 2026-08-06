@@ -383,6 +383,13 @@ _: {
               enable = true;
               enableTCPIP = true;
               settings.listen_addresses = lib.mkForce "*";
+              # Modest budget for the paperless DB container (host is shared
+              # with nous + politikerstod postgres servers, so keep each
+              # instance explicit instead of the 128 MB stock default).
+              settings.shared_buffers = "256MB";
+              settings.effective_cache_size = "1GB";
+              settings.max_connections = 50;
+              settings.work_mem = "16MB";
 
               authentication = pkgs.lib.mkOverride 10 ''
                 # TYPE  DATABASE        USER            ADDRESS                 METHOD

@@ -143,6 +143,11 @@ in {
     heartbeat.push = {
       enable = true;
       schedule = "*:0/5";
+      # Shrink the randomized delay from the 2m module default: with a 5 min
+      # schedule, the 2m delay lets healthy inter-arrival gaps reach ~7 min,
+      # which exceeds sedna's 5 min failover timeout and caused constant false
+      # failovers (the sedna side now uses a 10 min timeout as well).
+      randomizedDelaySec = "30s";
       # sedna's heartbeat receiver over the public internet (port 18080 opened
       # in sedna's WAN firewall). Previously a ZeroTier IPv6 literal that
       # silently died if sedna's ZT address changed.
@@ -511,6 +516,10 @@ in {
   # systemd autovt wrapper need disabling.
   systemd.services."getty@tty1".enable = false;
   systemd.services."autovt@tty1".enable = false;
+
+  # Bound the journal: kea-dhcp4 + blocky log ~66k lines/day with no
+  # SystemMaxUse configured, so the journal grew to 4 GiB unbounded.
+  services.journald.extraConfig = "SystemMaxUse=512M\nSystemMaxFileSize=64M\n";
 
   # Wildcard *.lan.stark.pub ACME renewal: the router's own resolver
   # (blocky→unbound, lan.stark.pub is a static local zone) answers NODATA for

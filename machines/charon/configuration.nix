@@ -44,6 +44,7 @@ in {
       rclone-s3
       wake-proxy
       auto-suspend
+      storage-alerts
       wireguard-tunnels
       paperless-consumption-mount
       politikerstod-remote-worker
@@ -278,7 +279,7 @@ in {
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy"];
       };
 
       allowReadAccess = [
@@ -459,6 +460,19 @@ in {
       loadThreshold = "6.0";
     };
 
+    # Capacity/SMART alerts: the root btrfs volume is at 88 % (warn threshold
+    # is 85 %), so the first health check fires a ntfy alert into the
+    # storage-alerts topic.
+    storage-alerts = {
+      enable = true;
+      ntfy = {
+        serverUrl = "https://ntfy.lan.stark.pub";
+        topic = "storage-alerts";
+        tokenFile = config.my.secrets.getPath "ntfy" "storage-token";
+        tags = ["warning" "floppy_disk" "charon"];
+      };
+    };
+
     # Remote worker for politikerstod OCR/embeddings processing
     politikerstod-remote-worker = {
       instances = {
@@ -626,6 +640,13 @@ in {
     IOSchedulingPriority = lib.mkForce 7;
     LimitNOFILE = "infinity";
   };
+
+  # Cap the in-journal coredump backtrace size: a crashing QtWebEngine renderer
+  # produced a >4M COREDUMP_STACK_TRACE entry that exceeds
+  # systemd-journal-upload's per-entry buffer, making the uploader fail forever
+  # on the same unskippable entry (NRestarts climbing). 512M keeps core dumps
+  # but bounds the journal field so uploads can progress.
+  systemd.coredump.settings.Coredump.ProcessSizeMax = "512M";
   users.users.p = {
     extraGroups = ["dialout"];
   };

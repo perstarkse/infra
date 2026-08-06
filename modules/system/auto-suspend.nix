@@ -32,6 +32,7 @@
       LOAD_THRESHOLD="${cfg.loadThreshold}"
       USER_IDLE_SECONDS=${toString cfg.userIdleSeconds}
       ACTIVE_TCP_PORTS="${lib.concatStringsSep " " (map toString cfg.activeTcpPorts)}"
+      TREAT_STALE_IDLE_HINT_AS_IDLE=${toString cfg.treatStaleIdleHintAsIdle}
 
       mkdir -p /run/auto-suspend
 
@@ -83,7 +84,12 @@
           hint_age="activeFor=$since_hint_change"
         fi
         # IdleHint stuck at no past the idle threshold usually means continuous
-        # input OR a Wayland idle inhibitor (Electron apps, video, etc.).
+        # input OR a Wayland idle inhibitor (Electron apps, video, etc.). The
+        # stale flag is computed below; treatStaleIdleHintAsIdle then counts
+        # such a session as idle (no input for the full threshold despite the
+        # hint never flipping) so the seat can actually suspend. Block-mode
+        # inhibitors are still respected separately, so a video player that
+        # inhibits sleep keeps the machine awake.
         stale_idle_hint=""
         if [ "$idle_hint" = "no" ] \
           && [ -n "$since_hint_change_seconds" ] \
@@ -96,7 +102,8 @@
           && [ "$session_active" = "yes" ] \
           && [ "$session_state" = "active" ]; then
           session_idle=0
-          if [ "$idle_hint" = "yes" ] \
+          if { [ "$idle_hint" = "yes" ] \
+              || { [ "$TREAT_STALE_IDLE_HINT_AS_IDLE" = "1" ] && [ -n "$stale_idle_hint" ]; }; } \
             && [ -n "$since_hint_change_seconds" ] \
             && [ "$since_hint_change_seconds" -ge "$USER_IDLE_SECONDS" ]; then
             session_idle=1
@@ -211,6 +218,18 @@
         default = [];
         example = [9898 22];
         description = "Treat system as active when established TCP connections exist on these local ports (useful for remote dev sessions).";
+      };
+
+      treatStaleIdleHintAsIdle = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Treat a Wayland/X11 session whose IdleHint is stuck at "no" past
+          userIdleSeconds as idle. Idle-inhibiting apps (Electron, video
+          players) prevent swayidle from flipping the hint, so without this the
+          seat never counts as idle and auto-suspend never fires. Block-mode
+          sleep inhibitors are still respected via checkInhibitors.
+        '';
       };
 
       useSystemSuspend = lib.mkOption {

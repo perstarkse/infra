@@ -98,6 +98,12 @@ in {
       dnsFailover = {
         enable = true;
         sednaPublicIp = "130.61.55.4";
+        # io's heartbeat push runs on *:0/5 with a 2m randomized delay, so a
+        # healthy inter-arrival gap reaches ~7 min. The 5 min default timeout
+        # false-triggered failover on normal jitter (866 "heartbeat lost"
+        # events / 7 days). 10 min exceeds the worst healthy gap and matches
+        # the 15m deadmanInterval configured below.
+        heartbeatTimeoutMinutes = 10;
         # skipDnsRevert defaults to true: ddclient on IO restores DNS after the
         # outage, avoiding split-brain if IO's public IP changed meanwhile.
         cloudflareApiTokenFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
@@ -247,6 +253,11 @@ in {
   };
 
   services = {
+    # Bound the journal: 1.8 GB on a 46 GB disk, with sshd preauth-scan noise
+    # (~52k lines/week) being the main contributor. Unbounded growth on a 1 GB
+    # VPS is a standing footgun.
+    journald.extraConfig = "SystemMaxUse=256M\nSystemMaxFileSize=64M\n";
+
     avahi.enable = lib.mkForce false;
 
     openssh = {

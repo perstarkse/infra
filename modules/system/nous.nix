@@ -116,6 +116,17 @@
       # PostgreSQL database
       services.postgresql = {
         enable = true;
+        # Two other postgres servers share this box (paperless-db and
+        # politikerstod-db containers), so keep the budget modest and explicit
+        # rather than relying on the 128 MB stock default (0.7 % of 32 GiB
+        # RAM). Total added shared_buffers across all three ≈ 1 GiB, well
+        # within the ~22 GiB available on makemake.
+        settings = {
+          shared_buffers = "512MB";
+          effective_cache_size = "6GB";
+          max_connections = 80;
+          work_mem = "32MB";
+        };
         ensureDatabases = [cfg.database.name];
         ensureUsers = [
           {

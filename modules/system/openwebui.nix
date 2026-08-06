@@ -118,6 +118,10 @@
         http.virtualHosts = lib.optional (cfg.endpoints.domain != null) {
           inherit (cfg.endpoints) domain;
           inherit (cfg.endpoints) lanOnly useWildcard;
+          # LAN-only vhosts need no public certificate: chat.stark.pub's per-
+          # vhost HTTP-01 order failed daily because the LAN-only domain has no
+          # public A record (it is excluded from the ddclient/public registry).
+          noAcme = cfg.endpoints.lanOnly;
         };
         firewall.local = {
           enable = cfg.firewallTcpPorts != [] || cfg.firewallUdpPorts != [];

@@ -6,9 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **sedna DNS failover false-triggering** (`machines/sedna/configuration.nix`): `heartbeatTimeoutMinutes` raised 5 → 10 (io's `*:0/5` push with the 2m randomized delay let healthy gaps reach ~7 min, exceeding the old timeout; 866 false "heartbeat lost" events/week, real DNS PATCHes flipping public domains to the maintenance page). io's `heartbeat.push.randomizedDelaySec` lowered 2m → 30s to shrink jitter.
+- **ddclient never updating on io** (`modules/system/router/nginx.nix`): ddclient 4.x daemonizes by default — the oneshot units exited 0 in ~150ms doing nothing and left zombie daemons, so `nous.fyi` stayed pointed at sedna's maintenance page for 2 days after a failover flap. Units now run `--foreground` with a writable per-zone cache (`/var/lib/ddclient` via `StateDirectory`) and no `daemon=` line (4.x treats `daemon=0` as a 60s loop that never exits). Verified: records restored, both zones run clean, timers healthy.
+- **`chat.stark.pub` ACME order failing daily on io** (`modules/system/openwebui.nix`): the LAN-only vhost got a per-vhost HTTP-01 order against no public A record (`no valid A records found`, system `degraded`). LAN-only openwebui vhosts now set `noAcme = true`; the failing unit is gone after rebuild.
+- **charon `systemd-journal-upload` crash loop** (`machines/charon/configuration.nix`): a giant `COREDUMP_STACK_TRACE` from crashing QtWebEngine/garage processes (10 MB+ entries, rejected by nginx's body limit) wedged the uploader since Aug 3. `systemd.coredump.settings.Coredump.ProcessSizeMax = "512M"` caps future in-journal backtraces; uploads verified flowing to io's collector again (4313 charon entries received).
+- **charon auto-suspend never firing** (`modules/system/auto-suspend.nix`): a Wayland idle-inhibiting app kept the session `IdleHint` stuck at `no`, so the seat never counted as idle. New `treatStaleIdleHintAsIdle` option (default true) treats a hint stuck past `userIdleSeconds` as idle; block-mode sleep inhibitors are still respected.
+- **pg_dump artifacts inside restic snapshots** (`machines/makemake/configuration.nix`): `nous_prod.dump` / `paperless.dump` are written into the restic data dirs, embedding a redundant copy in every snapshot. Both jobs now exclude the dump path.
+- **libvirt pool not autostarting** (`modules/system/libvirt.nix`): NixVirt 0.6.0 has no pool autostart support; a oneshot `libvirt-pool-autostart` service (after libvirtd) runs `virsh pool-autostart` for declared pools.
+
 ### Changed
 
-- **npm 7-day release-age gate for pi extensions and all global npm installs** (`modules/home/node.nix`): the managed `~/.npmrc` now sets `min-release-age=7`, so npm refuses any package published strictly more-recently than 7 days ago. 
+- **io nginx runs more than one worker** (`modules/system/router/nginx.nix`): `prependConfig = "worker_processes auto;"` + `eventsConfig = "worker_connections 2048;"` (the `workerProcesses` NixOS option was removed in 26.05). ~19 vhosts were served by a single worker on the 4-core router; verified 4 workers after deploy.
+- **Journal size bounds**: io `SystemMaxUse=512M` (was 4 GiB unbounded, kea/blocky noise), sedna `SystemMaxUse=256M` (was 1.8 GiB on a 46 GiB disk). Verified io at 512M bound post-rotation, sedna 226.9M and dropping.
+- **Postgres tuning on makemake** (`modules/system/nous.nix`, `paperless.nix`, `politikerstod.nix`): all three servers ran stock 128 MB `shared_buffers` (0.7 % of 32 GiB). Now explicit modest budgets — nous 512MB/6GB cache/80 conns/32MB work_mem, container DBs 256MB/1GB/50/16MB — ≈ 1 GiB total added, no cgroup ballooning.
+- **charon storage alerts enabled** (`machines/charon/configuration.nix`): `my.storage-alerts` with ntfy (`storage-alerts` topic); the 88 %-full root btrfs volume now fires the 85 % capacity warning (verified end-to-end ntfy publish).
+
+### Changed
+
+- **npm 7-day release-age gate for pi extensions and all global npm installs** (`modules/home/node.nix`): the managed `~/.npmrc` now sets `min-release-age=7`, so npm refuses any package published strictly more-recently than 7 days ago.
 
 ### Removed
 
