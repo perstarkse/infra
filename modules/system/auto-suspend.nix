@@ -24,15 +24,84 @@
         ${pkgs.systemd}/bin/systemctl suspend
       '';
 
+    # Records the CLOCK_MONOTONIC usec timestamp of the last evdev input event.
+    # evdev is the ground truth for "is someone using this machine": physical
+    # keyboards/mice and uinput virtual devices (Sunshine, Steam Remote Play)
+    # all land here, and Wayland idle-inhibit cannot suppress it.
+    inputWatchScript = pkgs.writeScript "auto-suspend-input-watch" ''
+      #!${pkgs.python3}/bin/python3
+      import glob
+      import os
+      import select
+      import time
+
+      STATE_DIR = "/run/auto-suspend"
+      STATE_FILE = os.path.join(STATE_DIR, "last-input")
+
+      def now_us():
+          return int(time.clock_gettime(time.CLOCK_MONOTONIC) * 1_000_000)
+
+      def write_state():
+          os.makedirs(STATE_DIR, exist_ok=True)
+          tmp = STATE_FILE + ".tmp"
+          with open(tmp, "w") as fh:
+              fh.write(str(now_us()))
+          os.replace(tmp, STATE_FILE)
+
+      # Baseline at startup: no input yet, so the machine counts as idle from
+      # boot until the first evdev event.
+      write_state()
+
+      devices = {}  # file object -> device path
+
+      while True:
+          present = [
+              p for p in glob.glob("/dev/input/event*") if os.access(p, os.R_OK)
+          ]
+          for p in present:
+              if p not in devices.values():
+                  try:
+                      fh = open(p, "rb")
+                      os.set_blocking(fh.fileno(), False)
+                      devices[fh] = p
+                  except OSError:
+                      pass
+          for fh in list(devices):
+              if devices[fh] not in present:
+                  try:
+                      fh.close()
+                  except OSError:
+                      pass
+                  del devices[fh]
+
+          readable, _, _ = select.select(list(devices), [], [], 1.0)
+          if readable:
+              # Any evdev event is input activity. Drain without grabbing so
+              # the compositor keeps receiving the same events.
+              for fh in readable:
+                  try:
+                      fh.read(65536)
+                  except OSError:
+                      pass
+              write_state()
+    '';
+
+    resetScript = pkgs.writeShellScript "auto-suspend-reset" ''
+      ${pkgs.coreutils}/bin/rm -f /run/auto-suspend/idle-count
+      # Re-baseline last-input at wake; otherwise the pre-suspend timestamp
+      # makes the first check after resume instantly idle.
+      ${pkgs.systemd}/bin/systemctl restart auto-suspend-input-watch.service
+    '';
+
     autoSuspendScript = pkgs.writeShellScript "auto-suspend-check" ''
       set -euo pipefail
 
       IDLE_FILE="/run/auto-suspend/idle-count"
+      LAST_INPUT_FILE="/run/auto-suspend/last-input"
       REQUIRED_CHECKS=${toString cfg.requiredIdleChecks}
       LOAD_THRESHOLD="${cfg.loadThreshold}"
       USER_IDLE_SECONDS=${toString cfg.userIdleSeconds}
       ACTIVE_TCP_PORTS="${lib.concatStringsSep " " (map toString cfg.activeTcpPorts)}"
-      TREAT_STALE_IDLE_HINT_AS_IDLE=${toString cfg.treatStaleIdleHintAsIdle}
 
       mkdir -p /run/auto-suspend
 
@@ -43,87 +112,23 @@
       load_idle=$(${pkgs.gawk}/bin/awk -v avg="$loadavg" -v threshold="$LOAD_THRESHOLD" \
         'BEGIN { print (avg < threshold) ? "1" : "0" }')
 
-      # Check for user input activity via logind IdleHint (set by swayidle
-      # idlehint). Wayland idle-inhibit (Electron apps, video players, etc.)
-      # prevents swayidle from flipping IdleHint to yes — logs then show a
-      # stale activeFor while the seat looks "ACTIVE".
-      # Keep every session's properties because a bare ACTIVE/idle result is
-      # not enough to diagnose a stale or incorrectly targeted IdleHint.
+      # User activity = real input events, tracked by auto-suspend-input-watch
+      # from /dev/input. logind's session IdleHint cannot be used here: swayidle
+      # is its only writer, and Wayland idle-inhibit (Electron apps, video
+      # players) suppresses the idle flip, so the hint stays "no" both while
+      # someone types for hours and while nobody is at the seat.
       user_idle=1
-      user_sessions=""
-      ignored_sessions=""
-      now_monotonic_us=$(${pkgs.python3}/bin/python3 -c 'import time; print(int(time.clock_gettime(time.CLOCK_MONOTONIC) * 1_000_000))')
-      for session in $(${pkgs.systemd}/bin/loginctl list-sessions --no-legend | ${pkgs.gawk}/bin/awk '{print $1}'); do
-        session_user=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Name --value 2>/dev/null || echo "")
-        session_type=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Type --value 2>/dev/null || echo "")
-        session_class=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Class --value 2>/dev/null || echo "")
-        session_active=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p Active --value 2>/dev/null || echo "")
-        session_state=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p State --value 2>/dev/null || echo "")
-        idle_hint=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleHint --value 2>/dev/null || echo "unknown")
-        idle_since_monotonic=$(${pkgs.systemd}/bin/loginctl show-session "$session" -p IdleSinceHintMonotonic --value 2>/dev/null || echo "")
-        # IdleSinceHintMonotonic is CLOCK_MONOTONIC usec (not /proc/uptime /
-        # CLOCK_BOOTTIME). Using uptime here inflates ages by total suspend time.
-        # IdleSinceHintMonotonic is time-of-last-IdleHint-change, not "how long
-        # idle". When IdleHint=no this is active duration; when yes, idle duration.
-        since_hint_change="unknown"
-        since_hint_change_seconds=""
-        case "$idle_since_monotonic" in
-          ""|*[!0-9]*) ;;
-          *)
-            if [ "$idle_since_monotonic" -le "$now_monotonic_us" ]; then
-              since_hint_change_seconds="$(( (now_monotonic_us - idle_since_monotonic) / 1000000 ))"
-              since_hint_change="''${since_hint_change_seconds}s"
-            else
-              since_hint_change="future-timestamp"
-            fi
-            ;;
-        esac
-        if [ "$idle_hint" = "yes" ]; then
-          hint_age="idleFor=$since_hint_change"
-        else
-          hint_age="activeFor=$since_hint_change"
-        fi
-        # IdleHint stuck at no past the idle threshold usually means continuous
-        # input OR a Wayland idle inhibitor (Electron apps, video, etc.). The
-        # stale flag is computed below; treatStaleIdleHintAsIdle then counts
-        # such a session as idle (no input for the full threshold despite the
-        # hint never flipping) so the seat can actually suspend. Block-mode
-        # inhibitors are still respected separately, so a video player that
-        # inhibits sleep keeps the machine awake.
-        stale_idle_hint=""
-        if [ "$idle_hint" = "no" ] \
-          && [ -n "$since_hint_change_seconds" ] \
-          && [ "$since_hint_change_seconds" -ge "$USER_IDLE_SECONDS" ]; then
-          stale_idle_hint=" staleIdleHint=yes(likely-wayland-idle-inhibit)"
-        fi
-        session_details="$session user=$session_user type=$session_type class=$session_class active=$session_active state=$session_state idleHint=$idle_hint idleSinceMonotonic=$idle_since_monotonic $hint_age$stale_idle_hint"
-        if { [ "$session_type" = "wayland" ] || [ "$session_type" = "x11" ]; } \
-          && [ "$session_class" = "user" ] \
-          && [ "$session_active" = "yes" ] \
-          && [ "$session_state" = "active" ]; then
-          session_idle=0
-          if { [ "$idle_hint" = "yes" ] \
-              || { [ "$TREAT_STALE_IDLE_HINT_AS_IDLE" = "1" ] && [ -n "$stale_idle_hint" ]; }; } \
-            && [ -n "$since_hint_change_seconds" ] \
-            && [ "$since_hint_change_seconds" -ge "$USER_IDLE_SECONDS" ]; then
-            session_idle=1
-          fi
-          [ "$session_idle" = "1" ] && session_details="$session_details decision=idle"
-          [ "$session_idle" = "0" ] && session_details="$session_details decision=active"
-          if [ -n "$user_sessions" ]; then
-            user_sessions="$user_sessions; "
-          fi
-          user_sessions="$user_sessions$session_details"
-          if [ "$session_idle" = "0" ]; then
+      user_idle_seconds=""
+      if [ -r "$LAST_INPUT_FILE" ] && [ -s "$LAST_INPUT_FILE" ]; then
+        last_input_us=$(${pkgs.coreutils}/bin/cat "$LAST_INPUT_FILE")
+        now_monotonic_us=$(${pkgs.python3}/bin/python3 -c 'import time; print(int(time.clock_gettime(time.CLOCK_MONOTONIC) * 1_000_000))')
+        if [ -n "$last_input_us" ] && [ "$last_input_us" -le "$now_monotonic_us" ]; then
+          user_idle_seconds="$(( (now_monotonic_us - last_input_us) / 1000000 ))"
+          if [ "$user_idle_seconds" -lt "$USER_IDLE_SECONDS" ]; then
             user_idle=0
           fi
-        else
-          if [ -n "$ignored_sessions" ]; then
-            ignored_sessions="$ignored_sessions; "
-          fi
-          ignored_sessions="$ignored_sessions$session_details decision=ignored"
         fi
-      done
+      fi
 
       # Check for inhibitors - only care about "sleep" with "block" mode
       inhibited=0
@@ -149,13 +154,11 @@
       [ "$load_idle" = "0" ] && status="$status load:ACTIVE($loadavg)"
       [ "$load_idle" = "1" ] && status="$status load:idle($loadavg)"
       if [ "$user_idle" = "0" ]; then
-        status="$status user:ACTIVE(threshold=''${USER_IDLE_SECONDS}s; sessions=$user_sessions)"
-      elif [ -n "$user_sessions" ]; then
-        status="$status user:idle(threshold=''${USER_IDLE_SECONDS}s; sessions=$user_sessions)"
+        status="$status user:ACTIVE(idleFor=''${user_idle_seconds}s)"
+      elif [ -n "$user_idle_seconds" ]; then
+        status="$status user:idle(idleFor=''${user_idle_seconds}s)"
       else
-        status="$status user:idle(no-eligible-session"
-        [ -n "$ignored_sessions" ] && status="$status; ignored=$ignored_sessions"
-        status="$status)"
+        status="$status user:idle(no-input-signal)"
       fi
       [ "$inhibited" = "1" ] && status="$status inhibitor:BLOCKING"
       [ "$tcp_active" = "1" ] && status="$status tcp:ACTIVE"
@@ -204,7 +207,7 @@
       userIdleSeconds = lib.mkOption {
         type = lib.types.int;
         default = 600;
-        description = "Seconds of no user input before considering user idle";
+        description = "Seconds without input (evdev events) before considering the machine idle";
       };
 
       checkInhibitors = lib.mkOption {
@@ -218,18 +221,6 @@
         default = [];
         example = [9898 22];
         description = "Treat system as active when established TCP connections exist on these local ports (useful for remote dev sessions).";
-      };
-
-      treatStaleIdleHintAsIdle = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = ''
-          Treat a Wayland/X11 session whose IdleHint is stuck at "no" past
-          userIdleSeconds as idle. Idle-inhibiting apps (Electron, video
-          players) prevent swayidle from flipping the hint, so without this the
-          seat never counts as idle and auto-suspend never fires. Block-mode
-          sleep inhibitors are still respected via checkInhibitors.
-        '';
       };
 
       useSystemSuspend = lib.mkOption {
@@ -254,22 +245,35 @@
           };
         };
 
+        # Records last input time; the check below reads /run/auto-suspend/last-input.
+        services.auto-suspend-input-watch = {
+          description = "Track last input event time for auto-suspend";
+          wantedBy = ["multi-user.target"];
+          serviceConfig = {
+            Type = "simple";
+            ExecStart = inputWatchScript;
+            Restart = "always";
+            RestartSec = "1s";
+          };
+        };
+
         services.auto-suspend = {
           description = "Check for idle and suspend";
+          after = ["auto-suspend-input-watch.service"];
           serviceConfig = {
             Type = "oneshot";
             ExecStart = autoSuspendScript;
           };
         };
 
-        # Reset idle counter on resume
+        # Reset idle counter and re-baseline input tracking on resume
         services.auto-suspend-reset = {
-          description = "Reset auto-suspend counter on wake";
+          description = "Reset auto-suspend counters on wake";
           wantedBy = ["suspend.target" "hibernate.target"];
           after = ["suspend.target" "hibernate.target"];
           serviceConfig = {
             Type = "oneshot";
-            ExecStart = "${pkgs.coreutils}/bin/rm -f /run/auto-suspend/idle-count";
+            ExecStart = resetScript;
           };
         };
       };

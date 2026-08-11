@@ -319,6 +319,11 @@
       # jrCfg.port is nginx with client-certificate authentication against the
       # journal-upload CA. makemake's journal-upload presents client.pem;
       # requests without a valid client cert get HTTP 401.
+      #
+      # http2 off: systemd-journal-upload aborts with "Buffer space is too
+      # small to write entry" / EIO when libcurl hands it a small trailing
+      # read buffer under HTTP/2 (systemd#39166). nginx >= 1.25.1 enables h2
+      # by default on ssl listeners, so it must be disabled per listener here.
       (mkIf jrCfg.enable {
         services.journald.remote = {
           enable = true;
@@ -336,6 +341,10 @@
             }
           ];
           serverName = "journal-upload";
+          # The nixpkgs nginx module defaults http2 = true and would emit
+          # "http2 on;"; nginx >= 1.25.1 also enables h2 by default on ssl
+          # listeners. Both must be defeated here: see extraConfig below.
+          http2 = false;
           # onlySSL: no port-80 redirect server. (A listen-less redirect would
           # bind this nginx build's default port 8000, colliding with kea's
           # control agent.) journal-upload always uses https.
@@ -344,6 +353,11 @@
           sslCertificateKey = toString (config.my.secrets.getPath "journal-upload" "server.key");
           sslTrustedCertificate = toString (config.my.secrets.getPath "journal-upload" "ca.pem");
           extraConfig = ''
+            # http2 off (server directive, nginx >= 1.25.1): systemd-journal-upload
+            # aborts with "Buffer space is too small to write entry" / EIO when
+            # libcurl hands it a small trailing read buffer under HTTP/2
+            # (systemd#39166); this listener must stay HTTP/1.1.
+            http2 off;
             # journal-upload catch-up streams very large bodies
             client_max_body_size 0;
             ssl_client_certificate ${toString (config.my.secrets.getPath "journal-upload" "ca.pem")};

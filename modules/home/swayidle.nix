@@ -36,7 +36,9 @@
         # session swayidle resolved from logind (more reliable than
         # /session/auto from a transient sh -c).
         # Wayland idle-inhibit (Electron apps, video players, etc.) blocks
-        # idlehint from ever firing — check for inhibitors if auto-suspend stalls.
+        # idlehint from ever firing. auto-suspend does not depend on this hint:
+        # it reads evdev input directly via auto-suspend-input-watch; the hint
+        # stays for other logind IdleHint consumers.
         # -w is only useful when waiting for before-sleep commands.
         extraArgs =
           lib.optionals cfg.lockOnSuspend ["-w"]
