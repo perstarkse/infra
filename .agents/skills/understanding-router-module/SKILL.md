@@ -244,7 +244,9 @@ zones = [
 - **br-lan**: Bridge combining LAN interfaces
 - **vlanN**: Tagged VLAN interfaces on br-lan
 - **wg0**: WireGuard interface
-- **WAN**: DHCP client on WAN interface
+- **WAN**: DHCP client on WAN interface (`RequiredForOnline = "no"` — ISP/PHY failure must not gate boot)
+- **wait-online**: waits only for the primary LAN segment (`ConfigureWithoutCarrier` + static address), not WAN or every VLAN
+- **igc EEE**: systemd.link `EnergyEfficientEthernet=false` plus an `igc-disable-eee` ethtool oneshot (Intel I225/I226 often leave the link dark after the driver binds)
 
 ## Common Modifications
 
