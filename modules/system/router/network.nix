@@ -34,7 +34,6 @@
           "kernel.hung_task_panic" = 1;
         };
 
-      # igc.eee_enable was never a real module param (ignored at boot).
       # pcie_aspm=off: BIOS still reports "can't disable ASPM; OS doesn't have
       # ASPM control" without this; keep pcie_port_pm=off as well.
       # Manual follow-up: disable ASPM in firmware if the option exists.
@@ -61,20 +60,18 @@
 
       systemd.network = {
         enable = true;
+        # Only gate network-online on the primary LAN segment: it is a static
+        # address with ConfigureWithoutCarrier, so a dead WAN PHY or unplugged
+        # ISP link must never block boot. --operational-state=degraded accepts
+        # the routable state the segment reaches once its address is configured
+        # (default would be "online", which a static-only link never reaches).
         wait-online = {
           enable = lib.mkForce true;
-          extraArgs = map (iface: "--interface=${iface}") routedInterfaces;
+          extraArgs = [
+            "--interface=${helpers.primaryInterface}"
+            "--operational-state=degraded"
+          ];
           timeout = 30;
-        };
-
-        # Replace the dead igc.eee_enable=0 module param with systemd.link EEE off
-        # (systemd >= 258 [EnergyEfficientEthernet] section).
-        links."10-igc-no-eee" = {
-          matchConfig.Driver = "igc";
-          extraConfig = ''
-            [EnergyEfficientEthernet]
-            Enable=false
-          '';
         };
 
         netdevs =
@@ -107,7 +104,7 @@
                 DHCP = "yes";
                 IPv4Forwarding = true;
               };
-              linkConfig.RequiredForOnline = "routable";
+              linkConfig.RequiredForOnline = "no";
             };
 
             "10-${lanBridge}" = {

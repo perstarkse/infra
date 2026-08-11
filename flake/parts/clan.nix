@@ -140,6 +140,23 @@
             };
           };
         };
+        user-root = {
+          module = {
+            name = "users";
+            input = "clan-core";
+          };
+          roles.default = {
+            machines = {
+              io = {};
+              makemake = {};
+            };
+            settings = {
+              user = "root";
+              prompt = true;
+              # groups = [];
+            };
+          };
+        };
         emergency-access = {
           module = {
             name = "emergency-access";
