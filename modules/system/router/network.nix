@@ -2,6 +2,7 @@
   config.flake.nixosModules.router-network = {
     lib,
     config,
+    pkgs,
     ...
   }: let
     cfg = config.my.router;
@@ -11,6 +12,7 @@
     lanBridge = helpers.lanBridge or "br-lan";
     segments = helpers.segments or [];
     routedInterfaces = map (segment: segment.interface) segments;
+    primaryInterface = helpers.primaryInterface or (builtins.head routedInterfaces);
     bridgeSelfVlanMembership = map (segment: {VLAN = segment.vlanId;}) segments;
   in {
     config = lib.mkIf cfg.enable {
@@ -61,9 +63,12 @@
 
       systemd.network = {
         enable = true;
+        # Router boot must not wait on WAN DHCP / ISP link. Only require the
+        # primary LAN segment (ConfigureWithoutCarrier + static address).
         wait-online = {
           enable = lib.mkForce true;
-          extraArgs = map (iface: "--interface=${iface}") routedInterfaces;
+          any = true;
+          extraArgs = ["--interface=${primaryInterface}"];
           timeout = 30;
         };
 
@@ -107,7 +112,9 @@
                 DHCP = "yes";
                 IPv4Forwarding = true;
               };
-              linkConfig.RequiredForOnline = "routable";
+              # Never gate network-online / boot on ISP DHCP. A dead WAN PHY
+              # (common on Intel I226/igc) must not block LAN bring-up.
+              linkConfig.RequiredForOnline = "no";
             };
 
             "10-${lanBridge}" = {
@@ -138,6 +145,9 @@
                     matchConfig.Name = segment.interface;
                     address = ["${segment.routerIp}/${toString segment.cidrPrefix}"];
                     networkConfig.ConfigureWithoutCarrier = true;
+                    # Primary is selected explicitly via wait-online --interface=;
+                    # keep RequiredForOnline=no so a cable-less lab boot still
+                    # configures the static address (ConfigureWithoutCarrier).
                     linkConfig.RequiredForOnline = "no";
                   }
                   // lib.optionalAttrs (segment.linkMtu != null) {
@@ -145,6 +155,47 @@
                   })
             )
             segments);
+      };
+
+      # Belt-and-suspenders for Intel I225/I226 (igc): systemd.link EEE=off is
+      # not always applied before the first link train. Disable via ethtool
+      # before networkd configures the iface; only bounce WAN when link is
+      # already down so a healthy link is not disrupted on every boot.
+      systemd.services."igc-disable-eee" = {
+        description = "Disable Energy Efficient Ethernet on igc NICs";
+        wantedBy = ["network-pre.target"];
+        before = ["network-pre.target"];
+        after = ["systemd-udev-settle.service"];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = pkgs.writeShellScript "igc-disable-eee" ''
+            set -eu
+            ethtool=${pkgs.ethtool}/bin/ethtool
+            ip=${pkgs.iproute2}/bin/ip
+            for nic in /sys/class/net/*; do
+              iface=$(basename "$nic")
+              case "$iface" in
+                lo|bonding_masters) continue ;;
+              esac
+              driver=$(basename "$(readlink -f "$nic/device/driver" 2>/dev/null || true)" 2>/dev/null || true)
+              if [ "$driver" != "igc" ]; then
+                continue
+              fi
+              $ethtool --set-eee "$iface" eee off 2>/dev/null || true
+            done
+            # I226 often trains once with EEE on and leaves the link dark.
+            # Bounce WAN only when carrier is absent so healthy boots are quiet.
+            if [ -d /sys/class/net/${wan} ]; then
+              $ethtool --set-eee ${wan} eee off 2>/dev/null || true
+              carrier=$(cat /sys/class/net/${wan}/carrier 2>/dev/null || echo 0)
+              if [ "$carrier" != "1" ]; then
+                $ip link set ${wan} down || true
+                $ip link set ${wan} up || true
+              fi
+            fi
+          '';
+        };
       };
 
       systemd.services.nftables = {

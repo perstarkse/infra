@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **io boot stuck on wait-online / dead WAN link (Intel I226/igc)**: `systemd-networkd-wait-online` no longer waits on every VLAN or on WAN DHCP (`RequiredForOnline=routable`). It only requires the primary LAN segment (static address + `ConfigureWithoutCarrier`), so ISP/PHY failure cannot gate boot. WAN is `RequiredForOnline=no`. Added an `igc-disable-eee` oneshot (ethtool EEE off + conditional WAN bounce when carrier is down) on top of the existing systemd.link EEE disable — matches the observed "WAN LED on when powered off, dark once the OS takes the PHY" failure mode.
+- **Root console password missing on servers**: the fleet migrated off the deprecated Clan `admin` service onto `sshd`, but never re-attached a `users` instance for `root`. Orphaned `root-password` vars were not applied, and with `mutableUsers = false` root stayed password-locked (interactive user `p` was also removed from servers). Added inventory `users-root` (`user = "root"`) and migrated existing vars to `user-password-root/{user-password,user-password-hash}` for io/makemake/charon/ariel. Sedna still needs `clan vars generate sedna` (or a deploy prompt) once to create its root password.
+
 ### Changed
 
 - **npm 7-day release-age gate for pi extensions and all global npm installs** (`modules/home/node.nix`): the managed `~/.npmrc` now sets `min-release-age=7`, so npm refuses any package published strictly more-recently than 7 days ago. 

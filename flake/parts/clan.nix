@@ -128,7 +128,7 @@
             input = "clan-core";
           };
           # The interactive user p exists only on the desktop machines;
-          # servers are root-only (admin via the clan sshd key).
+          # servers are root-only (admin via the clan sshd key + root password).
           roles.default = {
             machines = {
               charon = {};
@@ -137,6 +137,27 @@
             settings = {
               user = "p";
               prompt = true;
+            };
+          };
+        };
+        # Root password for console / emergency login. The fleet migrated off
+        # the deprecated admin clanService onto sshd, but never re-attached a
+        # users instance for root — so root-password vars were orphaned and
+        # mutableUsers=false left root password-locked on servers.
+        users-root = {
+          module = {
+            name = "users";
+            input = "clan-core";
+          };
+          roles.default = {
+            tags.nixos = {};
+            settings = {
+              user = "root";
+              # Existing migrated vars (user-password-root) are reused; prompt
+              # only fires for machines that still lack the generator output
+              # (currently sedna).
+              prompt = true;
+              groups = [];
             };
           };
         };
