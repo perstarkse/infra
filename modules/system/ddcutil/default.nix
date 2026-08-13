@@ -44,14 +44,8 @@
       "@DISPLAY_NUM@"
       "@MAX_ATTEMPTS@"
       "@RETRY_INTERVAL@"
-      "@RESUME_ON_LOCAL_WAKE_ONLY@"
-      "@RESUME_WAIT_SECONDS@"
-      "@REMOTE_WAKE_USER@"
-      "@KEEP_AWAKE_STATE_DIR@"
-      "@KEEP_AWAKE_UNIT@"
-      "@DATE@"
-      "@AWK@"
-      "@JOURNALCTL@"
+      "@MKDIR@"
+      "@DIRNAME@"
       "@GREP@"
       "@SLEEP@"
       "@LOGGER@"
@@ -63,18 +57,8 @@
       (toString monitorCfg.display)
       (toString monitorCfg.resumeMaxAttempts)
       (toString monitorCfg.resumeRetrySeconds)
-      (
-        if monitorCfg.resumeOnLocalWakeOnly
-        then "true"
-        else "false"
-      )
-      (toString monitorCfg.resumeRemoteWakeWaitSeconds)
-      (monitorCfg.remoteWakeUser or "")
-      monitorCfg.keepAwakeStateDir
-      monitorCfg.keepAwakeUnit
-      "${pkgs.coreutils}/bin/date"
-      "${pkgs.gawk}/bin/awk"
-      "${pkgs.systemd}/bin/journalctl"
+      "${pkgs.coreutils}/bin/mkdir"
+      "${pkgs.coreutils}/bin/dirname"
       "${pkgs.gnugrep}/bin/grep"
       "${pkgs.coreutils}/bin/sleep"
       "${pkgs.util-linux}/bin/logger"
@@ -93,8 +77,17 @@
     monitorPower = substituteScript "monitor-power" ./scripts/power.sh;
     monitorResume = substituteResumeScript;
 
+    monitorPowerInput =
+      pkgs.writeScript "monitor-power-input"
+      (lib.replaceStrings
+        ["#!/usr/bin/env python3" "@MONITOR_POWER@"]
+        ["#!${pkgs.python3}/bin/python3" "${monitorPower}/bin/monitor-power"]
+        (builtins.readFile ./scripts/physical-input.py));
+
     systemSuspend =
       pkgs.writeShellScriptBin "system-suspend" (builtins.readFile ./scripts/suspend.sh);
+
+    keepAwakeUntilFile = "${monitorCfg.keepAwakeStateDir}/${monitorCfg.keepAwakeUnit}.until";
   in {
     options.my.ddcutil = {
       enable = lib.mkEnableOption "DDC/CI monitor control via ddcutil";
@@ -128,9 +121,10 @@
               type = lib.types.int;
               default = 20;
               description = ''
-                Resume attempts for monitor-power on after system sleep.
+                Resume attempts to force the monitor off after system sleep.
                 Each attempt probes with ddcutil --maxtries 1,1,1 and verifies
-                VCP D6 reads back On (0x01).
+                VCP D6 reads back Off (0x05). Physical input can abort this
+                and turn the panel on instead.
               '';
             };
 
@@ -140,41 +134,12 @@
               description = "Seconds between resume attempts when I2C is not ready yet.";
             };
 
-            resumeRemoteWakeWaitSeconds = lib.mkOption {
-              type = lib.types.float;
-              default = 5.0;
-              description = ''
-                After turning the monitor on, seconds to poll for a remote wake
-                signal (wake-proxy keep-awake lease or SSH accept). If remote
-                wake is detected, the monitor is turned back off.
-              '';
-            };
-
-            resumeOnLocalWakeOnly = lib.mkOption {
-              type = lib.types.bool;
-              default = true;
-              description = ''
-                After resume, turn the monitor on immediately, then turn it off
-                again if a remote wake-proxy keep-awake signal appears within
-                resumeRemoteWakeWaitSeconds. Physical wakes keep the panel on.
-              '';
-            };
-
-            remoteWakeUser = lib.mkOption {
-              type = lib.types.nullOr lib.types.str;
-              default = "wakeproxy-keep-awake";
-              example = "wakeproxy-keep-awake";
-              description = ''
-                SSH user whose Accepted publickey journal line indicates a
-                wake-proxy keep-awake session. Set to null to disable this signal.
-              '';
-            };
-
             keepAwakeStateDir = lib.mkOption {
               type = lib.types.str;
               default = "/var/lib/wakeproxy-keep-awake";
               description = ''
                 Directory where wake-proxy keep-awake writes .pid / .until lease files.
+                A new lease forces the monitor off (remote WoL session).
               '';
             };
 
@@ -218,13 +183,39 @@
           pkgs.yq-go
         ];
 
-        # Run classify+DDC outside the blocking system-sleep hook so thaw is
-        # not delayed and I2C retries can proceed in parallel with resume.
+        systemd.services.monitor-power-input = {
+          description = "Turn monitor on from physical seat input";
+          wantedBy = ["multi-user.target"];
+          after = ["systemd-udevd.service"];
+          serviceConfig = {
+            Type = "simple";
+            Restart = "always";
+            RestartSec = 1;
+            ExecStart = "${monitorPowerInput}";
+          };
+        };
+
+        # Force DDC off after thaw so HDMI/GPU resume cannot leave the panel
+        # lit. Physical input (monitor-power-input) turns it back on.
         systemd.services.monitor-power-resume = {
-          description = "Turn monitor on after sleep; off if remote wake-proxy";
+          description = "Force monitor off after sleep until physical input";
           serviceConfig = {
             Type = "oneshot";
             ExecStart = "${monitorResume}/bin/monitor-resume";
+          };
+        };
+
+        systemd.paths.monitor-power-keep-awake-off = {
+          description = "Watch wake-proxy keep-awake lease for remote WoL";
+          wantedBy = ["multi-user.target"];
+          pathConfig.PathModified = keepAwakeUntilFile;
+        };
+
+        systemd.services.monitor-power-keep-awake-off = {
+          description = "Force monitor off when wake-proxy keep-awake starts";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${monitorResume}/bin/monitor-resume keep-awake";
           };
         };
 
@@ -232,23 +223,10 @@
           source = pkgs.writeShellScript "monitor-power-resume-hook" ''
             case "$1" in
               pre)
-                ${pkgs.systemd}/bin/journalctl -k -b --show-cursor -n 0 --output=short-unix 2>/dev/null \
-                  | ${pkgs.gawk}/bin/awk -F';' '/^-- cursor:/ { print $2; exit }' \
-                  > /run/monitor-power-suspend-cursor || true
-                ${pkgs.coreutils}/bin/date -Iseconds > /run/monitor-power-suspend-since || true
-                ${pkgs.coreutils}/bin/rm -f /run/monitor-power-suspend-wakeup
-                for dev in /sys/class/wakeup/wakeup*; do
-                  if [ -f "$dev/name" ]; then
-                    name=$(${pkgs.coreutils}/bin/cat "$dev/name" 2>/dev/null)
-                    wc=$(${pkgs.coreutils}/bin/cat "$dev/wakeup_count" 2>/dev/null || echo 0)
-                    ec=$(${pkgs.coreutils}/bin/cat "$dev/event_count" 2>/dev/null || echo 0)
-                    ac=$(${pkgs.coreutils}/bin/cat "$dev/active_count" 2>/dev/null || echo 0)
-                    echo "$name $wc $ec $ac" >> /run/monitor-power-suspend-wakeup
-                  fi
-                done
+                ${pkgs.coreutils}/bin/mkdir -p /run/monitor-power
+                ${pkgs.coreutils}/bin/printf 'off-until-input\n' > /run/monitor-power/policy
                 ;;
               post)
-                # Non-blocking: do not hold systemd-sleep / user.slice thaw.
                 ${pkgs.systemd}/bin/systemctl start --no-block monitor-power-resume.service || true
                 ;;
             esac

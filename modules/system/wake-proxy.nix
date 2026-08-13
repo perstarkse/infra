@@ -26,6 +26,10 @@
           inherit (endpointsCfg) domain;
           inherit (endpointsCfg) public cloudflareProxied acmeDns01;
           websockets = true;
+          # pi-web is an interactive SPA: page loads fire dozens of API/SSE
+          # requests, so the shared 10r/m public zone 503s the UI. Exempt;
+          # fail2ban still blunts path-based scanners.
+          rateLimit = null;
         };
       };
     };

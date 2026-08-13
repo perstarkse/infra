@@ -476,9 +476,9 @@ in {
             group = "nginx";
           }
         ];
-        # Interactive SPA apps (minne, nous, politikerstod, request) declare
-        # rateLimit = null on their vhosts (see the service modules); the
-        # strict `public` limit_req zone applies to every other public vhost.
+        # Interactive SPA apps (minne, nous, politikerstod, request, wake/pi-web)
+        # declare rateLimit = null on their vhosts (see the service modules);
+        # the strict `public` limit_req zone applies to every other public vhost.
         virtualHosts = [];
       };
 

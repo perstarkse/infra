@@ -92,6 +92,9 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    monitorResumeChecks = import ../../tests/monitor-resume.nix {
+      inherit pkgs;
+    };
     accountedSystemChecks = import ../../tests/accounted-system.nix {
       inherit lib;
       inherit pkgs;
@@ -210,6 +213,7 @@
       mailserver-checks = mkCheckBundle "mailserver-checks" mailserverSystemChecks;
       sedna-failover-checks = mkCheckBundle "sedna-failover-checks" sednaFailoverChecks;
       auto-suspend-checks = mkCheckBundle "auto-suspend-checks" autoSuspendChecks;
+      monitor-resume-checks = mkCheckBundle "monitor-resume-checks" monitorResumeChecks;
       accounted-checks = mkCheckBundle "accounted-checks" accountedSystemChecks;
     };
 
@@ -912,6 +916,7 @@
       // backupsSystemChecks
       // mailserverSystemChecks
       // sednaFailoverChecks
-      // autoSuspendChecks;
+      // autoSuspendChecks
+      // monitorResumeChecks;
   };
 }

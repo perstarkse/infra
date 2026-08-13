@@ -19,6 +19,7 @@ Use these flake-native commands from repo root:
 - `nix build path:.#mailserver-checks`
 - `nix build path:.#sedna-failover-checks`
 - `nix build path:.#auto-suspend-checks`
+- `nix build path:.#monitor-resume-checks`
 - `nix build path:.#accounted-checks`
 - `nix build path:.#endpoints-manifest-check`
 - `nix flake check path:.`
@@ -37,6 +38,7 @@ Use these flake-native commands from repo root:
 - `mailserver-checks`: private-infra mailserver tests
 - `sedna-failover-checks`: sedna maintenance page and DNS failover tests
 - `auto-suspend-checks`: auto-suspend idle/load/inhibitor decision tests (short, headless)
+- `monitor-resume-checks`: ddcutil resume/keep-awake force-off unless physical-input policy is on; HID vs uinput classification
 - `accounted-checks`: Supabase+Accounted compose materialization, env render, Garage provision, migration unit ordering
 - `endpoints-manifest-check`: validates endpoints manifest structure and consistency
 - `nix flake check path:.`: all checks in flake (includes host builds)
@@ -47,6 +49,7 @@ Use these flake-native commands from repo root:
 - Endpoints layer changes (`flake/lib/endpoints*.nix`, `modules/system/options.nix` endpoints options, a service's `my.<svc>.endpoints`): run `path:.#router-endpoints-checks` and `path:.#endpoints-manifest-check`
 - `machines/io/configuration.nix` changes: run `path:.#predeploy-check`
 - Auto-suspend module changes (`modules/system/auto-suspend.nix`): run `path:.#auto-suspend-checks`
+- ddcutil resume/monitor-power/input (`modules/system/ddcutil/**`): run `path:.#monitor-resume-checks`
 - Before merge/deploy: run `path:.#final-checks`
 
 ## Troubleshooting
