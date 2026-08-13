@@ -383,6 +383,11 @@ in {
           mac = "a0:88:69:af:a7:f3";
         }
         {
+          name = "tv";
+          ip = "103";
+          mac = "2c:fe:e2:f0:a3:56";
+        }
+        {
           name = "makemake";
           ip = "10";
           mac = "00:d0:b4:02:bb:3c";
