@@ -252,7 +252,7 @@ _: {
           "accounted-env-render.service"
           "accounted-migrate.service"
         ];
-        path = [pkgs.docker pkgs.rsync pkgs.coreutils];
+        path = [pkgs.docker pkgs.rsync pkgs.coreutils pkgs.gnugrep pkgs.iproute2];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
@@ -269,12 +269,30 @@ _: {
             ${accountedSrc}/ ${lib.escapeShellArg stackDir}/
           install -m 0644 ${lanOverlay} ${lib.escapeShellArg stackDir}/docker-compose.lan.yml
           cd ${lib.escapeShellArg stackDir}
+          # Wait for the bind address: at boot the DHCP lease on the LAN
+          # interface can lag network-online.target, and docker refuses to bind
+          # host ports to an unassigned address ("cannot assign requested
+          # address"), which previously left the app container created without
+          # any network endpoint.
+          for _ in $(seq 1 90); do
+            if ip -4 addr show | grep -q "inet ${cfg.address}/"; then
+              break
+            fi
+            sleep 2
+          done
+          if ! ip -4 addr show | grep -q "inet ${cfg.address}/"; then
+            echo "bind address ${cfg.address} not assigned after 180s; aborting" >&2
+            exit 1
+          fi
           # --build: cron image is built from pinned docker/cron.Dockerfile (digest-pinned).
+          # --force-recreate: never reuse a stale container — one created while
+          # the bind address was missing has no network endpoint, and compose
+          # otherwise treats it as up-to-date forever (config hash unchanged).
           docker compose \
             -f docker-compose.yml \
             -f docker-compose.lan.yml \
             --env-file .env \
-            up -d --build --remove-orphans
+            up -d --build --remove-orphans --force-recreate
         '';
       };
 
