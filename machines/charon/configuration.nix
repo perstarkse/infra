@@ -221,8 +221,16 @@ in {
             # (venv interpreter from the shared agent-tooling package).
             agentcad = {
               command = "${ctx.inputs.agentTooling.packages.${pkgs.stdenv.hostPlatform.system}.agentcad}/bin/python";
-              args = [ "-m" "agentcad.mcp" ];
+              args = ["-m" "agentcad.mcp"];
               lifecycle = "lazy";
+              # Host workaround: OCP's GL renderer aborts the process with an
+              # X error on a live display it cannot use (BadWindow kills the
+              # auto-diff PNG phase — agentcad 0.4.0 has no --no-diff). An
+              # unreachable DISPLAY fails the GL phase gracefully instead.
+              # See printing/desktop-side-box/spec.md → CAD tooling.
+              env = {
+                DISPLAY = "invalid-display";
+              };
             };
           };
         };
