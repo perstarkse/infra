@@ -217,6 +217,13 @@ in {
                 DIGIKEY_TOKEN_STORE = "/home/p/.local/state/digikey-mcp/tokens.json";
               };
             };
+            # agentcad: stdio MCP server exposing the CAD CLI as typed tools
+            # (venv interpreter from the shared agent-tooling package).
+            agentcad = {
+              command = "${ctx.inputs.agentTooling.packages.${pkgs.stdenv.hostPlatform.system}.agentcad}/bin/python";
+              args = [ "-m" "agentcad.mcp" ];
+              lifecycle = "lazy";
+            };
           };
         };
         pi-web = {
