@@ -40,6 +40,7 @@ in {
       webdav-htpasswd-secret
       heartbeat
       home-assistant
+      mosquitto
       ntfy
       unifi-os
       frigate
@@ -124,6 +125,7 @@ in {
 
     frigate.enable = true;
     home-assistant.enable = true;
+    mosquitto.enable = true;
 
     # Garage S3-compatible storage (clustered with makemake)
     garage = {
@@ -281,7 +283,7 @@ in {
               end = 200;
             };
           };
-          policy.routerAllowedTcpPorts = [3900 3901];
+          policy.routerAllowedTcpPorts = [1883 3900 3901];
         };
         iot = {
           vlan.id = 20;

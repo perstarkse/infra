@@ -6,7 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Mosquitto MQTT broker on io** (`modules/system/mosquitto.nix`, `machines/io/configuration.nix`): LAN-only listener on `10.0.0.1:1883` (`allow_anonymous false`) with two clients — `air-exhaust` (the exhaust-c6 ESP32 fan controller) and `hass` (Home Assistant's `mqtt:` integration) — each scoped by ACL to `air-exhaust/#`. The clan-vars shared secret `air-exhaust-mqtt` generates random per-client passwords (`mosquitto_passwd` hashes for systemd-credential delivery, plus cleartext `*.env` files for the firmware and HA); generated 2026-08-18. Port 1883 opened on the trusted segment (`routerAllowedTcpPorts`).
+
 ### Fixed
+
+- **`Mod+Ctrl+L` no longer suspends on charon** (`modules/system/ddcutil`): the keybind (added in `13e6d09`) spawns `system-suspend` in the user session, but `137a986` gave the script root-only writes to `/run/monitor-power/policy` under `set -euo pipefail` — so the session spawn aborted with EACCES before `systemctl suspend`. The policy write is now root-gated (`id -u`); the ddcutil systemd-sleep pre hook still writes the same `off-until-input` policy at actual sleep, and `monitor-power off` still runs before suspend. Charon-only as intended (the bind only resolves where ddcutil monitor control is enabled); `auto-suspend` on charon is unaffected (it runs the same script as root).
 
 - **Accounted stack down since Aug 11 reboot** (`modules/system/accounted.nix`): `accounted-stack` started before systemd-networkd had the DHCP lease on enp1s0, so docker could not bind the host port `10.0.0.10:3050` (`cannot assign requested address`) and the app container was created without any network endpoint. Compose then treated the broken container as up-to-date forever (config hash unchanged), so every restart reused it: the app could not reach Supabase, `/api/health` failed, and `up -d` aborted waiting for the `service_healthy` cron dependency. The unit now waits for the bind address (`ip addr` loop, 180s cap) before running compose, and `up -d` passes `--force-recreate` so a stale/networkless container is replaced instead of reused. Verified: recreated the container on makemake, app healthy, `https://accounting.lan.stark.pub/api/health` returns 200 via the router, cron running.
 
