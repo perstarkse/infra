@@ -42,19 +42,24 @@ turn_off() {
 force_on() {
 	local attempt
 	for attempt in $(@SEQ@ 1 "$MAX_ATTEMPTS"); do
+		[[ "$(policy)" == "on" ]] || return 0
 		if turn_on 2>/dev/null; then
 			@LOGGER@ -t monitor-power "display on ($1)"
 			exit 0
 		fi
 		@SLEEP@ "$RETRY_INTERVAL"
 	done
+	[[ "$(policy)" == "on" ]] || return 0
 	@DDCUTIL@ --maxtries 1,1,1 -d "$DISPLAY_NUM" setvcp --noverify D6 01 || true
 	@LOGGER@ -t monitor-power "display on without verify ($1)"
 	exit 0
 }
 
-# Physical seat already claimed the machine (input daemon wrote policy=on).
-if [[ "$(policy)" == "on" ]]; then
+# A wake-proxy lease is authoritative over input noise emitted while devices
+# resume. A real physical event during or after this force-off writes "on" again.
+if [[ "$SOURCE" == "keep-awake" ]]; then
+	write_policy "off-until-input"
+elif [[ "$(policy)" == "on" ]]; then
 	force_on "physical input"
 fi
 

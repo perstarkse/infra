@@ -213,6 +213,7 @@
 
         systemd.services.monitor-power-keep-awake-off = {
           description = "Force monitor off when wake-proxy keep-awake starts";
+          after = ["monitor-power-resume.service"];
           serviceConfig = {
             Type = "oneshot";
             ExecStart = "${monitorResume}/bin/monitor-resume keep-awake";

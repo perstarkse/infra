@@ -147,12 +147,22 @@ in {
       reset_case
       printf 'on\n' > "$work/policy"
       "$resume_bin" keep-awake
-      assert_on "keep-awake-physical"
-      if ${pkgs.gnugrep}/bin/grep -q 'setvcp --noverify D6 05' "$work/ddc.log"; then
-        echo "FAIL keep-awake-physical: sent D6 05 (off)" >&2
-        cat "$work/ddc.log" >&2
-        exit 1
-      fi
+      assert_no_on "keep-awake-stale-resume-input"
+      assert_off "keep-awake-stale-resume-input"
+      ${pkgs.gnugrep}/bin/grep -qx 'off-until-input' "$work/policy"
+
+      reset_case
+      printf 'on\n' > "$work/policy"
+      export DDC_OFF_SLEEP=0.2
+      (
+        ${pkgs.coreutils}/bin/sleep 0.05
+        printf 'on\n' > "$work/policy"
+      ) &
+      "$resume_bin" keep-awake
+      wait || true
+      unset DDC_OFF_SLEEP
+      assert_on "keep-awake-physical-during-off"
+      ${pkgs.gnugrep}/bin/grep -q 'physical input during keep-awake' "$work/logger.log"
 
       export POWER_LOG="$work/power.log"
       export MONITOR_POWER_BIN="${mockMonitorPower}"
