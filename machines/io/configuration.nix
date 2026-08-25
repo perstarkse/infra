@@ -46,6 +46,7 @@ in {
       frigate
       garage
       atuin
+      backups
       libvirt
       agent-microvm
     ]
@@ -137,6 +138,19 @@ in {
       zone = "io";
     };
 
+    # First backup job on this host: HA state (registries, automations,
+    # ZHA data) is operationally critical and unrecoverable from config.
+    # Daily to B2, mirroring makemake's job shape.
+    backups.home-assistant = {
+      enable = true;
+      path = "/data/.state/home-assistant";
+      frequency = "daily";
+      backend = {
+        type = "b2";
+        lifecycleKeepPriorVersionsDays = 30;
+      };
+    };
+
     atuin = {
       enable = true;
       syncAddress = "http://10.0.0.10:8888";
@@ -151,9 +165,12 @@ in {
       # failovers (the sedna side now uses a 10 min timeout as well).
       randomizedDelaySec = "30s";
       # sedna's heartbeat receiver over the public internet (port 18080 opened
-      # in sedna's WAN firewall). Previously a ZeroTier IPv6 literal that
-      # silently died if sedna's ZT address changed.
-      endpointUrl = "http://130.61.55.4:18080/heartbeat";
+      # in sedna's WAN firewall). TLS with a pinned private CA: the receiver
+      # cert has SAN IP 130.61.55.4, so curl validates the raw-IP endpoint via
+      # --cacert instead of a hostname (previously a ZeroTier IPv6 literal
+      # that silently died if sedna's ZT address changed).
+      endpointUrl = "https://130.61.55.4:18080/heartbeat";
+      caCertFile = config.my.secrets.getPath "heartbeat-tls" "ca.pem";
     };
 
     frigate.endpoints = {
@@ -237,7 +254,7 @@ in {
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload" "frigate"];
+        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload" "frigate" "b2"];
       };
 
       allowReadAccess = [

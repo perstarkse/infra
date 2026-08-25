@@ -8,6 +8,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **io: first backup job** — `backups.home-assistant` (daily restic → B2 of
+  `/data/.state/home-assistant`, bucket `restic-io-home-assistant`, lifecycle
+  30 d). Requires the `b2` tag in `secrets.discover.includeTags` so the
+  shared b2-service credentials are discovered; restic password pre-seeded
+  via `clan vars set` (generator prompts are non-interactive otherwise).
+  First snapshot verified 2026-08-25.
+
+### Added
+
+- `agent verify eval` validation tier (`.agent/project.json`): evaluates all five machine
+toplevels without building — catches option/assertion/config errors in the fast loop that
+`fast` (flake metadata only) misses.
+- Heartbeat TLS support (`modules/system/heartbeat.nix`): receiver options
+`my.heartbeat.receiver.tls.{enable,certFile,keyFile}` terminate TLS directly on the
+receiver socket; push option `my.heartbeat.push.caCertFile` pins a private CA for curl
+(the endpoint is a raw WAN IP, so there is no ACME name to validate against).
+- New shared secret generator `vars/generators/heartbeat-tls.nix` (tag `heartbeat`, so io
+and sedna pick it up via existing discovery): CA + server cert with SAN IP 130.61.55.4.
+First deploy of io and sedna must regenerate/redeploy vars to materialize the PKI.
+
+### Changed
+
+- **io→sedna heartbeat encrypted**: push URL is now `https://130.61.55.4:18080/heartbeat`
+with `--cacert` pinning; previously the bearer token transited plaintext over the public
+internet (review 2026-08-25). Bearer-token auth unchanged; firewall rule unchanged.
+- Clan SSH agent forwarding (`clan.core.networking.forwardAgent`) restricted to charon;
+was fleet-wide, which let a compromised server reuse the interactive agent over SSH.
+- `nix.settings.trusted-users` now grants the main user only where `my.mainUser.enable =
+true`; on servers it collapses to `["root"]` (mkForce'd over clan-core's recommended
+`["root"]` default, which list-concatenated into duplicates before).
+- electron-39.8.10 insecure-package allowance scoped from fleet-wide to the two
+workstations that evaluate bitwarden-desktop (charon, ariel); servers never see it.
+
 - Frigate event retention raised to 30 days (top-level `retain.events.days`,
   default was 10); continuous recording stays off. Deployed to io 2026-08-25;
   note: the podman-frigate unit does not restart on config-only switches —
