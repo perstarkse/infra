@@ -97,6 +97,7 @@ in {
         pi-agent
         pi-web
         shared-skills
+        antigravity
       ]);
 
     home.packages = [
@@ -155,34 +156,14 @@ in {
 
       agentTooling = {
         pi-agent = {
-          permissionSystem.enable = false;
           enable = true;
+          permissionSystem.enable = false;
+          governance.enable = false;
           shellAlias = "PI_FFF_MODE=override command pi";
           defaultProvider = "cline-pass";
           defaultModel = "deepseek/deepseek-v4-flash";
           extraPackages = ["/home/p/repos/pi-cline-provider"];
-          models = {
-            providers.openrouter.models = [
-              {
-                id = "tencent/hy3:free";
-                name = "Tencent Hy3 (Free)";
-                reasoning = true;
-                input = ["text"];
-                cost = {
-                  input = 0;
-                  output = 0;
-                  cacheRead = 0;
-                  cacheWrite = 0;
-                };
-                contextWindow = 202144;
-                maxTokens = 202144;
-                compat = {
-                  thinkingFormat = "openrouter";
-                  supportsDeveloperRole = false;
-                };
-              }
-            ];
-          };
+          models = {};
           subagentOverrides = lib.genAttrs ["scout" "context-builder" "planner" "researcher" "reviewer" "delegate"] (_: {
             model = "opencode/deepseek-v4-flash-free";
             fallbackModels = ["deepseek/deepseek-v4-flash"];
@@ -245,6 +226,17 @@ in {
         };
         shared-skills = {
           enable = true;
+        };
+        antigravity = {
+          enable = true;
+          # Headless agy runs cannot approve tool prompts; these prefixes are
+          # rendered into ~/.gemini/antigravity-cli/settings.json.
+          allowedCommands = [
+            "git"
+            "nix"
+            "cargo"
+            "just"
+          ];
         };
       };
     };
