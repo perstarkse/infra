@@ -4,7 +4,8 @@ result-*
 nohup.out
 
 # Local agent state (never commit)
-.agent/
+.agent/*
+!.agent/guard.json
 .pi-subagents/
 # Security review working doc (never commit)
 SECURITY-REVIEW.md

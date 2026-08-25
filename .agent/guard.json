@@ -1,0 +1,55 @@
+{
+  "rules": [
+    {
+      "id": "evidence-immutable",
+      "trigger": {
+        "paths": [
+          ".agent/runs/*",
+          ".agent/worksheets/*"
+        ]
+      },
+      "constraint": "Never edit or delete verification evidence; re-run the command instead.",
+      "severity": "forbid",
+      "origin": "evidence integrity",
+      "enabled": true
+    },
+    {
+      "id": "no-env-files",
+      "trigger": {
+        "paths": [
+          "*.env",
+          ".env",
+          "*.env.*"
+        ]
+      },
+      "constraint": "Never create or modify env files; secrets live in sops/vars, never in plaintext.",
+      "severity": "forbid",
+      "origin": "repo contract protectedPaths",
+      "enabled": true
+    },
+    {
+      "id": "sops-encrypted-only",
+      "trigger": {
+        "paths": [
+          "sops/*"
+        ]
+      },
+      "constraint": "Never create or hand-edit files under sops/; secret changes go through the sops/clan vars workflow on the host.",
+      "severity": "forbid",
+      "origin": "plaintext secret exposure risk",
+      "enabled": true
+    },
+    {
+      "id": "machines-are-deploy-targets",
+      "trigger": {
+        "paths": [
+          "machines/*"
+        ]
+      },
+      "constraint": "Machine configs deploy to real hosts: verify with a full nix flake check and state the blast radius (which machines) in the final summary before handing off.",
+      "severity": "warn",
+      "origin": "deploy safety",
+      "enabled": true
+    }
+  ]
+}
