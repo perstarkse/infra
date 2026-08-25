@@ -240,14 +240,9 @@ in {
         };
         antigravity = {
           enable = true;
-          # Headless agy runs cannot approve tool prompts; these prefixes are
-          # rendered into ~/.gemini/antigravity-cli/settings.json.
-          allowedCommands = [
-            "git"
-            "nix"
-            "cargo"
-            "just"
-          ];
+          # allowedCommands: the shared module default already covers
+          # git/nix/cargo/just plus read-only inspection tools; override here
+          # only to add machine-specific extras.
         };
       };
     };
