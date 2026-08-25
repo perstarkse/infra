@@ -555,6 +555,11 @@ in {
 
   zramSwap.enable = true;
 
+  # Decode and persist machine-check exceptions (MCEs) so hardware errors like the
+  # uncorrectable EX watchdog errors before the Aug 19 hard reset are not lost.
+  # Records go to /var/lib/rasdaemon/ras-mc_event.db; query with ras-mc-ctl.
+  hardware.rasdaemon.enable = true;
+
   environment.systemPackages = with pkgs; [
     unstable.code-cursor-fhs
     devenv

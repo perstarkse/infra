@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **rasdaemon on charon** (`machines/charon/configuration.nix`): `hardware.rasdaemon.enable` decodes and persists machine-check exceptions (MCEs) to `/var/lib/rasdaemon/ras-mc_event.db` (query with `ras-mc-ctl`). Motivation: the Aug 19 hard reset was associated with uncorrectable EX-watchdog MCEs (Bank 5/22) that the kernel only prints once at the next boot — rasdaemon keeps a running record and also surfaces correctable errors.
+
 - **Mosquitto MQTT broker on io** (`modules/system/mosquitto.nix`, `machines/io/configuration.nix`): LAN-only listener on `10.0.0.1:1883` (`allow_anonymous false`) with two clients — `air-exhaust` (the exhaust-c6 ESP32 fan controller) and `hass` (Home Assistant's `mqtt:` integration) — each scoped by ACL to `air-exhaust/#`. The clan-vars shared secret `air-exhaust-mqtt` generates random per-client passwords (`mosquitto_passwd` hashes for systemd-credential delivery, plus cleartext `*.env` files for the firmware and HA); generated 2026-08-18. Port 1883 opened on the trusted segment (`routerAllowedTcpPorts`).
 
 ### Fixed
