@@ -385,6 +385,9 @@ in {
 
       lanServer.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10.0.0.10/24'", timeout=120)
       lanClient.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10\\.0\\.0\\.'", timeout=180)
+      # The WAN uplink needs its own lease from the wan node's dnsmasq; without
+      # this wait the NAT'd ping below races the router's DHCPv4 exchange.
+      router.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '192\\.168\\.100\\.'", timeout=120)
 
       router.succeed("ping -c1 -W2 10.0.0.10")
       lanClient.succeed("ping -c1 -W2 10.0.0.1")
