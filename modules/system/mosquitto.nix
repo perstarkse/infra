@@ -33,19 +33,37 @@ _: {
         # Two clients per listener: `air-exhaust` for the exhaust-c6 ESP32
         # firmware and `hass` for the Home Assistant `mqtt:` integration.
         # Hashed passwords are generated once into the clan store (see the
-        # secret below) and delivered as systemd credentials. Both clients
-        # are scoped to the air-exhaust/# topic space.
+        # secret below) and delivered as systemd credentials. Both share the
+        # `air-exhaust/#` topic space for the fan control/status loops.
+        #
+        # HA MQTT discovery needs two extra ACL grants: the firmware publishes
+        # retained discovery configs under `homeassistant/sensor/...` (so it
+        # must be able to write there), and the hass integration subscribes to
+        # `homeassistant/#` to create entities from them (so it must be able
+        # to read there). Scope both as narrowly as possible.
+        #
+        # MQTT wildcards must be a whole level, so a prefix-scoped
+        # `homeassistant/sensor/exhaust_c6_#` is invalid (the firmware's
+        # discovery topics are `homeassistant/sensor/exhaust_c6_{duty,rpm,
+        # room,mode}/config`); `homeassistant/sensor/#` is the narrowest valid
+        # pattern that still matches them.
         listeners = map (listener:
           listener
           // {
             users = {
               air-exhaust = {
                 hashedPasswordFile = config.my.secrets.getPath cfg.secretName "air-exhaust.hash";
-                acl = ["readwrite air-exhaust/#"];
+                acl = [
+                  "readwrite air-exhaust/#"
+                  "write homeassistant/sensor/#"
+                ];
               };
               hass = {
                 hashedPasswordFile = config.my.secrets.getPath cfg.secretName "hass.hash";
-                acl = ["readwrite air-exhaust/#"];
+                acl = [
+                  "readwrite air-exhaust/#"
+                  "read homeassistant/#"
+                ];
               };
             };
           })

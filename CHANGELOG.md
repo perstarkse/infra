@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **air-exhaust fan invisible in Home Assistant** (`modules/system/mosquitto.nix`):
+  the mosquitto ACL scoped both clients to `air-exhaust/#` only, so the
+  firmware's retained HA discovery configs
+  (`homeassistant/sensor/exhaust_c6_{duty,rpm,room,mode}/config`) were
+  silently dropped on the write side and the `hass` integration could not
+  subscribe to `homeassistant/#` on the read side — the device never appeared
+  in HA even though the `air-exhaust/fan/status` and `room_temp` feeds worked.
+  The firmware client now also gets `write homeassistant/sensor/#` and the
+  hass client `read homeassistant/#`; both stay scoped otherwise. The
+  acl-file plugin enforces MQTT wildcard-as-whole-level rules, so a
+  prefix-glued `exhaust_c6_#` grant would be rejected at startup; the
+  firmware's write grant is `homeassistant/sensor/#`, which matches
+  `.../exhaust_c6_{duty,rpm,room,mode}/config`. No
+  firmware change needed — the firmware re-publishes its retained discovery
+  configs on every MQTT session start, and the deploy's mosquitto restart
+  drops its session so it reconnects and republishes within seconds.
+
 ### Added
 
 - **rasdaemon on charon** (`machines/charon/configuration.nix`): `hardware.rasdaemon.enable` decodes and persists machine-check exceptions (MCEs) to `/var/lib/rasdaemon/ras-mc_event.db` (query with `ras-mc-ctl`). Motivation: the Aug 19 hard reset was associated with uncorrectable EX-watchdog MCEs (Bank 5/22) that the kernel only prints once at the next boot — rasdaemon keeps a running record and also surfaces correctable errors.
