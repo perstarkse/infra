@@ -2,7 +2,6 @@
   config.flake.nixosModules.home-assistant = {
     config,
     lib,
-    pkgs,
     mkStandardEndpointsOptions,
     ...
   }: let
@@ -17,52 +16,17 @@
     };
 
     config = lib.mkIf cfg.enable {
-      systemd = {
-        tmpfiles.rules = [
-          "d /data/.state/home-assistant 0755 root root - -"
-        ];
-        services.homeassistant-reverse-proxy-config = {
-          description = "Ensure Home Assistant trusts local reverse proxy";
-          before = ["podman-homeassistant.service"];
-          serviceConfig.Type = "oneshot";
-          script = ''
-            set -eu
-
-            cfg=/data/.state/home-assistant/configuration.yaml
-
-            if [ ! -f "$cfg" ]; then
-              cat > "$cfg" <<'EOF'
-            # Loads default set of integrations. Do not remove.
-            default_config:
-
-            # Load frontend themes from the themes folder
-            frontend:
-              themes: !include_dir_merge_named themes
-
-            automation: !include automations.yaml
-            script: !include scripts.yaml
-            scene: !include scenes.yaml
-            EOF
-            fi
-
-            if ! ${pkgs.gnugrep}/bin/grep -q "use_x_forwarded_for:" "$cfg"; then
-              cat >> "$cfg" <<'EOF'
-
-            http:
-              use_x_forwarded_for: true
-              trusted_proxies:
-                - 10.0.0.1
-                - 127.0.0.1
-                - ::1
-            EOF
-            fi
-          '';
-        };
-        services.podman-homeassistant = {
-          requires = ["homeassistant-reverse-proxy-config.service"];
-          after = ["homeassistant-reverse-proxy-config.service"];
-        };
-      };
+      systemd.tmpfiles.rules = [
+        "d /data/.state/home-assistant 0755 root root - -"
+      ];
+      # Note (2026-08-18): neither HTTP reverse-proxy trust
+      # (use_x_forwarded_for / trusted_proxies) nor the MQTT broker wiring
+      # belongs in configuration.yaml on HA 2026.8+: the former lives in
+      # .storage/http (Settings > System > Network) and the latter is a config
+      # entry in .storage/core.config_entries. A YAML `mqtt: broker: ...` block
+      # is INVALID config on 2026.8 (mqtt setup fails, which also takes down
+      # frigate since it depends on mqtt), and the http block is ignored after
+      # migration. Do not re-add YAML blocks here.
       services = {
         # System requirements for bluetooth
         dbus.enable = true;
