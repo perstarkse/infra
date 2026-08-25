@@ -15,6 +15,17 @@
     };
   };
 in {
+  # Workstation-only: agent forwarding lets the deploy/build host reuse the
+  # interactive agent over SSH; servers must never enable it.
+  clan.core.networking.forwardAgent = true;
+
+  # electron 39.8.10 is EOL in nixpkgs 26.05; bitwarden-desktop pins to it.
+  # Scoped here (and on ariel) instead of fleet-wide: servers never evaluate
+  # electron, so the insecure-package allowance stays off there.
+  nixpkgs.config.permittedInsecurePackages = [
+    "electron-39.8.10"
+  ];
+
   imports = with ctx.flake.nixosModules;
     [
       home-module

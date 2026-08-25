@@ -244,6 +244,14 @@ in {
       user = "heartbeat";
       group = "heartbeat";
       listenAddress = "0.0.0.0";
+      # WAN-facing deadman endpoint: terminate TLS on the receiver socket so
+      # io's bearer token never transits plaintext (review 2026-08-25). The
+      # cert SAN covers 130.61.55.4; io pins the private CA.
+      tls = {
+        enable = true;
+        certFile = config.my.secrets.getPath "heartbeat-tls" "server-cert.pem";
+        keyFile = config.my.secrets.getPath "heartbeat-tls" "server-key.pem";
+      };
       externalEndpointName = "io-heartbeat";
       deadmanInterval = "15m";
       deadmanAlert.description = "io heartbeat missing";

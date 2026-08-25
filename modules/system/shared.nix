@@ -8,7 +8,6 @@
     mainUser = config.my.mainUser.name;
   in {
     system.stateVersion = config.my.stateVersion;
-    clan.core.networking.forwardAgent = true;
 
     time.timeZone = "Europe/Stockholm";
 
@@ -37,14 +36,9 @@
       })
     ];
 
-    # electron 39.8.10 is EOL in nixpkgs 26.05; bitwarden-desktop pins to it.
-    # Allow it here until upstream bumps the electron version.
     nixpkgs.config = {
       allowUnfree = true;
       nvidia.acceptLicense = true;
-      permittedInsecurePackages = [
-        "electron-39.8.10"
-      ];
     };
 
     nix.gc = {
@@ -122,7 +116,12 @@
     };
 
     nix.settings = {
-      trusted-users = ["root" mainUser];
+      # Only grant trusted-user where the account exists: on servers
+      # (mainUser.enable = false) this collapses to ["root"], so a
+      # compromised user account cannot push arbitrary closures.
+      # mkForce: clan-core's recommended defaults contribute their own
+      # ["root"] definition and list options merge by concatenation.
+      trusted-users = lib.mkForce (["root"] ++ lib.optionals config.my.mainUser.enable [mainUser]);
       "download-buffer-size" = 268435456;
       trusted-substituters = [
         "https://noctalia.cachix.org"

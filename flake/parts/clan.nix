@@ -24,6 +24,10 @@
       machines = {
         sedna = {
           deploy.buildHost = "root@charon.lan";
+          # The charon -> <m> closure-copy hop reuses the workstation agent
+          # (charon itself has clan.core.networking.forwardAgent for the
+          # workstation -> charon hop). No key material stored on charon.
+          deploy.forwardAgent = true;
           tags = [
             "server"
             "check-profile-sedna"
@@ -31,6 +35,10 @@
         };
         io = {
           deploy.buildHost = "root@charon.lan";
+          # The charon -> <m> closure-copy hop reuses the workstation agent
+          # (charon itself has clan.core.networking.forwardAgent for the
+          # workstation -> charon hop). No key material stored on charon.
+          deploy.forwardAgent = true;
           tags = [
             "server"
             "check-profile-io-final"
@@ -39,6 +47,10 @@
         };
         makemake = {
           deploy.buildHost = "root@charon.lan";
+          # The charon -> <m> closure-copy hop reuses the workstation agent
+          # (charon itself has clan.core.networking.forwardAgent for the
+          # workstation -> charon hop). No key material stored on charon.
+          deploy.forwardAgent = true;
           tags = [
             "server"
             "check-profile-fast"
@@ -62,6 +74,10 @@
         };
         ariel = {
           deploy.buildHost = "root@charon.lan";
+          # The charon -> <m> closure-copy hop reuses the workstation agent
+          # (charon itself has clan.core.networking.forwardAgent for the
+          # workstation -> charon hop). No key material stored on charon.
+          deploy.forwardAgent = true;
           tags = [
             "client"
             "check-profile-fast"

@@ -19,16 +19,30 @@ _: {
       then cfg.receiver.path
       else "/${cfg.receiver.path}";
 
+    tlsEnabled =
+      cfg.receiver.tls.enable && cfg.receiver.tls.certFile != null && cfg.receiver.tls.keyFile != null;
+
     receiverScript = pkgs.writeText "heartbeat-receiver.py" ''
       import http.server
       import hmac
       import os
+      import ssl
       import urllib.parse
       import urllib.request
 
       LISTEN = ("${cfg.receiver.listenAddress}", ${toString cfg.receiver.port})
       EXPECTED_PATH = "${endpointPath}"
       PUSH_TOKEN = os.environ["HEARTBEAT_PUSH_TOKEN"]
+      TLS_CERT_FILE = "${
+        if tlsEnabled
+        then toString cfg.receiver.tls.certFile
+        else ""
+      }"
+      TLS_KEY_FILE = "${
+        if tlsEnabled
+        then toString cfg.receiver.tls.keyFile
+        else ""
+      }"
       GATUS_URL = "http://127.0.0.1:${toString cfg.receiver.gatusPort}/api/v1/endpoints/${receiverEndpointApiId}/external?success=true&duration=1ms"
       TIMESTAMP_FILE = "${lib.optionalString (cfg.receiver.heartbeatTimestampFile != null) cfg.receiver.heartbeatTimestampFile}"
 
@@ -91,9 +105,33 @@ _: {
               self.end_headers()
 
 
-      with http.server.ThreadingHTTPServer(LISTEN, Handler) as httpd:
+      def _build_server():
+          httpd = http.server.ThreadingHTTPServer(LISTEN, Handler)
+          if TLS_CERT_FILE:
+              ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+              ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+              ctx.load_cert_chain(certfile=TLS_CERT_FILE, keyfile=TLS_KEY_FILE)
+              httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+          return httpd
+
+      with _build_server() as httpd:
           httpd.serve_forever()
     '';
+
+    # Private-CA pinning: the heartbeat endpoint is a raw IP on the public
+    # internet, so there is no ACME name to validate against.
+    pushCurlArgs = lib.concatStringsSep " \\\n        " (
+      [
+        "--connect-timeout ${toString cfg.push.connectTimeoutSeconds}"
+        "--max-time ${toString cfg.push.requestTimeoutSeconds}"
+        "--retry ${toString cfg.push.retries}"
+        "--retry-delay ${toString cfg.push.retryDelaySeconds}"
+        "--retry-all-errors"
+      ]
+      ++ lib.optionals (cfg.push.caCertFile != null) [
+        ''--cacert "${toString cfg.push.caCertFile}"''
+      ]
+    );
 
     pushScript = pkgs.writeShellScript "heartbeat-push" ''
       set -euo pipefail
@@ -114,11 +152,7 @@ _: {
       fi
 
       ${pkgs.curl}/bin/curl -fsS \
-        --connect-timeout ${toString cfg.push.connectTimeoutSeconds} \
-        --max-time ${toString cfg.push.requestTimeoutSeconds} \
-        --retry ${toString cfg.push.retries} \
-        --retry-delay ${toString cfg.push.retryDelaySeconds} \
-        --retry-all-errors \
+        ${pushCurlArgs} \
         -X POST \
         -H "Authorization: Bearer $HEARTBEAT_PUSH_TOKEN" \
         "$target_url" \
@@ -157,6 +191,27 @@ _: {
           type = lib.types.str;
           default = "127.0.0.1";
           description = "Address to bind heartbeat receiver on.";
+        };
+
+        tls = {
+          enable = lib.mkEnableOption ''
+            TLS termination on the receiver socket.
+
+            For receivers reachable over untrusted networks (e.g. a WAN-facing
+            deadman endpoint): the bearer token must not transit plaintext.
+            Pair with push.caCertFile on senders (private-CA pinning).'';
+
+          certFile = lib.mkOption {
+            type = lib.types.nullOr lib.types.path;
+            default = null;
+            description = "Server certificate chain (PEM).";
+          };
+
+          keyFile = lib.mkOption {
+            type = lib.types.nullOr lib.types.path;
+            default = null;
+            description = "Server private key (PEM).";
+          };
         };
 
         port = lib.mkOption {
@@ -263,6 +318,12 @@ _: {
           description = "Target heartbeat URL. Null reads HEARTBEAT_URL from secret env.";
         };
 
+        caCertFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.path;
+          default = null;
+          description = "CA bundle passed to curl --cacert. Required when the endpoint uses https with a private CA.";
+        };
+
         schedule = lib.mkOption {
           type = lib.types.str;
           default = "*:0/10";
@@ -303,12 +364,30 @@ _: {
 
     config = lib.mkMerge [
       (lib.mkIf cfg.receiver.enable {
-        my.secrets.allowReadAccess = [
+        assertions = [
           {
-            readers = [cfg.receiver.user "gatus"];
-            path = envFile;
+            assertion = !cfg.receiver.tls.enable || (cfg.receiver.tls.certFile != null && cfg.receiver.tls.keyFile != null);
+            message = "my.heartbeat.receiver.tls.enable requires both tls.certFile and tls.keyFile.";
           }
         ];
+
+        my.secrets.allowReadAccess =
+          [
+            {
+              readers = [cfg.receiver.user "gatus"];
+              path = envFile;
+            }
+          ]
+          ++ lib.optionals tlsEnabled [
+            {
+              readers = [cfg.receiver.user];
+              path = cfg.receiver.tls.certFile;
+            }
+            {
+              readers = [cfg.receiver.user];
+              path = cfg.receiver.tls.keyFile;
+            }
+          ];
 
         systemd.services.gatus.serviceConfig.EnvironmentFile = lib.mkAfter [envFile];
 

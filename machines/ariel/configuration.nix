@@ -5,6 +5,11 @@
   lib,
   ...
 }: {
+  # electron 39.8.10 is EOL in nixpkgs 26.05; bitwarden-desktop pins to it.
+  nixpkgs.config.permittedInsecurePackages = [
+    "electron-39.8.10"
+  ];
+
   imports = with ctx.flake.nixosModules;
     [
       home-module
