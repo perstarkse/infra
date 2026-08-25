@@ -32,6 +32,12 @@
           reolink_p330_sub:
             - $RTSP_SUB_URL
 
+      # Keep detected-event clips for 30 days (Frigate's default is 10).
+      # Continuous recording stays off via the per-camera retain below.
+      retain:
+        events:
+          days: 30
+
       cameras:
         reolink_p330:
           ffmpeg:
@@ -51,6 +57,9 @@
 
           record:
             enabled: true
+            # days: 0 = no continuous recording; event clips are governed by
+            # the top-level retain.events above. The camera is offline by
+            # intent until it is re-mounted (owner decision 2026-08-25).
             retain:
               days: 0
     '';

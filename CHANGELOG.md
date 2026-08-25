@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Frigate event retention raised to 30 days (top-level `retain.events.days`,
+  default was 10); continuous recording stays off. Deployed to io 2026-08-25;
+  note: the podman-frigate unit does not restart on config-only switches —
+  `frigate-config-sync.service` + `podman-frigate.service` must be restarted
+  manually for config changes to reach the container.
+
 ### Fixed
 
 - **air-exhaust fan invisible in Home Assistant** (`modules/system/mosquitto.nix`):
