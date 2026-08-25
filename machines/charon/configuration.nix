@@ -168,8 +168,25 @@ in {
       agentTooling = {
         pi-agent = {
           enable = true;
-          permissionSystem.enable = false;
-          governance.enable = false;
+          permissionSystem.enable = true;
+          governance.enable = true;
+          # Machine-specific CWD-boundary allow: all agent work lives under
+          # /mnt/sdb/repos (25 project session dirs, ~56k governance entries);
+          # cross-project reads are constant and every sibling repo is the
+          # same trust level. ~/repos is a symlink to this mount and is
+          # matched via canonical path resolution. Full map (replaces the
+          # module default for this option).
+          permissions.external_directory = {
+            "*" = "ask";
+            "/mnt/sdb/repos/*" = "allow";
+            "~/repos/*" = "allow";
+            "~/.cargo/registry/*" = "allow";
+            "~/.cargo/git/*" = "allow";
+            "~/.cache/nix/*" = "allow";
+            "~/.local/share/nix/*" = "allow";
+            "/nix/store/*" = "allow";
+            "/tmp/*" = "allow";
+          };
           shellAlias = "PI_FFF_MODE=override command pi";
           defaultProvider = "cline-pass";
           defaultModel = "deepseek/deepseek-v4-flash";
