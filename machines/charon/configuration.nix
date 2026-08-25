@@ -169,7 +169,12 @@ in {
         pi-agent = {
           enable = true;
           permissionSystem.enable = true;
-          governance.enable = true;
+          governance = {
+            enable = true;
+            # Nightly zero-token digest of cross-project traces + permission
+            # friction; report lands in ~/.local/state/agent-governance/.
+            digest.enable = true;
+          };
           # Machine-specific CWD-boundary allow: all agent work lives under
           # /mnt/sdb/repos (25 project session dirs, ~56k governance entries);
           # cross-project reads are constant and every sibling repo is the
