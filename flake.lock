@@ -1658,11 +1658,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1771164157,
-        "narHash": "sha256-Mcl8x8FENuf7Cdpy3A4eIqziXPCZaJL8+g6LEqRU8qI=",
+        "lastModified": 1787670423,
+        "narHash": "sha256-M8JAOeykqkGq+cHaTu78qUk/a24JrWLzbFnMMK/eTB8=",
         "ref": "main",
-        "rev": "a35eac54bcdc8a5ecd8a289e78d3069328493474",
-        "revCount": 58,
+        "rev": "0560ae26e16994c72986edebc9c660c83a045beb",
+        "revCount": 61,
         "submodules": true,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/saas-minne.git"
