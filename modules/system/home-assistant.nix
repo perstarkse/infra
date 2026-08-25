@@ -65,7 +65,12 @@
             TZ = "Europe/Berlin";
             DBUS_SYSTEM_BUS_ADDRESS = "unix:path=/run/dbus/system_bus_socket";
           };
-          image = "ghcr.io/home-assistant/home-assistant:stable";
+          # Pinned deliberately: podman's default pull policy is "missing", so
+          # `:stable` never re-pulled and the container silently ran a 14-month-
+          # old image (2025.6.1/py3.13) until 2026-08-18. Bump this tag together
+          # with the frigate (>= 5.15.4 on py3.14) and plejd (>= 0.20.x)
+          # component versions.
+          image = "ghcr.io/home-assistant/home-assistant:2026.8.2";
           extraOptions = [
             "--network=host"
             "--device=/dev/conbee:/dev/conbee"
