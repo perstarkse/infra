@@ -31,6 +31,9 @@ _: {
       import urllib.request
 
       LISTEN = ("${cfg.receiver.listenAddress}", ${toString cfg.receiver.port})
+      # Bound per-connection TLS handshakes so a client that connects and goes
+      # silent cannot pin a thread forever.
+      TLS_HANDSHAKE_TIMEOUT_SECONDS = 10
       EXPECTED_PATH = "${endpointPath}"
       PUSH_TOKEN = os.environ["HEARTBEAT_PUSH_TOKEN"]
       TLS_CERT_FILE = "${
@@ -105,14 +108,45 @@ _: {
               self.end_headers()
 
 
+      class Server(http.server.ThreadingHTTPServer):
+          """Threading server that terminates TLS per accepted connection.
+
+          Wrapping the listening socket (ctx.wrap_socket(httpd.socket, ...)) is a
+          footgun: SSLSocket.accept() performs the handshake synchronously in
+          the accept loop, so one client that connects and goes silent wedges
+          the whole receiver with a full SYN backlog (seen 2026-08-26: a
+          scanner stall made every heartbeat push time out from everywhere,
+          indistinguishable from a firewall DROP). Wrapping the accepted socket
+          with do_handshake_on_connect=False moves the handshake into a worker
+          thread, bounded by the timeout above.
+          """
+
+          daemon_threads = True
+          request_queue_size = 128
+
+          def __init__(self, addr, handler, ssl_context):
+              super().__init__(addr, handler)
+              self._ssl_context = ssl_context
+
+          def get_request(self):
+              sock, addr = super().get_request()
+              if self._ssl_context is None:
+                  return sock, addr
+              # SSLSocket inherits the timeout, so the deferred handshake in the
+              # worker thread gives up after TLS_HANDSHAKE_TIMEOUT_SECONDS.
+              sock.settimeout(TLS_HANDSHAKE_TIMEOUT_SECONDS)
+              return self._ssl_context.wrap_socket(
+                  sock, server_side=True, do_handshake_on_connect=False
+              ), addr
+
       def _build_server():
-          httpd = http.server.ThreadingHTTPServer(LISTEN, Handler)
           if TLS_CERT_FILE:
               ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
               ctx.minimum_version = ssl.TLSVersion.TLSv1_2
               ctx.load_cert_chain(certfile=TLS_CERT_FILE, keyfile=TLS_KEY_FILE)
-              httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
-          return httpd
+          else:
+              ctx = None
+          return Server(LISTEN, Handler, ctx)
 
       with _build_server() as httpd:
           httpd.serve_forever()
