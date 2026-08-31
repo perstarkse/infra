@@ -8,7 +8,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- **io: first backup job** — `backups.home-assistant` (daily restic → B2 of
+- **charon: tether (iPhone bridge) packaged and enabled** — new `pkgs/tether`
+  (CMake build of github:zackb/tether v0.2.18, FetchContent pinned to nixpkgs
+  nlohmann_json/gtest), `modules/system/tether.nix` (firewall port 5134 for the
+  mTLS endpoint, `tether-btclass@hci0` Class-of-Device fix so bluetoothd's CoD
+  reset doesn't break MAP/PBAP) and `modules/home/tether.nix` (user daemon on
+  `graphical-session.target`, GTK app, native-messaging host wired into
+  firefox/thunderbird/chromium for the OTP extensions). Charon's mDNS moved
+  from systemd-resolved back to avahi (tether's Bonjour discovery uses
+  avahi-client; resolved now runs with `MulticastDNS = false`). Adversarial
+  review fixes: `wrapGAppsHook3` + `gsettings-desktop-schemas` for GTK
+  pixbuf/icon-theme loading, `BindsTo` + prepended PATH (not clobbered) on the
+  user daemon, `optionalAttrs` guard so `bluetoothAdapter = null` doesn't crash
+  eval, and a post-resume sleep hook that re-applies the Class-of-Device fix.
+
+### Fixed
+
+- **makemake: every-boot failure of units gated on `network-online.target`** —
+  clan-core's networking module sets `systemd.network.wait-online.enable =
+  false`, which masks `systemd-networkd-wait-online` and lets
+  `network-online.target` fire ~8s before enp1s0 acquired its DHCP lease.
+  Garage provisioners, restic garage bootstraps, the attic bootstrap, nginx
+  and atuin failed on every boot. Fixed by re-enabling wait-online pinned to
+  the primary NIC (`--interface=enp1s0 --operational-state=degraded`).
+- **makemake: `systemd-modules-load` failure on every boot** — dropped the
+  nonexistent `iommu` entry from `boot.kernelModules`; the IOMMU is already
+  enabled via the `intel_iommu=on` kernel param.
+- **storage-alerts: mdadm `PROGRAM` notifier failed with `cat: command not
+  found`** — `mdmonitor.service` carries no PATH on NixOS, so the notifier's
+  bare `cat` never resolved; use the absolute coreutils path.
+- **charon: pi's `agent_browser` tool fails with "Managed-session policy
+  coordination is unavailable or busy"** — pi-agent-browser-native probes the
+  managed-session lock owner's process start time via `ps` at the hardcoded
+  paths `/bin/ps` then `/usr/bin/ps`; NixOS has neither directory. Provision
+  `/bin/ps` → procps via an activation script so the deterministic lock path
+  works regardless of PATH.
+
+### Added
+
+- **charon: vllm-manager model refresh** — image `intel/vllm:0.11.1-xpu` →
+  `0.21.0-xpu` (first XPU line supporting Qwen3.5/Gemma 4 architectures).
+  Replaced DeepSeek-R1/Olmo model set with a Qwen3.8-distill lineup
+  (Qwen3.5 arch, all fit the 12GB Arc B580 alongside the desktop):
+  `tiny` (Qwen3.8-2B-Distill bf16, 4.2 GiB), `small` (Qwen3.8-4B-Distill
+  bf16, 8.6 GiB), `medium` (Qwen3.8-9B-Distill W4A16 AWQ, 8.0 GiB).
+  Per-model `--gpu-memory-utilization`
+  leaves headroom for transient whisper dictation. Real Qwen3.8-27B and
+  -Flash-Next need ≥16.8 / ≥167 GiB — out of reach on this hardware.
+  Container no longer overrides the image entrypoint (0.21.0 needs
+  oneAPI `setvars.sh` sourced for `LD_LIBRARY_PATH`/libccl) and the
+  deprecated `--disable-log-requests` flag became `--no-enable-log-requests`.
+  Verified end-to-end on charon: API up, chat completion returned.- **io: first backup job** — `backups.home-assistant` (daily restic → B2 of
   `/data/.state/home-assistant`, bucket `restic-io-home-assistant`, lifecycle
   30 d). Requires the `b2` tag in `secrets.discover.includeTags` so the
   shared b2-service credentials are discovered; restic password pre-seeded
@@ -27,6 +77,18 @@ receiver socket; push option `my.heartbeat.push.caCertFile` pins a private CA fo
 - New shared secret generator `vars/generators/heartbeat-tls.nix` (tag `heartbeat`, so io
 and sedna pick it up via existing discovery): CA + server cert with SAN IP 130.61.55.4.
 First deploy of io and sedna must regenerate/redeploy vars to materialize the PKI.
+- **sedna: backup MX** (`modules/system/backup-mx.nix`): queue-only Postfix that accepts
+  mail for `stark.pub` (`relay_domains`) and relays through `mail.stark.pub:25`
+  (`relayhost`). `mydestination = ""` ensures no local delivery — the only queue
+  action is forwarding. Firewall port 25 auto-opened. Enabled on sedna via
+  `my.backupMx.enable = true` (default primary `mail.stark.pub:25`). DNS: add
+  `MX 20 mx2.stark.pub.` → `A mx2.stark.pub 130.61.55.4` in Cloudflare manually
+  (no MX management in repo). Gatus endpoint `tcp://mx2.stark.pub:25` added to
+  sedna's monitoring. VM test suite (`tests/backup-mx.nix`) covers: delivery while
+  primary is up, queuing on backup while primary is down + automated flush on
+  recovery, no-open-relay rejection of foreign domains, and no local delivery
+  (mydestination empty). Registered as `backup-mx-checks` bundle on
+  `check-profile-sedna`.
 
 ### Changed
 
@@ -48,6 +110,18 @@ workstations that evaluate bitwarden-desktop (charon, ariel); servers never see 
   manually for config changes to reach the container.
 
 ### Fixed
+
+- **Heartbeat receiver wedges on a silent TLS client** (`modules/system/heartbeat.nix`):
+  the receiver wrapped its *listening* socket (`ctx.wrap_socket(httpd.socket, ...)`),
+  so `SSLSocket.accept()` ran the TLS handshake synchronously in the main accept loop.
+  A scanner that connects and sends nothing (seen 2026-08-26, 193.176.31.151) stalled
+  the single thread in `read()`; the SYN backlog filled (Recv-Q 6 > backlog 5) and every
+  inbound connection to 18080 timed out from everywhere — indistinguishable from a
+  firewall DROP, which tripped the deadman alert and failover while io was healthy. The
+  receiver now wraps each *accepted* socket with `do_handshake_on_connect=False`, moving
+  the handshake into a worker thread with a 10 s timeout, and `request_queue_size` is
+  raised to 128. Deployed to sedna 2026-08-26; verified a silent connection no longer
+  blocks the accept loop (14 ms second connect while a handshake stall was held).
 
 - **air-exhaust fan invisible in Home Assistant** (`modules/system/mosquitto.nix`):
   the mosquitto ACL scoped both clients to `air-exhaust/#` only, so the

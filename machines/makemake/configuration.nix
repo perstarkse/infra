@@ -48,6 +48,19 @@
   # authoritative NSs over the public internet.
   security.acme.certs."mail.stark.pub".extraLegoFlags = ["--dns.propagation-wait=120s"];
 
+  # Clan-core's networking module sets systemd.network.wait-online.enable =
+  # false (masking systemd-networkd-wait-online), so network-online.target
+  # fired ~8s before enp1s0 got its DHCP lease and every unit gated on it (garage provisioners, restic garage bootstraps,
+  # attic bootstrap) or binding 10.0.0.10 (nginx, atuin) failed on every boot.
+  # Pin the wait to the primary NIC only: --operational-state=degraded is the
+  # state the link reaches once its address is configured (same pattern as the
+  # router's wait-online in modules/system/router/network.nix).
+  systemd.network.wait-online = {
+    enable = lib.mkForce true;
+    timeout = 30;
+    extraArgs = ["--interface=enp1s0" "--operational-state=degraded"];
+  };
+
   my = {
     attic-cache.server = {
       enable = true;

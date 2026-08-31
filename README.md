@@ -89,6 +89,8 @@ Useful targeted checks:
 - `nix build path:.#checks.x86_64-linux.router-port-forward` for NAT/port-forward changes.
 - `nix build path:.#checks.x86_64-linux.io-predeploy` for full `io` predeploy coverage only.
 - `nix build path:.#checks.x86_64-linux.io-wireguard` for WireGuard access through the real `io` configuration.
+- `nix build path:.#checks.x86_64-linux.backup-mx-deliver-while-down` for backup MX relay/queue/flush integration.
+- `nix build path:.#checks.x86_64-linux.backup-mx-no-open-relay` for open-relay prevention on the backup MX.
 
 Notes:
 
@@ -117,6 +119,7 @@ machine-update <machine> [<machine> ...] [options]
 | `check-profile-garage` | `garage-checks` |
 | `check-profile-politikerstod` | `politikerstod-checks` |
 | `check-profile-wireguard` | `wireguard-checks` |
+| `check-profile-sedna` | `sedna-failover-checks`, `backup-mx-checks` |
 | `check-profile-paperless` | `paperless-checks` |
 | `check-profile-accounted` | `accounted-checks` |
 | `check-profile-backups` | `backups-checks` |

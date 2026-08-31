@@ -41,6 +41,7 @@ in {
       heartbeat
       remote-monitoring
       sedna-failover
+      backup-mx
     ])
     ++ (with ctx.inputs.varsHelper.nixosModules; [default]);
 
@@ -287,6 +288,8 @@ in {
   networking.firewall.allowedTCPPorts = [
     2222
   ];
+
+  my.backupMx.enable = true;
 
   users = {
     groups.heartbeat = {};

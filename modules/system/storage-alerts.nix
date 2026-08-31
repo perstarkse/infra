@@ -63,7 +63,9 @@ _: {
         detail="$(${pkgs.mdadm}/bin/mdadm --detail "$device" 2>&1 || true)"
       fi
 
-      message=$(cat <<EOF
+      # mdadm spawns PROGRAM handlers with mdmonitor's environment, which
+      # carries no PATH on NixOS; bare command names do not resolve.
+      message=$(${pkgs.coreutils}/bin/cat <<EOF
       Host: ${config.networking.hostName}
       Event: $event
       Array: $device

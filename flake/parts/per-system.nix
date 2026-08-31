@@ -87,6 +87,12 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    backupMxChecks = import ../../tests/backup-mx.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+      privateMailserverModule = inputs.private-infra.nixosModules.mailserver;
+    };
     autoSuspendChecks = import ../../tests/auto-suspend.nix {
       inherit lib;
       inherit pkgs;
@@ -212,6 +218,7 @@
       };
       mailserver-checks = mkCheckBundle "mailserver-checks" mailserverSystemChecks;
       sedna-failover-checks = mkCheckBundle "sedna-failover-checks" sednaFailoverChecks;
+      backup-mx-checks = mkCheckBundle "backup-mx-checks" backupMxChecks;
       auto-suspend-checks = mkCheckBundle "auto-suspend-checks" autoSuspendChecks;
       monitor-resume-checks = mkCheckBundle "monitor-resume-checks" monitorResumeChecks;
       accounted-checks = mkCheckBundle "accounted-checks" accountedSystemChecks;
@@ -233,7 +240,7 @@
           "check-profile-paperless": ["paperless-checks"],
           "check-profile-backups": ["backups-checks", "backups-multi-checks", "backups-failure-checks"],
           "check-profile-mailserver": ["mailserver-checks"],
-          "check-profile-sedna": ["sedna-failover-checks"],
+          "check-profile-sedna": ["sedna-failover-checks", "backup-mx-checks"],
           "check-profile-accounted": ["accounted-checks"],
       }
 
@@ -916,6 +923,7 @@
       // backupsSystemChecks
       // mailserverSystemChecks
       // sednaFailoverChecks
+      // backupMxChecks
       // autoSuspendChecks
       // monitorResumeChecks;
   };

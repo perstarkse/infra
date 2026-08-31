@@ -60,6 +60,7 @@ in {
       paperless-consumption-mount
       politikerstod-remote-worker
       vpn-browser
+      tether
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
@@ -98,6 +99,7 @@ in {
         local-ai
         swayidle
         wow-launcher
+        tether
       ]
       ++ (with ctx.inputs.varsHelper.homeModules; [default])
       ++ (with ctx.inputs.privateInfra.homeModules; [
@@ -150,6 +152,7 @@ in {
       zellij.enable = true;
       zoxide.enable = true;
       wow-launcher.enable = true;
+      tether.enable = true;
 
       rofi = {
         enable = true;
@@ -168,7 +171,8 @@ in {
       agentTooling = {
         pi-agent = {
           enable = true;
-          permissionSystem.enable = true;
+          ponytail.enable = true;
+          permissionSystem.enable = false;
           governance = {
             enable = true;
             # Nightly zero-token digest of cross-project traces + permission
@@ -193,13 +197,13 @@ in {
             "/tmp/*" = "allow";
           };
           shellAlias = "PI_FFF_MODE=override command pi";
-          defaultProvider = "cline-pass";
-          defaultModel = "deepseek/deepseek-v4-flash";
-          extraPackages = ["/home/p/repos/pi-cline-provider"];
+          defaultProvider = "commandcode";
+          defaultModel = "MiniMaxAI/MiniMax-M3";
+          extraPackages = [];
           models = {};
           subagentOverrides = lib.genAttrs ["scout" "context-builder" "planner" "researcher" "reviewer" "delegate"] (_: {
-            model = "opencode/deepseek-v4-flash-free";
-            fallbackModels = ["deepseek/deepseek-v4-flash"];
+            model = "commandcode/MiniMaxAI/MiniMax-M3";
+            fallbackModels = [];
             defaultContext = "fresh";
             systemPromptMode = "append";
             systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
@@ -593,6 +597,17 @@ in {
     google-cloud-sdk
   ];
 
+  # pi-agent-browser-native probes the managed-session policy lock owner's
+  # process start time via ps at the hardcoded paths /bin/ps then /usr/bin/ps
+  # (dist/extensions/agent-browser/lib/process-identity.js). NixOS has neither
+  # directory, so pi's agent_browser tool fails with "Managed-session policy
+  # coordination is unavailable or busy". Symlink /bin/ps onto procps so the
+  # deterministic lock path works without relying on PATH.
+  system.activationScripts.agent-browser-ps = ''
+    mkdir -p /bin
+    ln -sfn ${pkgs.procps}/bin/ps /bin/ps
+  '';
+
   # Accept keep-awake lease requests from io's wake-proxy.
   services.wakeproxy.keepAwake = {
     maxDurationSeconds = 14400;
@@ -602,10 +617,16 @@ in {
     };
   };
 
-  services.avahi.enable = lib.mkForce false;
-  services.resolved = {
+  services.avahi.enable = true;
+  # Tether's WiFi discovery (Bonjour) rides on avahi; resolved's mDNS responder
+  # must stay off so the two don't fight over the .local domain. resolved keeps
+  # handling unicast DNS.
+  services.resolved.settings.Resolve.MulticastDNS = false;
+
+  my.tether = {
     enable = true;
-    settings.Resolve.MulticastDNS = "yes";
+    # WiFi pairing + clipboard + files + messages/notifications over BT.
+    openFirewall = true;
   };
 
   systemd.network.links."40-enp4s0" = {

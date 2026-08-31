@@ -11,33 +11,26 @@
       set -e
 
       # Configuration
-      IMAGE="intel/vllm:0.11.1-xpu"
+      # 0.21.0-xpu (2026-08) is the first image line with Qwen3.5 / Gemma 4 support
+      IMAGE="intel/vllm:0.21.0-xpu"
       CONTAINER_NAME="vllm-arc"
       PORT="8009"
 
-      # Model Definitions
+      # Model Definitions — Qwen3.8-teacher distill on the Qwen3.5 arch.
+      # Only tiny is configured: larger Qwen3.8 distills (4B bf16 8.6GB, 9B AWQ
+      # 8.0GB) exceed the shared-desktop VRAM budget (measured 9B @ 0.9 util
+      # starved the desktop to ~1GB and froze it). util 0.55 leaves ~5GB free
+      # for the desktop and transient whisper-v3 dictation.
       declare -A MODELS
-      MODELS[r1]="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
-      MODELS[r1-awq]="casperhansen/deepseek-r1-distill-qwen-7b-awq"
-      MODELS[r1-8b-awq]="stelterlab/DeepSeek-R1-0528-Qwen3-8B-AWQ"
-      MODELS[olmo]="kaitchup/Olmo-3-7B-Think-awq-w4a16-asym"
-      MODELS[tiny]="facebook/opt-125m"
+      MODELS[tiny]="empero-ai/Qwen3.8-2B-Distill"
 
-      # Quantization Settings
-      declare -A QUANT
-      QUANT[r1]=""
-      QUANT[r1-awq]="awq"
-      QUANT[r1-8b-awq]="awq"
-      QUANT[olmo]="awq"
-      QUANT[tiny]=""
-
-      # Context Lengths
+      # Context Lengths (native is 256K — capped to VRAM budget)
       declare -A CONTEXT
-      CONTEXT[r1]="32768"
-      CONTEXT[r1-awq]="32768"
-      CONTEXT[r1-8b-awq]="20480"
-      CONTEXT[olmo]="32768"
-      CONTEXT[tiny]="2048"
+      CONTEXT[tiny]="16384"
+
+      # GPU memory utilization
+      declare -A UTIL
+      UTIL[tiny]="0.55"
 
       # Helper Functions
       show_help() {
@@ -85,13 +78,10 @@
           docker rm -f ''${CONTAINER_NAME} > /dev/null
         fi
 
-        # Build Command Arguments
-        local quant_arg=""
-        if [ -n "''${QUANT[$model_key]}" ]; then
-          quant_arg="--quantization ''${QUANT[$model_key]}"
-        fi
-
+        # Do NOT override the image entrypoint: it sources oneAPI setvars.sh,
+        # which sets LD_LIBRARY_PATH (e.g. libccl.so.1) required by torch.
         docker run -d \
+          --init \
           --name ''${CONTAINER_NAME} \
           --net=host \
           --ipc=host \
@@ -100,22 +90,20 @@
           -v $HOME/.cache/huggingface:/root/.cache/huggingface \
           -e VLLM_WORKER_MULTIPROC_METHOD=spawn \
           -e HUGGING_FACE_HUB_TOKEN=$HUGGING_FACE_HUB_TOKEN \
-          --entrypoint /bin/bash \
           ''${IMAGE} \
-          -c "
+          bash -c "
             python3 -m vllm.entrypoints.openai.api_server \
             --model $model_id \
             --served-model-name local-model \
             --dtype float16 \
-            $quant_arg \
             --enforce-eager \
             --tensor-parallel-size 1 \
-            --gpu-memory-utilization 0.8 \
+            --gpu-memory-utilization ''${UTIL[$model_key]} \
             --port ''${PORT} \
             --trust-remote-code \
             --max-model-len ''${CONTEXT[$model_key]} \
             --no-enable-prefix-caching \
-            --disable-log-requests
+            --no-enable-log-requests
           "
 
         echo "Container launched. Logs:"
@@ -184,12 +172,8 @@
                 max-input-chars: 65536
                 top-p: 0.9
                 roles:
-                  r1: "You are DeepSeek R1, a helpful and reasoning AI assistant."
-                  r1-awq: "You are DeepSeek R1, a helpful and reasoning AI assistant."
-                  r1-8b-awq: "You are DeepSeek R1, a helpful and reasoning AI assistant."
-                  olmo: "You are AllenAI Olmo, a thinking model engaging in deep reasoning."
-                  tiny: "You are a concise test assistant."
-                  default: "You are a helpful assistant."
+                  tiny: "You are Qwen3.8 distilled, a concise and fast assistant."
+                  default: "You are a helpful assistant.""
       '';
     };
   };

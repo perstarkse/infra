@@ -10,7 +10,10 @@
   boot = {
     initrd.availableKernelModules = ["nvme" "xhci_pci" "ahci" "usbhid" "usb_storage" "sd_mod"];
     initrd.kernelModules = ["vfio-pci"];
-    kernelModules = ["kvm-intel" "vfio-pci" "iommu"];
+    # No kernel module named "iommu" exists; the IOMMU is enabled via the
+    # intel_iommu=on kernelParam below. The bogus entry failed
+    # systemd-modules-load on every boot.
+    kernelModules = ["kvm-intel" "vfio-pci"];
     kernelParams = ["intel_iommu=on" "iommu=pt"];
 
     extraModulePackages = [];
