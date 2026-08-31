@@ -51,11 +51,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1787643207,
-        "narHash": "sha256-jKwT/O/84xK7UIhZ26tJnkXc9WyZzJ87Mn1jjU8QUXA=",
+        "lastModified": 1788092849,
+        "narHash": "sha256-mxvMD7BQGFS9eNUSe8CoyUVMtt5Mqw7cng5mEOqSKaw=",
         "ref": "refs/heads/main",
-        "rev": "bc6cf9b460601b50335cf504a37d60ad78484eed",
-        "revCount": 93,
+        "rev": "4620051bb60c2ca73f11e5b6cb14d28067b1f139",
+        "revCount": 104,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/agent-tooling.git"
       },
@@ -1450,11 +1450,11 @@
         "treefmt-nix": "treefmt-nix_5"
       },
       "locked": {
-        "lastModified": 1782850199,
-        "narHash": "sha256-b57hB4lZEfF2z2orJgMHPfbSLHu1l/2WHWzQeGTDhr4=",
+        "lastModified": 1788161571,
+        "narHash": "sha256-J9qurs70ri48L4Xk1gd/23Z1uvUBHV8HmzCsEVKDg84=",
         "ref": "refs/heads/main",
-        "rev": "727f9b5fe32518da507433dc78d1b3efa2c66da0",
-        "revCount": 250,
+        "rev": "c933fc7399c0cd0185975e0fe20dbafa6953431b",
+        "revCount": 254,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/nous.git"
       },
