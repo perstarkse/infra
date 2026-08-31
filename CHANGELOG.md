@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **charon: pre-existing `auto-suspend-resume-hooks` VM test failing** — the
+  test asserted `/run/monitor-power-suspend-wakeup`, which the system-sleep
+  pre hook stopped writing in `137a986` (the hook now records the
+  `off-until-input` policy instead). The test now asserts the live contract:
+  the pre hook writes `/run/monitor-power/policy` and the post hook triggers
+  `monitor-power-resume.service`.
+
 ### Added
 
 - **charon: tether (iPhone bridge) packaged and enabled** — new `pkgs/tether`

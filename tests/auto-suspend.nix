@@ -303,9 +303,10 @@ in {
       machine.succeed("/etc/systemd/system-sleep/bluetooth-resume post")
       machine.wait_until_succeeds("journalctl -u bluetooth-resume-recover.service | grep -i 'Bluetooth'", timeout=30)
 
-      # Test monitor-power pre hook records wakeup devices
+      # Test monitor-power pre hook records the off-until-input policy
       machine.succeed("/etc/systemd/system-sleep/monitor-power pre")
-      machine.succeed("test -f /run/monitor-power-suspend-wakeup")
+      machine.succeed("test -f /run/monitor-power/policy")
+      machine.succeed("test \"$(cat /run/monitor-power/policy)\" = off-until-input")
 
       # Test monitor-power post hook triggers monitor-power-resume service non-blockingly
       machine.succeed("/etc/systemd/system-sleep/monitor-power post")
