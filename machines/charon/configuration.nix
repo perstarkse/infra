@@ -627,6 +627,10 @@ in {
     enable = true;
     # WiFi pairing + clipboard + files + messages/notifications over BT.
     openFirewall = true;
+    # bluetoothd --experimental so BlueZ exposes org.bluez.Bearer.LE1 before the
+    # iPhone is paired: without it a bond has no LE half and ANCS notification
+    # mirroring can never work (tether --bt-setup reports the step).
+    experimentalBluetoothd = true;
   };
 
   systemd.network.links."40-enp4s0" = {

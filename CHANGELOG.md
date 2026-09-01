@@ -6,7 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **charon: tether Bluetooth notifications now reachable** — `my.tether.experimentalBluetoothd`
+  runs bluetoothd with `--experimental` so BlueZ exposes the per-transport
+  `org.bluez.Bearer.LE1` interface. NixOS's bluetooth module has no flag option
+  (it builds ExecStart from a hardcoded args list), so the tether module now
+  overrides bluetooth.service ExecStart (`mkForce`) to append the flag; the
+  upstream `bluetooth-experimental.conf` drop-in pointed at `/usr/lib` paths
+  that don't exist on NixOS and was previously skipped. The flag must be active
+  BEFORE pairing — a bond made without it has no LE half and ANCS notification
+  mirroring can never come up. `tether --bt-setup` now reports nothing to do
+  (was: "1 step left", because the class fix was already declarative via
+  `tether-btclass@hci0` but the Bearer API step was still missing).
+
 ### Fixed
+
+- **politikerstod: `uvloop` 0.22.0 `test_cancel_post_init` flake on Python 3.13** — `machine-update` for charon/makemake runs `politikerstod-checks` (VM test) which pulled `python3.13-uvloop-0.22.0` via the pinned `nixpkgs` (2026-01-21). That version flakes on `test_cancel_post_init` (`unexpected calls to loop.call_exception_handler()`), fixed upstream in 0.22.1 by disabling the test. Patched `politikerstod/nix/modules/context.nix` to set `python313Packages.uvloop.doInstallCheck = false` (narrow, drop when pin moves past 0.22.1) and bumped `flake.lock:politikerstod` to `6f7dc11`.
 
 - **charon: pre-existing `auto-suspend-resume-hooks` VM test failing** — the
   test asserted `/run/monitor-power-suspend-wakeup`, which the system-sleep

@@ -33,6 +33,19 @@ _: {
           after bluetooth.service. null disables the unit.
         '';
       };
+
+      experimentalBluetoothd = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Run bluetoothd with --experimental so BlueZ exposes the per-transport
+          org.bluez.Bearer.LE1 interface. Tether needs this BEFORE pairing: a
+          bond made without it has no LE half, and ANCS notification mirroring
+          can then never come up. NixOS builds bluetoothd's ExecStart from a
+          hardcoded args list with no flag option, so the whole ExecStart must be
+          overridden (mkForce). Requires hardware.bluetooth.enable = true.
+        '';
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -44,6 +57,20 @@ _: {
       # optionalAttrs so bluetoothAdapter = null (option documents this as
       # disabling the unit) doesn't crash string interpolation of the unit name.
       systemd.services = lib.optionalAttrs (cfg.bluetoothAdapter != null) {
+        # NixOS's bluetooth module builds ExecStart from a hardcoded args list
+        # ("-f /etc/bluetooth/main.conf") with no --experimental option, and the
+        # upstream bluetooth-experimental.conf drop-in would point at /usr/lib
+        # paths that don't exist here. Override the whole ExecStart to append
+        # --experimental; mkForce because hardware.bluetooth sets restartIfChanged
+        # = false and NixOS 26.05 systemd does not merge list ExecStart from
+        # drop-ins without it. Only meaningful when hardware.bluetooth.enable is
+        # set; that is the caller's job (charon does it).
+        bluetooth = lib.mkIf cfg.experimentalBluetoothd {
+          serviceConfig.ExecStart = lib.mkForce [
+            ""
+            "${pkgs.bluez}/libexec/bluetooth/bluetoothd --experimental -f /etc/bluetooth/main.conf"
+          ];
+        };
         "tether-btclass@${cfg.bluetoothAdapter}" = {
           description = "Set Bluetooth Class of Device to A/V Hands-Free on ${cfg.bluetoothAdapter} for Tether";
           after = ["bluetooth.service"];

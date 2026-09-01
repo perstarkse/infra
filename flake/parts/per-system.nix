@@ -98,6 +98,11 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    tetherChecks = import ../../tests/tether.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+    };
     monitorResumeChecks = import ../../tests/monitor-resume.nix {
       inherit pkgs;
     };
@@ -220,6 +225,7 @@
       sedna-failover-checks = mkCheckBundle "sedna-failover-checks" sednaFailoverChecks;
       backup-mx-checks = mkCheckBundle "backup-mx-checks" backupMxChecks;
       auto-suspend-checks = mkCheckBundle "auto-suspend-checks" autoSuspendChecks;
+      tether-checks = mkCheckBundle "tether-checks" tetherChecks;
       monitor-resume-checks = mkCheckBundle "monitor-resume-checks" monitorResumeChecks;
       accounted-checks = mkCheckBundle "accounted-checks" accountedSystemChecks;
     };
@@ -925,6 +931,7 @@
       // sednaFailoverChecks
       // backupMxChecks
       // autoSuspendChecks
+      // tetherChecks
       // monitorResumeChecks;
   };
 }
