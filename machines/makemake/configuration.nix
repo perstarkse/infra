@@ -403,8 +403,6 @@
             prettyBacktrace = true;
             numWorkers = 4;
             pollingHistoricalMonths = 36;
-            openaiModel = "gpt-4.1-mini";
-            evaluationModel = "gpt-4.1-mini";
             authAllowedEmailDomains = ["lekeberg.se"];
           };
         };
@@ -447,8 +445,6 @@
             prettyBacktrace = true;
             numWorkers = 4;
             pollingHistoricalMonths = 1;
-            openaiModel = "gpt-4.1-mini";
-            evaluationModel = "gpt-4.1-mini";
           };
         };
       };

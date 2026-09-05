@@ -105,8 +105,16 @@ in {
         # events / 7 days). 10 min exceeds the worst healthy gap and matches
         # the 15m deadmanInterval configured below.
         heartbeatTimeoutMinutes = 10;
-        # skipDnsRevert defaults to true: ddclient on IO restores DNS after the
-        # outage, avoiding split-brain if IO's public IP changed meanwhile.
+        # Declarative failover must self-heal: let sedna revert DNS via the
+        # stored dns-state.json when the heartbeat recovers. The previous
+        # default (skipDnsRevert = true) delegated revert to ddclient on IO,
+        # but ddclient's cache skips Cloudflare GETs when its web IP equals
+        # the cached IP, so out-of-band mutations (failover PATCHes) are never
+        # reconciled — the 2026-09-02 00:40 failover stuck at sedna for 10h
+        # because ddclient kept reporting "already set to 91.145.7.45" while
+        # Cloudflare was at 130.61.55.4, and the health-check had already
+        # deleted dns-state.json ("letting ddclient restore").
+        skipDnsRevert = false;
         cloudflareApiTokenFile = config.my.secrets.getPath "api-key-cloudflare-dns" "api-token";
 
         zones = lib.mapAttrsToList (zone: domains: {

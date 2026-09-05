@@ -83,8 +83,6 @@
         "PRETTY_BACKTRACE=${lib.boolToString (instance.settings.prettyBacktrace or false)}"
         "NUM_WORKERS=${toString (instance.settings.numWorkers or 2)}"
         "POLLING_HISTORICAL_MONTHS=${toString (instance.settings.pollingHistoricalMonths or 12)}"
-        "OPENAI_MODEL=${instance.settings.openaiModel or "gpt-4o-mini"}"
-        "EVALUATION_MODEL=${instance.settings.evaluationModel or "gpt-4o-mini"}"
         "AUTH_ALLOWED_EMAIL_DOMAINS=\"${authAllowedRegex}\""
         "FASTEMBED_CACHE_PATH=${dataDir}/fastembed_cache"
       ];
@@ -258,14 +256,6 @@
               pollingHistoricalMonths = lib.mkOption {
                 type = lib.types.int;
                 default = 12;
-              };
-              openaiModel = lib.mkOption {
-                type = lib.types.str;
-                default = "gpt-4o-mini";
-              };
-              evaluationModel = lib.mkOption {
-                type = lib.types.str;
-                default = "gpt-4o-mini";
               };
               authAllowedEmailDomains = lib.mkOption {
                 type = lib.types.listOf lib.types.str;

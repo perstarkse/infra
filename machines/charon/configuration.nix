@@ -48,6 +48,7 @@ in {
       attic-cache
       journal-upload
       steam
+      bambu-studio
       backups
       sunshine
       atuin
@@ -143,7 +144,11 @@ in {
       ncspot.enable = true;
       nix-scaffold.enable = true;
       node.enable = true;
-      sccache.enable = true;
+      sccache = {
+        enable = true;
+        cacheDir = "/mnt/sdb/cache/sccache-daemon";
+        cacheSize = "150G";
+      };
       ssh.enable = true;
       starship.enable = true;
       voxtype.enable = true;
@@ -303,6 +308,7 @@ in {
     intel-gpu.enable = true;
     sound.enable = true;
     steam.enable = true;
+    bambu-studio.enable = true;
     sunshine.enable = true;
     ledger.enable = true;
 
@@ -490,6 +496,8 @@ in {
 
     sccache-daemon = {
       enable = true;
+      cacheDir = "/mnt/sdb/cache/sccache-daemon";
+      cacheSize = "150G";
     };
 
     # Auto-suspend when system is idle (load < threshold + no user input)
@@ -577,7 +585,49 @@ in {
     "usbcore.autosuspend=-1"
   ];
 
-  zramSwap.enable = true;
+  zramSwap = {
+    enable = true;
+    priority = 100;
+  };
+
+  swapDevices = [
+    {
+      device = "/mnt/sdb/swap/swapfile";
+      size = 64 * 1024; # 64G overflow on enterprise SATA (INTEL SSDSC2KB038TZ) below zram
+      priority = 10;
+    }
+  ];
+
+  boot.loader.systemd-boot.configurationLimit = 5;
+
+  services.journald.extraConfig = ''
+    SystemMaxUse=1G
+    SystemMaxFileSize=100M
+    MaxRetentionSec=14day
+    RuntimeMaxUse=250M
+  '';
+
+  nix.settings.auto-optimise-store = true;
+
+  # Native SATA offload (no bind mounts) — keep NVMe for /nix/store + rust-analyzer salsa DB
+  # Docker high churn -> enterprise SATA endurance; huggingface/pip sequential -> SATA
+  virtualisation.docker.daemon.settings."data-root" = "/mnt/sdb/cache/docker";
+
+  environment.sessionVariables = {
+    HF_HOME = "/mnt/sdb/cache/home-p/huggingface";
+    PIP_CACHE_DIR = "/mnt/sdb/cache/home-p/pip";
+  };
+
+  systemd.tmpfiles.rules = [
+    "d /mnt/sdb/cache 0755 root root -"
+    "d /mnt/sdb/cache/docker 0711 root root -"
+    "d /mnt/sdb/cache/home-p 0755 p users -"
+    "d /mnt/sdb/cache/home-p/huggingface 0755 p users -"
+    "d /mnt/sdb/cache/home-p/pip 0755 p users -"
+    "d /mnt/sdb/swap 0755 root root -"
+  ];
+
+  nix.gc.options = lib.mkForce "--delete-older-than 7d";
 
   # Decode and persist machine-check exceptions (MCEs) so hardware errors like the
   # uncorrectable EX watchdog errors before the Aug 19 hard reset are not lost.

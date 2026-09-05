@@ -22,6 +22,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **kea reservation `exhaust-c6` held the wrong MAC** (`machines/io/configuration.nix`):
+  `44:1b:f6:d6:27:30` @ 10.0.0.101 is a different, unidentified ESP32 —
+  every OTA post and `OTA_HOST` hit it instead of the controller.
+  Reservation MAC corrected to the real C6 (`9c:cc:01:43:a2:f8`, esptool
+  2026-09-04); redeploy io and let the C6 renew DHCP (or power-cycle it).
 - **politikerstod: `uvloop` 0.22.0 `test_cancel_post_init` flake on Python 3.13** — `machine-update` for charon/makemake runs `politikerstod-checks` (VM test) which pulled `python3.13-uvloop-0.22.0` via the pinned `nixpkgs` (2026-01-21). That version flakes on `test_cancel_post_init` (`unexpected calls to loop.call_exception_handler()`), fixed upstream in 0.22.1 by disabling the test. Patched `politikerstod/nix/modules/context.nix` to set `python313Packages.uvloop.doInstallCheck = false` (narrow, drop when pin moves past 0.22.1) and bumped `flake.lock:politikerstod` to `6f7dc11`.
 
 - **charon: pre-existing `auto-suspend-resume-hooks` VM test failing** — the

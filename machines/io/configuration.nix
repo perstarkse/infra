@@ -394,7 +394,7 @@ in {
         {
           name = "exhaust-c6";
           ip = "101";
-          mac = "44:1b:f6:d6:27:30";
+          mac = "9c:cc:01:43:a2:f8";
         }
         {
           name = "unifi-switch";

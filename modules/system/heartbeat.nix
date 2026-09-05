@@ -90,19 +90,27 @@ _: {
                   method="POST",
                   headers={"Authorization": f"Bearer {PUSH_TOKEN}"},
               )
-              try:
-                  with urllib.request.urlopen(req, timeout=${toString cfg.receiver.gatusTimeoutSeconds}):
-                      pass
-              except Exception:
-                  self.send_response(502)
-                  self.end_headers()
-                  return
-
+              # Timestamp is the source of truth for DNS failover; gatus is
+              # best-effort. A prior version wrote the timestamp only after a
+              # successful gatus forward, so a gatus outage made every push
+              # return 502 and the health-check saw "heartbeat lost" even
+              # though io was healthy. Write first, then forward.
               try:
                   if TIMESTAMP_FILE:
                       _write_timestamp()
               except Exception:
                   pass
+
+              try:
+                  with urllib.request.urlopen(req, timeout=${toString cfg.receiver.gatusTimeoutSeconds}):
+                      pass
+              except Exception:
+                  # Gatus down must not wedge failover: timestamp already
+                  # written, so DNS stays healthy. Return 502 so the sender
+                  # can retry, but failover will not trigger.
+                  self.send_response(502)
+                  self.end_headers()
+                  return
 
               self.send_response(204)
               self.end_headers()

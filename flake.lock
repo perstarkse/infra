@@ -51,11 +51,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1788092849,
-        "narHash": "sha256-mxvMD7BQGFS9eNUSe8CoyUVMtt5Mqw7cng5mEOqSKaw=",
+        "lastModified": 1788548836,
+        "narHash": "sha256-fCfaZ8EiM4sOsL5wn32vLzeZGDxQibvK7a3Rh53FvGQ=",
         "ref": "refs/heads/main",
-        "rev": "4620051bb60c2ca73f11e5b6cb14d28067b1f139",
-        "revCount": 104,
+        "rev": "8f635526532f6251adb50cc42ce2937e048e5a11",
+        "revCount": 107,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/agent-tooling.git"
       },
@@ -1557,11 +1557,11 @@
         "treefmt-nix": "treefmt-nix_6"
       },
       "locked": {
-        "lastModified": 1788258723,
-        "narHash": "sha256-rwfCOv++Yef1Kp1bGBTZTjclppa5cWFURtwSf+cuMYc=",
+        "lastModified": 1788276752,
+        "narHash": "sha256-D4SPnClzQ58x730kkHY1CwCPLHFA+9cUI/sMk735FDs=",
         "ref": "refs/heads/main",
-        "rev": "6f7dc1159738b4a1e8c670bfbe349241452b74f5",
-        "revCount": 914,
+        "rev": "199c0cf00a480fe451a5b67a89bd349fe71ceca5",
+        "revCount": 917,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/politikerstod.git"
       },

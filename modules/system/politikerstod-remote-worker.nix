@@ -44,7 +44,6 @@
         "LEKEBERG_BASE_URL=${instance.scraper.baseUrl or ""}"
         "LOG_LEVEL=${instance.logLevel or "info"}"
         "NUM_WORKERS=${toString (instance.numWorkers or 4)}"
-        "OPENAI_MODEL=${instance.openai.model or "gpt-4.1-mini"}"
         "FASTEMBED_CACHE_PATH=${dataDir}/fastembed_cache"
         "HOST=http://localhost"
         "PORT=5150"
@@ -55,7 +54,6 @@
         "MAILER_FROM=${instance.smtp.from or "politikerstod@stark.pub"}"
         "PRETTY_BACKTRACE=false"
         "POLLING_HISTORICAL_MONTHS=${toString (instance.settings.pollingHistoricalMonths or 12)}"
-        "EVALUATION_MODEL=${instance.settings.evaluationModel or "gpt-4o-mini"}"
       ]
       ++ dbUrl;
   in {
@@ -154,22 +152,11 @@
               };
             };
 
-            openai = {
-              model = lib.mkOption {
-                type = lib.types.str;
-                default = "gpt-4.1-mini";
-              };
-            };
-
             settings = {
               authAllowedEmailDomains = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = ["*"];
                 description = "Allowed email domains for sign-up. Use [\"*\"] to accept all.";
-              };
-              evaluationModel = lib.mkOption {
-                type = lib.types.str;
-                default = "gpt-4o-mini";
               };
               pollingHistoricalMonths = lib.mkOption {
                 type = lib.types.int;
