@@ -1,11 +1,16 @@
-{
+{inputs, ...}: {
   config.flake.nixosModules.vaultwarden = {
     config,
     lib,
+    pkgs,
     mkStandardEndpointsOptions,
     ...
   }: let
     cfg = config.my.vaultwarden;
+    # Bitwarden 2026.8+ mobile clients require vaultwarden >=1.37 (sync
+    # payload shape changes); stable 26.05 still ships 1.36, so track the
+    # server from nixpkgs-unstable until it lands in the release branch.
+    unstablePkgs = inputs."nixpkgs-unstable".legacyPackages.${pkgs.stdenv.hostPlatform.system};
   in {
     options.my.vaultwarden = {
       enable = lib.mkOption {
@@ -65,9 +70,12 @@
       services.vaultwarden = {
         inherit (cfg) enable;
         inherit (cfg) backupDir;
+        package = unstablePkgs.vaultwarden;
+        webVaultPackage = unstablePkgs.vaultwarden.webvault;
         config = {
           ROCKET_PORT = cfg.port;
           ROCKET_ADDRESS = cfg.address;
+          DOMAIN = "https://vault.lan.stark.pub";
         };
         environmentFile = config.my.secrets.getPath "vaultwarden" "env";
       };

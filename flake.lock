@@ -1400,11 +1400,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1782723713,
-        "narHash": "sha256-oPXCU/SSUokcGaJREHibG1CBX3+s/W7orDWQOZDsEeQ=",
+        "lastModified": 1788531059,
+        "narHash": "sha256-hLD4l3QOGBQhkVp3mQ2lJ/YbEi99qUgKapb40KovZ88=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "b5aa0fbd538984f6e3d201be0005b4463d8b09f8",
+        "rev": "801bef6abd86b91e51083066b83fb354a11fc640",
         "type": "github"
       },
       "original": {
@@ -1588,11 +1588,11 @@
         "vpnconfinement": "vpnconfinement"
       },
       "locked": {
-        "lastModified": 1785996390,
-        "narHash": "sha256-jAg14Vilrs5xCH7lQhbW/WxsI126diZrMbyo/AQ4+qM=",
+        "lastModified": 1788642133,
+        "narHash": "sha256-+O620S7e+9ca7wvxKgoeJoFsRLsQ+cD/mzWX6gJ60ZM=",
         "ref": "refs/heads/main",
-        "rev": "ca4525c0ebbea900356b776ff50a07a657d302f2",
-        "revCount": 80,
+        "rev": "1a6f372081543062b3a6de3e3db32400128c205b",
+        "revCount": 82,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/private-infra.git"
       },
