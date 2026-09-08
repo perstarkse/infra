@@ -135,6 +135,7 @@ in {
       metaDir = "/storage/garage/meta";
       replicationMode = 2;
       rpcPublicAddr = "10.0.0.1:3901";
+      bindAddress = "10.0.0.1";
       zone = "io";
     };
 

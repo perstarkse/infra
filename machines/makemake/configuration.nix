@@ -307,6 +307,7 @@
       metaDir = "/var/lib/garage/meta";
       replicationMode = 2;
       rpcPublicAddr = "10.0.0.10:3901";
+      bindAddress = "10.0.0.10";
       zone = "makemake";
     };
 
@@ -314,7 +315,7 @@
     webdav-garage = {
       enable = true;
       bucket = "shared";
-      endpoint = "http://127.0.0.1:3900";
+      endpoint = "http://10.0.0.10:3900";
       bindAddress = "10.0.0.10";
       port = 8081;
       htpasswdFile = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
@@ -343,6 +344,8 @@
     # Nous burnout prevention app
     nous = {
       enable = true;
+      # Garage S3 binds the host LAN IP (no localhost listener).
+      s3.endpoint = "http://10.0.0.10:3900";
       endpoints = {
         enable = true;
         public = true;
@@ -397,6 +400,7 @@
           scraper.baseUrl = "https://meetings.lekeberg.se";
           s3.bucket = "politikerstod";
           s3.prefix = "lekeberg";
+          s3.endpoint = "http://10.0.0.10:3900";
 
           settings = {
             logLevel = "info";
@@ -511,7 +515,7 @@
       s3Consumption = {
         enable = true;
         bucket = "paperless-consume";
-        endpoint = "http://127.0.0.1:3900";
+        endpoint = "http://10.0.0.10:3900";
         region = "garage";
       };
     };

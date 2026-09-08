@@ -3,9 +3,12 @@ _: {
     config,
     lib,
     pkgs,
+    mkRestrictedPortRules,
     ...
   }: let
     cfg = config.my.garage;
+    lanSources = ["10.0.0.0/8" "127.0.0.0/8"];
+    mkPortRules = port: (mkRestrictedPortRules {inherit port; allowedSources = lanSources;}).iptables;
   in {
     options.my.garage = {
       enable = lib.mkEnableOption "Enable Garage S3 Service";
@@ -52,6 +55,12 @@ _: {
         description = "Public address for RPC (e.g., '10.0.0.1:3901'). Required for clustering.";
       };
 
+      bindAddress = lib.mkOption {
+        type = lib.types.str;
+        default = "127.0.0.1";
+        description = "Local address the S3 API and RPC sockets bind to. Use the host LAN IP (e.g. 10.0.0.10) when other hosts or LAN consumers need S3/RPC; every S3 consumer must then point at that address, never 127.0.0.1.";
+      };
+
       bootstrapPeers = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [];
@@ -81,11 +90,11 @@ _: {
 
             s3_api = {
               s3_region = cfg.region;
-              api_bind_addr = "0.0.0.0:${toString cfg.s3Port}";
+              api_bind_addr = "${cfg.bindAddress}:${toString cfg.s3Port}";
               root_domain = ".s3.garage";
             };
 
-            rpc_bind_addr = "0.0.0.0:${toString cfg.rpcPort}";
+            rpc_bind_addr = "${cfg.bindAddress}:${toString cfg.rpcPort}";
             admin = {
               api_bind_addr = "127.0.0.1:3903";
             };
@@ -98,17 +107,18 @@ _: {
           };
       };
 
-      my.secrets.allowReadAccess = [
-        {
-          readers = ["garage"];
-          path = config.my.secrets.getPath "garage" "rpc_secret";
-        }
-      ];
+      # No allowReadAccess for the garage user, and no
+      # GARAGE_ALLOW_WORLD_READABLE_SECRETS override, by design. Garage
+      # refuses secret files with group/other mode bits (mode & 0o077) but
+      # runs as root here (no User= set, DynamicUser forced off), so it reads
+      # the root-owned 0400 file directly. Granting access via setfacl was
+      # actively harmful: the named-user ACE flips the ACL mask, which shows
+      # up as group read bits (0440) and trips garage's check — the override
+      # added in 87932fa was compensating for the ACL itself. Keep both gone.
 
       systemd = {
         services.garage = {
           serviceConfig.DynamicUser = lib.mkForce false;
-          environment.GARAGE_ALLOW_WORLD_READABLE_SECRETS = "true";
         };
 
         tmpfiles.rules = [
@@ -121,7 +131,16 @@ _: {
         ];
       };
 
-      networking.firewall.allowedTCPPorts = [cfg.s3Port cfg.rpcPort];
+      # LAN + loopback only. The router host (io) disables
+      # networking.firewall entirely and governs these ports via its own
+      # nftables (trusted-segment allow only), so this block is guarded to
+      # plain-firewall hosts like makemake.
+      networking.firewall = lib.mkIf config.networking.firewall.enable {
+        extraCommands = lib.mkAfter (lib.concatStringsSep "\n" [
+          (mkPortRules cfg.s3Port)
+          (mkPortRules cfg.rpcPort)
+        ]);
+      };
 
       users.users.garage = {
         isSystemUser = true;

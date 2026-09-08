@@ -35,6 +35,7 @@
         enable = true;
         replicationMode = 2;
         rpcPublicAddr = "${ip}:3901";
+        bindAddress = ip;
         inherit zone;
       };
 
