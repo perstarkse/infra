@@ -111,6 +111,11 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    heartbeatChecks = import ../../tests/heartbeat.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+    };
     endpointsManifestData = inputs.self.lib.endpoints.mkEndpointsManifest systemNixosConfigs;
 
     endpointsManifest = pkgs.writeText "endpoints-manifest.json" (builtins.toJSON endpointsManifestData);
@@ -228,6 +233,7 @@
       tether-checks = mkCheckBundle "tether-checks" tetherChecks;
       monitor-resume-checks = mkCheckBundle "monitor-resume-checks" monitorResumeChecks;
       accounted-checks = mkCheckBundle "accounted-checks" accountedSystemChecks;
+      heartbeat-checks = mkCheckBundle "heartbeat-checks" heartbeatChecks;
     };
 
     machineUpdatePlanResolverPy = pkgs.writeText "machine-update-plan-resolver.py" ''
@@ -266,7 +272,11 @@
           tag for tag in tags if isinstance(tag, str) and tag.startswith("check-profile-")
       ]
       if not profiles_static:
-          profiles_static = [default_profile]
+          raise SystemExit(
+              f"Machine '{machine}' has no check-profile-* inventory tags; refusing to fail "
+              f"open to a treefmt-only deploy. Add an explicit check-profile-* tag "
+              f"(e.g. check-profile-fast) to '{machine}' in flake/parts/clan.nix."
+          )
 
       profiles_dynamic = []
       profiles_mandatory = []
@@ -936,6 +946,7 @@
       // autoSuspendChecks
       // tetherChecks
       // monitorResumeChecks
-      // accountedSystemChecks;
+      // accountedSystemChecks
+      // heartbeatChecks;
   };
 }
