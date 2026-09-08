@@ -316,7 +316,7 @@
         {
           services.restic.backups = lib.mkMerge (concatLists (mapAttrsToList (
               jobName: backup:
-                if !backup.enable || backup.restore.enable
+                if !backup.enable
                 then []
                 else let
                   backends = resolveBackends backup;
@@ -487,7 +487,7 @@
               ]
               ++ (concatLists (mapAttrsToList (
                   jobName: backup:
-                    if !backup.enable || backup.restore.enable
+                    if !backup.enable
                     then []
                     else let
                       backends = resolveBackends backup;
@@ -505,6 +505,19 @@
         }
 
         {
+          # Scheduled backups keep running while a job is in restore mode:
+          # a restore that takes days to validate must not create a backup
+          # gap, and restore mode itself emits a warning (see below).
+          warnings = concatLists (mapAttrsToList (
+              jobName: backup:
+                if backup.enable && backup.restore.enable
+                then [
+                  "my.backups.${jobName}: restore mode is ENABLED. The restic-restore-${jobName} unit must be started manually and restores IN-PLACE over live data; scheduled backups keep running. Disable restore mode when the restore is done."
+                ]
+                else []
+            )
+            cfg);
+
           systemd.services = lib.mkMerge (mapAttrsToList (
               jobName: backup: let
                 backends = resolveBackends backup;
@@ -515,15 +528,20 @@
                 secretName = mkSecretName jobName targetBackendName;
               in {
                 "restic-restore-${jobName}" = mkIf (backup.enable && backup.restore.enable) {
-                  description = "Restic restore for ${jobName} from ${targetBackendName}";
-                  wantedBy = ["multi-user.target"];
+                  description = "Restic restore for ${jobName} from ${targetBackendName} (manual start only, restores in-place)";
+                  # No wantedBy: this is destructive and must be started by hand
+                  # (systemctl start restic-restore-${jobName}) after deploying
+                  # with restore mode enabled.
                   serviceConfig = {
                     Type = "oneshot";
                     EnvironmentFile = config.my.secrets.getPath secretName "env";
+                    # restic appends the snapshot's absolute paths under
+                    # --target, so --target / writes files back to their
+                    # original locations (in-place restore over live data).
                     ExecStart = ''
                       ${pkgs.restic}/bin/restic --repository-file ${config.my.secrets.getPath secretName "repo"} \
                         --password-file ${config.my.secrets.getPath secretName "password"} \
-                        restore ${backup.restore.snapshot} --target ${backup.path}
+                        restore ${backup.restore.snapshot} --target /
                     '';
                   };
                 };

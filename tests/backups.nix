@@ -324,6 +324,13 @@ in {
     testScript = ''
       start_all()
 
+      # Fresh boot with restore mode enabled: the destructive restore unit
+      # must NOT have run (no [Install] section -> neither boot nor a
+      # re-deploy/activation starts it; activation only restarts ACTIVE units).
+      # "failed" would also fail this: a boot-activated unit with no repo yet
+      # would have failed, not stayed inactive.
+      machine.succeed("test \"$(systemctl show -p ActiveState --value restic-restore-restore.service)\" = 'inactive'")
+
       machine.wait_for_unit("minio.service")
       machine.succeed("AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin123 AWS_DEFAULT_REGION=garage AWS_PAGER= aws --endpoint-url http://127.0.0.1:3900 s3api create-bucket --bucket restic-integration --region garage >/dev/null 2>&1 || true")
 
@@ -347,13 +354,18 @@ in {
       machine.succeed("chown backupowner:backupowner /var/lib/testdata/restore-source/payload.txt")
       machine.succeed("set -a; . /etc/test-secrets/restic-restore-garage/env; restic -r $(cat /etc/test-secrets/restic-restore-garage/repo) --password-file /etc/test-secrets/restic-restore-garage/password init || true")
       machine.succeed("set -a; . /etc/test-secrets/restic-restore-garage/env; restic -r $(cat /etc/test-secrets/restic-restore-garage/repo) --password-file /etc/test-secrets/restic-restore-garage/password backup /var/lib/testdata/restore-source")
-      machine.succeed("rm -rf /var/lib/testdata/restore-target/*")
-      machine.succeed("set -a; . /etc/test-secrets/restic-restore-garage/env; restic -r $(cat /etc/test-secrets/restic-restore-garage/repo) --password-file /etc/test-secrets/restic-restore-garage/password restore latest --target /var/lib/testdata/restore-target")
+      # Simulate data loss: the file the restore service must bring back
+      machine.succeed("rm /var/lib/testdata/restore-source/payload.txt")
+      # Restore unit must NOT be boot-enabled (destructive: manual start only)
+      machine.fail("systemctl is-enabled restic-restore-restore.service")
+      # Scheduled backups keep running even while the job is in restore mode
+      machine.succeed("systemctl list-timers --no-pager | grep -q 'restic-backups-restore-garage.timer'")
       machine.succeed("systemctl reset-failed restic-restore-restore.service || true")
       machine.succeed("systemctl start restic-restore-restore.service")
       machine.wait_until_succeeds("systemctl show -p Result --value restic-restore-restore.service | grep -q '^success$'", timeout=120)
-      machine.succeed("grep -q '^restored-by-service$' /var/lib/testdata/restore-target/var/lib/testdata/restore-source/payload.txt")
-      machine.succeed("test \"$(stat -c '%u:%g' /var/lib/testdata/restore-target/var/lib/testdata/restore-source/payload.txt)\" = '2001:2001'")
+      # In-place restore: file is back at its ORIGINAL path, not nested under a target dir
+      machine.succeed("grep -q '^restored-by-service$' /var/lib/testdata/restore-source/payload.txt")
+      machine.succeed("test \"$(stat -c '%u:%g' /var/lib/testdata/restore-source/payload.txt)\" = '2001:2001'")
     '';
   };
 

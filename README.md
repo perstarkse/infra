@@ -113,16 +113,20 @@ machine-update <machine> [<machine> ...] [options]
 | Profile tag | Additional checks |
 |-------------|-------------------|
 | `check-profile-fast` | none (treefmt only) |
-| `check-profile-router` | `router-checks` |
+| `check-profile-router` | `router-checks`, `router-endpoints-checks` |
 | `check-profile-io-predeploy` | `predeploy-check` |
-| `check-profile-io-final` | `final-checks` |
+| `check-profile-io-final` | `final-checks`, `router-endpoints-checks`, `endpoints-manifest-check` |
 | `check-profile-garage` | `garage-checks` |
 | `check-profile-politikerstod` | `politikerstod-checks` |
 | `check-profile-wireguard` | `wireguard-checks` |
 | `check-profile-sedna` | `sedna-failover-checks`, `backup-mx-checks` |
 | `check-profile-paperless` | `paperless-checks` |
 | `check-profile-accounted` | `accounted-checks` |
-| `check-profile-backups` | `backups-checks` |
+| `check-profile-backups` | `backups-checks`, `backups-multi-checks`, `backups-failure-checks` |
+| `check-profile-mailserver` | `mailserver-checks` |
+| `check-profile-tether` | `tether-checks` |
+| `check-profile-auto-suspend` | `auto-suspend-checks` |
+| `check-profile-monitor` | `monitor-resume-checks` |
 
 All machines always run `nix fmt` + treefmt verification first (unless `--force`).
 
@@ -336,7 +340,13 @@ my.backups.vaultwarden.restore = {
 };
 ```
 
-The module sets up a `restic-restore-<name>` oneshot unit that restores into `path` using the provisioned `repo`, `password`, and `env` files.
+The module sets up a `restic-restore-<name>` oneshot unit. It is **not** started automatically — deploy with restore mode on, then start it by hand:
+
+```console
+systemctl start restic-restore-vaultwarden.service
+```
+
+The restore is **in-place** (`restic restore … --target /`): snapshot paths are written back to their original locations, overwriting live data. Scheduled backups keep running while restore mode is on, and eval emits a warning naming the job — flip `restore.enable` back to `false` once the restore is done.
 
 ## Secrets with vars-helper: examples (from `machines/charon/configuration.nix`)
 
