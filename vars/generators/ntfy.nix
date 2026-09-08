@@ -1,7 +1,7 @@
 {pkgs, ...}: {
   "ntfy" = {
     share = true;
-    runtimeInputs = [pkgs.coreutils pkgs.gnugrep];
+    runtimeInputs = [pkgs.coreutils pkgs.gnugrep pkgs.gnused];
     files = {
       env = {
         mode = "0400";
