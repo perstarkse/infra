@@ -8,6 +8,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **charon: air-exhaust fan status at the left edge of the Noctalia bar** — new
+  `infra/air-exhaust-status` plugin (`modules/home/noctalia/plugins/air-exhaust-status/`)
+  streams `air-exhaust/fan/status` via `mosquitto_sub` and shows `<duty>% · <room>°C`
+  leftmost in `bar.main` (before `sysmon`), with `stale`/`offline` coloring and no
+  click actions. It authenticates as the new read-only `charon-ro` MQTT user
+  (`read air-exhaust/fan/status` only, `modules/system/mosquitto.nix`), whose
+  password is exposed to user `p` at `~/.config/air-exhaust/mqtt.env` and gated
+  behind `my.noctalia.airExhaust.enable` (on for charon only). The credential
+  generator lives in `vars/generators/air-exhaust-mqtt.nix` (shared values,
+  discovered by tag on io and charon) with `charon-ro.env` scoped
+  `neededFor = "users"` — an io-local declaration never reaches charon's
+  secret inventory, so a shared discovered generator is required. Deploy needs
+  one `clan vars generate` for the two new `charon-ro.*` secret files, then
+  update io (broker ACLs) and charon.
+
+- **MQTT credential rotation broke all air-exhaust consumers (2026-09-08)** —
+  adding `charon-ro.*` files re-ran the `air-exhaust-mqtt` generator script,
+  which regenerates *every* password in the generator, not just the missing
+  files. io picked up new hashes while the ESP32 firmware (compiled-in creds),
+  Home Assistant (`hass`), and charon held mismatched generations, so the
+  broker refuses all of them (`Connection Refused: not authorised`, incl.
+  `nix run .#air-exhaust-broker-log`). Recovery is convergence, not rotation:
+  update io + charon from the current store *without* `clan vars generate`,
+  then refresh `printing/.../firmware/.env` from the store `air-exhaust.env`
+  and reflash (OTA/USB), then update HA's mqtt password. Known footgun: any
+  future file added to this generator rotates all sibling passwords the same
+  way — splitting `charon-ro` into its own generator would isolate that.
+  Resolution found during triage: the 09:36 update deployed the new hashes
+  but the unit file was byte-identical (same secret paths/ACLs), so nothing
+  restarted mosquitto — it kept serving the pre-rotation hashes assembled at
+  09:21. A manual `systemctl restart mosquitto` on io picked up the current
+  credentials (auth verified from charon right after). Secret-content-only
+  changes do not bounce this service; any future credential rotation needs an
+  explicit broker restart (or a `restartUnits` wiring) to take effect.
+  HA repaired 2026-09-08 ~10:00: backup + stop `podman-homeassistant`, patch
+  the `mqtt` entry's `password` in `.storage/core.config_entries` from the
+  store `hass.env` (jq, perms preserved via `chmod --reference`), restart —
+  broker log shows `hass` connected. Backup left at
+  `core.config_entries.bak-20260908` on io; frigate has mqtt disabled, so it
+  was unaffected.
+
 - **charon: tether Bluetooth notifications now reachable** — `my.tether.experimentalBluetoothd`
   runs bluetoothd with `--experimental` so BlueZ exposes the per-transport
   `org.bluez.Bearer.LE1` interface. NixOS's bluetooth module has no flag option
@@ -282,3 +323,12 @@ workstations that evaluate bitwarden-desktop (charon, ariel); servers never see 
   - VM test `tests/accounted-system.nix` + `check-profile-accounted` on makemake
 - makemake `indicator-alert-daemon` tickers (ETH-USD daily, ETH-USD weekly, BOTZ, SEKEUR=X) each gain an RSI overbought alert (`threshold = 70.0`, `direction = "above"`) alongside the existing RSI < 30 alerts.
 - Home Manager `wow-launcher` module: `wow-launcher` CLI plus a Battle.net desktop entry via `umu-run` against the existing Steam Proton prefix (default compatdata `3077503121`), including a `kill` subcommand for stuck Agent processes after suspend. Enabled on charon.
+
+### Fixed
+
+- **sedna-failover: `skipDnsRevert` now defaults to `false`** — the old default delegated revert to ddclient on io, whose cache never reconciles out-of-band failover PATCHes (2026-09-02: traffic stuck at sedna 10h). Sedna now self-heals via the stored `dns-state.json`; the incident rationale moved into the option description and sedna's override was removed.
+- **sedna-failover: revert survives partial Cloudflare PATCH failures** — the revert script prunes each converged domain from `dns-state.json` as it goes, keeps failed entries, and exits non-zero (`Revert incomplete`) so the timer retries only what's left and the failure surfaces. New `sedna-failover-revert-partial` VM test (mock 422s one record): loud failure, pruned state, safe retry.
+- **backups: restore units are manual-start and restore in-place; timers survive restore mode** — `restic-restore-*` lost its `wantedBy` (deploying can no longer trigger a restore; VM test asserts `inactive` after a fresh boot with restore mode on), `restore --target /` writes files back to original locations instead of nesting them under `path`, scheduled backups + failure alerts stay wired while restoring, and eval warns naming any job in restore mode. README restore flow rewritten to match.
+- **router monitoring: Grafana `secret_key` via `$__file` provider backed by Clan vars** — the hardcoded key is out of `/nix/store` (new `vars/generators/grafana.nix`, read access for the `grafana` service user on io). The `router-wireguard-admin` VM test provisions a dummy key for the stub. Grafana is still disabled fleet-wide, so this is latent hygiene, verified by eval + full `router-checks`.
+- **garage: S3/RPC bound to LAN IPs with scoped firewall; world-readable-secrets override removed** — new `bindAddress` option (default `127.0.0.1`; io `10.0.0.1`, makemake `10.0.0.10`), `allowedTCPPorts` replaced with LAN-only `mkRestrictedPortRules`, same-host consumers moved off localhost. `GARAGE_ALLOW_WORLD_READABLE_SECRETS` + the setfacl entry are gone: garage runs as root and reads the `0400` file directly — the ACL's mask bits were what tripped garage's permission check, so the override was compensating for the ACL itself (`87932fa` had no rationale recorded). Correction: io was never WAN-exposed (firewall off, nftables-scoped); makemake was.
+- **checks wiring: `accounted-checks` runs under `nix flake check`; charon gains desktop profiles** — the accounted bundle was defined but never merged into `checks` (CI green, test never ran). New `check-profile-tether/auto-suspend/monitor` mappings tag charon; `check-profile-mailserver` was verified present (review claim was stale); README profile table now matches the resolver.
