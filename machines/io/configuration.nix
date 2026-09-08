@@ -254,7 +254,7 @@ in {
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload" "frigate" "b2"];
+        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload" "frigate" "b2" "grafana"];
       };
 
       allowReadAccess = [
@@ -265,6 +265,10 @@ in {
         {
           readers = ["nginx"];
           path = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
+        }
+        {
+          readers = ["grafana"];
+          path = config.my.secrets.getPath "grafana" "secret_key";
         }
       ];
     };

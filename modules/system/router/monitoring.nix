@@ -10,11 +10,6 @@
     helpers = config.routerHelpers or (throw "routerHelpers not defined — is the router module loaded?");
     bindAddress = helpers.primaryRouterIp;
     enabled = cfg.enable && mon.enable;
-    # NixOS 26.05 requires grafana to have an explicit secret_key. Hardcoded
-    # value is acceptable per the NixOS changelog when the DB has no secrets
-    # needing special protection; this is a LAN-only grafana without any
-    # provisioned datasources yet.
-    grafanaSecretKeyFile = pkgs.writeText "grafana-secret-key" "SW2YcwTIb9zpOOhoPsMm";
     monitoringServicePorts =
       lib.optionals (enabled && mon.netdata.enable) [
         {
@@ -77,7 +72,11 @@
               else bindAddress;
             http_port = mon.grafana.httpPort;
           };
-          settings.security.secret_key = "file:${grafanaSecretKeyFile}";
+          # File provider (not a store path): Grafana expands $__file{...}
+          # at runtime, so the signing key never lands in /nix/store.
+          # Secret is provisioned via Clan vars (vars/generators/grafana.nix)
+          # with read access for the grafana service user (see io config).
+          settings.security.secret_key = "$__file{${config.my.secrets.getPath "grafana" "secret_key"}}";
           inherit (mon.grafana) dataDir;
         };
 

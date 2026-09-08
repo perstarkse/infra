@@ -274,11 +274,20 @@
       my.secrets.getPath = lib.mkForce (name: file:
         if name == "journal-upload"
         then "/etc/test-secrets/journal-upload/${file}"
+        else if name == "grafana"
+        then "/etc/test-secrets/grafana/${file}"
         else "/run/empty-secret");
 
       environment.etc."test-secrets/journal-upload/ca.pem".source = ./lib/journal-upload/ca.pem;
       environment.etc."test-secrets/journal-upload/server.pem".source = ./lib/journal-upload/server.pem;
       environment.etc."test-secrets/journal-upload/server.key".source = ./lib/journal-upload/server.key;
+      # Dummy Grafana signing key for the $__file provider. World-readable
+      # on purpose: prod grants the grafana user read via allowReadAccess,
+      # which the stub does not wire up; the value is test-only.
+      environment.etc."test-secrets/grafana/secret_key" = {
+        text = "test-only-grafana-secret-key";
+        mode = "0444";
+      };
 
       my.router =
         lib.recursiveUpdate
