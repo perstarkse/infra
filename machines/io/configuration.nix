@@ -172,6 +172,13 @@ in {
       # that silently died if sedna's ZT address changed).
       endpointUrl = "https://130.61.55.4:18080/heartbeat";
       caCertFile = config.my.secrets.getPath "heartbeat-tls" "ca.pem";
+      # Push-side visibility: io is up but the path is down => alert locally.
+      # (Sedna-side timers cover io being down.)
+      failureNtfy = {
+            serverUrl = "https://ntfy.lan.stark.pub";
+            topic = "heartbeat";
+            tokenFile = config.my.secrets.getPath "ntfy" "heartbeat-token";
+      };
     };
 
     frigate.endpoints = {

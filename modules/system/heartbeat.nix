@@ -36,6 +36,18 @@ _: {
       TLS_HANDSHAKE_TIMEOUT_SECONDS = 10
       EXPECTED_PATH = "${endpointPath}"
       PUSH_TOKEN = os.environ["HEARTBEAT_PUSH_TOKEN"]
+      # Gatus API token, distinct from the WAN push bearer when the operator
+      # opts in via receiver.gatusApiTokenEnvVar. Falls back to the push token
+      # (with a loud journal warning) so a missing value can never crash-loop
+      # the receiver into a false failover — worst case is the pre-split behavior.
+      _GATUS_VAR = "${if cfg.receiver.gatusApiTokenEnvVar == null then "" else cfg.receiver.gatusApiTokenEnvVar}"
+      if _GATUS_VAR and os.environ.get(_GATUS_VAR):
+          GATUS_TOKEN = os.environ[_GATUS_VAR]
+          print(f"heartbeat-receiver: using dedicated gatus token from {_GATUS_VAR}", flush=True)
+      else:
+          GATUS_TOKEN = PUSH_TOKEN
+          if _GATUS_VAR:
+              print(f"heartbeat-receiver: WARNING {_GATUS_VAR} not set, falling back to push token", flush=True)
       TLS_CERT_FILE = "${
         if tlsEnabled
         then toString cfg.receiver.tls.certFile
@@ -88,7 +100,7 @@ _: {
               req = urllib.request.Request(
                   GATUS_URL,
                   method="POST",
-                  headers={"Authorization": f"Bearer {PUSH_TOKEN}"},
+                  headers={"Authorization": f"Bearer {GATUS_TOKEN}"},
               )
               # Timestamp is the source of truth for DNS failover; gatus is
               # best-effort. A prior version wrote the timestamp only after a
@@ -175,6 +187,43 @@ _: {
       ]
     );
 
+    pushNotifyScript = pkgs.writeShellScript "heartbeat-push-notify" ''
+      set -euo pipefail
+
+      subject="''${1:?subject required}"
+      body="''${2:?body required}"
+
+      ${lib.optionalString (cfg.push.failureNtfy.serverUrl != null) ''
+        args=(
+          -fsS --max-time 30
+          -H "Title: $subject"
+          -H "Priority: high"
+          -H "Tags: heartbeat"
+        )
+        ${lib.optionalString (cfg.push.failureNtfy.tokenFile != null) ''
+          args+=( -H "Authorization: Bearer $(<${cfg.push.failureNtfy.tokenFile})" )
+        ''}
+        ${pkgs.curl}/bin/curl "''${args[@]}" --data-binary "$body" \
+          "${cfg.push.failureNtfy.serverUrl}/${cfg.push.failureNtfy.topic}" || true
+      ''}
+    '';
+
+    # Fired by systemd onFailure when a push fails (io is up, the path is
+    # not). Alerts once until pushes recover; the push script itself sends
+    # the recovery notice and clears the flag on its next success.
+    pushFailedScript = pkgs.writeShellScript "heartbeat-push-failed" ''
+      set -euo pipefail
+
+      state_dir=/var/lib/heartbeat-push
+      mkdir -p "$state_dir"
+      if [ -e "$state_dir/failed" ]; then
+        exit 0
+      fi
+      ${pushNotifyScript} "heartbeat push failed on ${config.networking.hostName}" \
+        "Heartbeat push from ${config.networking.hostName} failed. Failover detection is sedna-timers-only until pushes recover."
+      : > "$state_dir/failed"
+    '';
+
     pushScript = pkgs.writeShellScript "heartbeat-push" ''
       set -euo pipefail
 
@@ -199,6 +248,14 @@ _: {
         -H "Authorization: Bearer $HEARTBEAT_PUSH_TOKEN" \
         "$target_url" \
         >/dev/null
+
+      # Push succeeded: clear a previous failure flag and report recovery.
+      # (On failure curl exits non-zero above and systemd onFailure alerts.)
+      if [ -e /var/lib/heartbeat-push/failed ]; then
+        ${pushNotifyScript} "heartbeat push recovered on ${config.networking.hostName}" \
+          "Heartbeat pushes from ${config.networking.hostName} are succeeding again."
+        rm -f /var/lib/heartbeat-push/failed
+      fi
     '';
   in {
     options.my.heartbeat = {
@@ -292,6 +349,12 @@ _: {
           type = lib.types.nullOr lib.types.str;
           default = null;
           description = "Gatus external endpoint API id. Null derives <group>_<name>.";
+        };
+
+        gatusApiTokenEnvVar = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = "Env var carrying the Gatus external-endpoint token, distinct from the WAN push bearer (HEARTBEAT_PUSH_TOKEN). Null keeps the legacy single-token behavior on both sides. Set to \"HEARTBEAT_GATUS_TOKEN\" only after the heartbeat secret provides it (the generator appends it on regeneration); the receiver falls back to the push token with a journal warning rather than crash-looping.";
         };
 
         deadmanGroup = lib.mkOption {
@@ -401,6 +464,26 @@ _: {
           default = 2;
           description = "Delay between heartbeat push retry attempts.";
         };
+
+        failureNtfy = {
+          serverUrl = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Base ntfy URL for push-failure/recovery alerts (e.g. https://ntfy.lan.stark.pub). Null disables remote alerting; failures are still visible via the failed unit.";
+          };
+
+          topic = lib.mkOption {
+            type = lib.types.str;
+            default = "heartbeat";
+            description = "ntfy topic for push-failure/recovery alerts.";
+          };
+
+          tokenFile = lib.mkOption {
+            type = lib.types.nullOr lib.types.path;
+            default = null;
+            description = "Optional file containing an ntfy bearer token for the alert topic.";
+          };
+        };
       };
     };
 
@@ -461,7 +544,10 @@ _: {
             {
               name = cfg.receiver.externalEndpointName;
               group = cfg.receiver.deadmanGroup;
-              token = "\${HEARTBEAT_PUSH_TOKEN}";
+              token =
+                if cfg.receiver.gatusApiTokenEnvVar == null
+                then "\${HEARTBEAT_PUSH_TOKEN}"
+                else "\${" + cfg.receiver.gatusApiTokenEnvVar + "}";
               heartbeat.interval = cfg.receiver.deadmanInterval;
               alerts = [
                 {
@@ -491,12 +577,23 @@ _: {
           description = "Push heartbeat to remote endpoint";
           after = ["network-online.target"];
           wants = ["network-online.target"];
+          onFailure = ["heartbeat-push-failed.service"];
           serviceConfig = {
             Type = "oneshot";
             User = cfg.push.user;
             Group = cfg.push.group;
             EnvironmentFile = envFile;
+            StateDirectory = "heartbeat-push";
             ExecStart = pushScript;
+          };
+        };
+
+        systemd.services.heartbeat-push-failed = {
+          description = "Alert once when heartbeat pushes fail (cleared on recovery)";
+          serviceConfig = {
+            Type = "oneshot";
+            StateDirectory = "heartbeat-push";
+            ExecStart = pushFailedScript;
           };
         };
 
