@@ -70,6 +70,9 @@
             "check-profile-wireguard"
             "check-profile-paperless"
             "check-profile-backups"
+            "check-profile-tether"
+            "check-profile-auto-suspend"
+            "check-profile-monitor"
           ];
         };
         ariel = {

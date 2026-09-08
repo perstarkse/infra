@@ -248,6 +248,9 @@
           "check-profile-mailserver": ["mailserver-checks"],
           "check-profile-sedna": ["sedna-failover-checks", "backup-mx-checks"],
           "check-profile-accounted": ["accounted-checks"],
+          "check-profile-tether": ["tether-checks"],
+          "check-profile-auto-suspend": ["auto-suspend-checks"],
+          "check-profile-monitor": ["monitor-resume-checks"],
       }
 
       machine = os.environ["MU_PLAN_MACHINE"]
@@ -932,6 +935,7 @@
       // backupMxChecks
       // autoSuspendChecks
       // tetherChecks
-      // monitorResumeChecks;
+      // monitorResumeChecks
+      // accountedSystemChecks;
   };
 }
