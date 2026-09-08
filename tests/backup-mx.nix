@@ -162,6 +162,12 @@
       python3
     ];
   };
+
+  # Queue-watch node: breach on ANY queued message (maxDepth = 0), no SMTP
+  # env so the test exercises detection + loud exit without network.
+  watchNode = lib.recursiveUpdate backupNode {
+    my.backupMx.queueWatch.maxDepth = 0;
+  };
 in {
   backup-mx-deliver-while-down = pkgs.testers.runNixOSTest {
     name = "backup-mx-deliver-while-down";
@@ -242,6 +248,51 @@ in {
           "python3 -c \"import smtplib; s=smtplib.SMTP('127.0.0.1',25); s.sendmail('x@external.test',['services@stark.pub'],'msg')\""
       )
       print("✓ relay-domain recipient accepted")
+    '';
+  };
+
+  backup-mx-queue-watch = pkgs.testers.runNixOSTest {
+    name = "backup-mx-queue-watch";
+    nodes.backup = watchNode;
+
+    testScript = ''
+      start_all()
+      backup.wait_for_unit("postfix.service")
+      backup.wait_until_succeeds("ss -ltn | grep -q ':25 '", timeout=120)
+
+      # Queue lifetime must outlast extended outages (default was 5d).
+      lifetime = backup.succeed("postconf -h maximal_queue_lifetime").strip()
+      print(f"maximal_queue_lifetime = '{lifetime}'")
+      assert lifetime == "30d", f"expected 30d queue lifetime, got '{lifetime}'"
+
+      # Empty queue: watch exits clean.
+      backup.succeed("systemctl start backup-mx-queue-watch.service")
+      status = backup.succeed("systemctl show backup-mx-queue-watch --property=ExecMainStatus --value").strip()
+      assert status == "0", f"empty queue should exit 0, got {status}"
+      print("✓ empty queue exits 0")
+
+      # Queue one message (no primary behind 10.0.0.10: deferred, stays queued).
+      backup.succeed(
+          "printf 'From: sender@external.test\\nTo: services@stark.pub\\nSubject: queue-watch-breach\\n\\nhello\\n' | sendmail -f sender@external.test services@stark.pub"
+      )
+      backup.wait_until_succeeds(
+          "find /var/lib/postfix/queue/deferred -type f | grep -q .", timeout=120
+      )
+
+      # Breach must fail loudly (alerting hooks onto the failed unit).
+      backup.succeed("set +e; systemctl start backup-mx-queue-watch.service >/tmp/watch.out 2>&1; echo $? > /tmp/watch.code")
+      assert backup.succeed("cat /tmp/watch.code").strip() != "0", "breached queue must fail loudly"
+      status = backup.succeed("systemctl show backup-mx-queue-watch --property=ExecMainStatus --value").strip()
+      assert status != "0", f"ExecMainStatus should be non-zero, got {status}"
+      journal = backup.succeed("journalctl -u backup-mx-queue-watch --no-pager")
+      assert "queue breached" in journal, f"should report the breach:\n{journal}"
+      print("✓ breached queue fails loudly")
+
+      # Retry while still breached: still loud, no duplicate state.
+      backup.succeed("systemctl reset-failed backup-mx-queue-watch.service")
+      backup.succeed("set +e; systemctl start backup-mx-queue-watch.service >/dev/null 2>&1; echo $? > /tmp/watch2.code")
+      assert backup.succeed("cat /tmp/watch2.code").strip() != "0", "retry must still fail loudly"
+      print("✓ retry still fails loudly")
     '';
   };
 
