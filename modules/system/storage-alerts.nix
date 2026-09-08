@@ -111,9 +111,9 @@ _: {
 
       ${lib.concatMapStringsSep "\n" (mountPoint: ''
           if ${pkgs.util-linux}/bin/mountpoint -q ${lib.escapeShellArg mountPoint}; then
-            clear_problem "mount-$(sanitize ${lib.escapeShellArg mountPoint})" "${config.networking.hostName}: mount recovered" "Mount ${mountPoint} is available again on ${config.networking.hostName}."
+            clear_problem "mount-$(sanitize ${lib.escapeShellArg mountPoint})" "${config.networking.hostName}: mount recovered" "Mount ${mountPoint} is available again on ${config.networking.hostName}." || true
           else
-            mark_problem "mount-$(sanitize ${lib.escapeShellArg mountPoint})" "${config.networking.hostName}: mount missing" "Mount ${mountPoint} is not available on ${config.networking.hostName}."
+            mark_problem "mount-$(sanitize ${lib.escapeShellArg mountPoint})" "${config.networking.hostName}: mount missing" "Mount ${mountPoint} is not available on ${config.networking.hostName}." || true
           fi
         '')
         cfg.mounts}
@@ -142,15 +142,22 @@ _: {
           done
           $skip && continue
 
-          pct=$(${pkgs.coreutils}/bin/df --output=pcent "$target" 2>/dev/null | tail -n +2 | tr -d ' %')
-          if [ -n "$pct" ] && [ "$pct" -ge ${toString cfg.capacity.warnPercent} ]; then
+          pct=$(${pkgs.coreutils}/bin/timeout 10 ${pkgs.coreutils}/bin/df -l --output=pcent "$target" 2>/dev/null | tail -n +2 | tr -d ' %' || true)
+          # -l keeps df on local filesystems; timeout bounds FUSE stalls.
+          # Every notifier call is isolated (|| true) so one dead target or
+          # unreachable ntfy never aborts the sweep under set -e.
+          if [ -z "$pct" ]; then
+            mark_problem "capacity-$(sanitize "$target")" \
+              "${config.networking.hostName}: disk usage unreadable" \
+              "Disk $target usage could not be read on ${config.networking.hostName} (df timed out or failed)." || true
+          elif [ "$pct" -ge ${toString cfg.capacity.warnPercent} ]; then
             mark_problem "capacity-$(sanitize "$target")" \
               "${config.networking.hostName}: disk usage warning" \
-              "Disk $target is at ''${pct}% capacity on ${config.networking.hostName} (threshold: ${toString cfg.capacity.warnPercent}%)."
+              "Disk $target is at ''${pct}% capacity on ${config.networking.hostName} (threshold: ${toString cfg.capacity.warnPercent}%)." || true
           else
             clear_problem "capacity-$(sanitize "$target")" \
               "${config.networking.hostName}: disk usage recovered" \
-              "Disk $target is at ''${pct}% capacity on ${config.networking.hostName}."
+              "Disk $target is at ''${pct}% capacity on ${config.networking.hostName}." || true
           fi
         done
       ''}
@@ -163,9 +170,9 @@ _: {
         degraded=$(cat "$md_path/degraded" 2>/dev/null || printf '0')
         if [ "$degraded" != "0" ]; then
           detail="$(${pkgs.mdadm}/bin/mdadm --detail "$device" 2>&1 || true)"
-          mark_problem "$key" "${config.networking.hostName}: mdadm degraded" "Array $device is degraded on ${config.networking.hostName}.\n\n$detail"
+          mark_problem "$key" "${config.networking.hostName}: mdadm degraded" "Array $device is degraded on ${config.networking.hostName}.\n\n$detail" || true
         else
-          clear_problem "$key" "${config.networking.hostName}: mdadm recovered" "Array $device is healthy again on ${config.networking.hostName}."
+          clear_problem "$key" "${config.networking.hostName}: mdadm recovered" "Array $device is healthy again on ${config.networking.hostName}." || true
         fi
       done
     '';
@@ -220,9 +227,9 @@ _: {
 
         excludeMounts = lib.mkOption {
           type = lib.types.listOf lib.types.str;
-          default = [];
+          default = ["/boot" "/efi"];
           example = ["/boot" "/efi"];
-          description = "Mount paths excluded from capacity alerts.";
+          description = "Mount paths excluded from capacity alerts. Small FAT boot partitions sit above warnPercent by design; alerting on them trains operators to ignore the topic.";
         };
 
         onlyMonitoredMounts = lib.mkOption {
@@ -285,6 +292,9 @@ _: {
           serviceConfig = {
             Type = "oneshot";
             StateDirectory = "storage-alerts";
+            # Bound the whole sweep: per-target df calls carry their own
+            # 10s timeout, this caps pathological mount storms.
+            TimeoutStartSec = "3min";
             ExecStart = healthcheck;
           };
         };
