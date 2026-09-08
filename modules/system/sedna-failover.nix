@@ -304,6 +304,18 @@ _: {
         exit 0
       fi
 
+      # Drop one domain from the state file once it has converged. Only called
+      # outside dry-run: the drill test asserts dry runs never mutate state.
+      prune_domain() {
+        ${pkgs.jq}/bin/jq --arg d "$1" 'map(select(.domain != $d))' "$STATE_FILE" > "$STATE_FILE.tmp" \
+          && mv "$STATE_FILE.tmp" "$STATE_FILE"
+      }
+
+      # Non-zero as long as any domain still needs a retry. The health check
+      # execs this script, so a partial revert surfaces as a failed service
+      # (alerting) and the remaining entries are retried on the next tick.
+      REVERT_FAILED=0
+
       ${lib.concatMapStringsSep "\n" ({
           zone,
           zoneId,
@@ -315,15 +327,20 @@ _: {
           for domain in ${domainArgs}; do
             echo "  Looking up DNS record for $domain..."
 
-            resp=$(${pkgs.curl}/bin/curl -fsS \
+            if ! resp=$(${pkgs.curl}/bin/curl -fsS \
               -H "Authorization: Bearer $CF_TOKEN" \
               -H "Content-Type: application/json" \
-              "${apiBaseUrl}/zones/${zoneId}/dns_records?type=A&name=$domain")
+              "${apiBaseUrl}/zones/${zoneId}/dns_records?type=A&name=$domain"); then
+              echo "  ✗ Lookup failed for $domain (API error), keeping state for retry"
+              REVERT_FAILED=1
+              continue
+            fi
 
             record_id=$(echo "$resp" | ${pkgs.jq}/bin/jq -r '.result[0].id // empty')
 
             if [ -z "$record_id" ]; then
-              echo "  WARNING: No A record found for $domain, skipping"
+              echo "  WARNING: No A record found for $domain, keeping state for retry"
+              REVERT_FAILED=1
               continue
             fi
 
@@ -338,7 +355,8 @@ _: {
 
             current_ip=$(echo "$resp" | ${pkgs.jq}/bin/jq -r '.result[0].content // empty')
             if [ "$current_ip" = "$original_ip" ]; then
-              echo "  Already at original IP ($original_ip), skipping"
+              echo "  Already at original IP ($original_ip), pruning state entry"
+              prune_domain "$domain"
               continue
             fi
 
@@ -348,17 +366,20 @@ _: {
             fi
 
             # Revert DNS record to original IP
-            update_resp=$(${pkgs.curl}/bin/curl -fsS -X PATCH \
+            if update_resp=$(${pkgs.curl}/bin/curl -fsS -X PATCH \
               -H "Authorization: Bearer $CF_TOKEN" \
               -H "Content-Type: application/json" \
               -d "{\"content\":\"$original_ip\",\"ttl\":120,\"proxied\":$original_proxied}" \
-              "${apiBaseUrl}/zones/${zoneId}/dns_records/$record_id")
-
-            if echo "$update_resp" | ${pkgs.jq}/bin/jq -e '.success == true' >/dev/null 2>&1; then
+              "${apiBaseUrl}/zones/${zoneId}/dns_records/$record_id") \
+              && echo "$update_resp" | ${pkgs.jq}/bin/jq -e '.success == true' >/dev/null 2>&1; then
               echo "  ✓ $domain → $original_ip"
+              prune_domain "$domain"
             else
-              err=$(echo "$update_resp" | ${pkgs.jq}/bin/jq -r '.errors[0].message // "unknown"')
-              echo "  ✗ Failed to revert $domain: $err"
+              # update_resp may be empty/garbage when curl itself failed;
+              # never let error formatting abort the per-domain loop (set -e).
+              [ -n "$update_resp" ] && err=$(echo "$update_resp" | ${pkgs.jq}/bin/jq -r '.errors[0].message // "unknown"') || err="unknown"
+              echo "  ✗ Failed to revert $domain: $err (state kept for retry)"
+              REVERT_FAILED=1
             fi
           done
         '')
@@ -366,10 +387,13 @@ _: {
 
       if [ "$DRY_RUN" = "1" ]; then
         echo "=== Dry-run complete (no DNS changes made) ==="
-      else
-        # Clear state file after successful revert
+      elif [ "$REVERT_FAILED" = "0" ] && [ "$(${pkgs.jq}/bin/jq 'length' "$STATE_FILE")" = "0" ]; then
         rm -f "$STATE_FILE"
         echo "=== Revert complete ==="
+      else
+        remaining=$(${pkgs.jq}/bin/jq -r '[.[].domain] | join(", ")' "$STATE_FILE")
+        echo "=== Revert incomplete: keeping state for retry ($remaining) ===" >&2
+        exit 1
       fi
     '';
 
@@ -519,8 +543,8 @@ _: {
 
         skipDnsRevert = lib.mkOption {
           type = lib.types.bool;
-          default = true;
-          description = "Skip DNS record revert when IO comes back. Lets ddclient on IO update DNS naturally. Avoids split-brain if IO's public IP changed during the outage.";
+          default = false;
+          description = "Skip DNS record revert when IO comes back, letting ddclient on IO update DNS naturally. Keep false: ddclient's cache skips Cloudflare GETs when its web IP equals the cached IP, so out-of-band failover PATCHes are never reconciled (2026-09-02: traffic stuck at sedna 10h). Only enable if IO's public IP may legitimately change during the outage.";
         };
 
         heartbeatTimeoutMinutes = lib.mkOption {

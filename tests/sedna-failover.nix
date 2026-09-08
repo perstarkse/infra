@@ -17,6 +17,7 @@
     #!${pkgs.python3}/bin/python3
     import json
     from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import urlparse, parse_qs
 
     REQUEST_LOG = "/tmp/cloudflare-requests.log"
 
@@ -57,13 +58,16 @@
             if self._unauthorized():
                 self._reject()
                 return
+            # Per-name record ids so tests can fail individual records.
+            query = parse_qs(urlparse(self.path).query)
+            name = query.get("name", ["unknown"])[0]
             self._json(
                 200,
                 {
                     "success": True,
                     "result": [
                         {
-                            "id": "rec-test",
+                            "id": f"rec-{name}",
                             "content": "192.0.2.2",
                             "proxied": True,
                         }
@@ -75,6 +79,15 @@
             self._record()
             if self._unauthorized():
                 self._reject()
+                return
+            # Any record whose name contains "fail" fails to PATCH, so the
+            # revert-partial test can prove one bad domain does not wipe
+            # the state of the domains that did revert.
+            if "fail" in self.path:
+                self._json(
+                    422,
+                    {"success": False, "errors": [{"message": "simulated per-record failure"}]},
+                )
                 return
             self._json(200, {"success": True, "result": {}})
 
@@ -307,6 +320,80 @@ in {
       assert state.strip() == "[]", f"dry run mutated the state file: {state}"
 
       print("✓ Dry-run failover drill passed: exact API sequence shown, no state mutation")
+    '';
+  };
+
+  sedna-failover-revert-partial = pkgs.testers.runNixOSTest {
+    name = "sedna-failover-revert-partial";
+    nodes.machine = lib.recursiveUpdate maintenanceNode {
+      my.sedna-failover.dnsFailover.zones = [
+        {
+          zone = "example.test";
+          zoneId = "test-zone-id";
+          domains = ["ok.example.test" "fail.example.test"];
+        }
+      ];
+    };
+
+    testScript = ''
+      import json
+      import time
+      start_all()
+      machine.wait_for_unit("multi-user.target")
+      machine.wait_for_unit("cloudflare-mock.service")
+      machine.sleep(2)
+
+      heartbeat_file = "/var/lib/sedna-failover/last-heartbeat"
+      token_file = "/var/lib/sedna-failover/cf-token"
+      state_file = "/var/lib/sedna-failover/dns-state.json"
+      state_dir = "/var/lib/sedna-failover"
+      request_log = "/tmp/cloudflare-requests.log"
+
+      machine.succeed(f"mkdir -p {state_dir}")
+      machine.succeed(
+          f"printf 'dummy-token' | install -o failover-check -g failover-check -m 0400 /dev/stdin {token_file}"
+      )
+      # Fresh heartbeat: IO is healthy, so the check takes the revert path.
+      machine.succeed(f"echo {int(time.time())} > {heartbeat_file}")
+      # Both domains still point at Sedna (mock serves 192.0.2.2); both need revert.
+      seed = json.dumps([
+          {"domain": "ok.example.test", "original_ip": "93.184.216.34", "original_proxied": "true"},
+          {"domain": "fail.example.test", "original_ip": "93.184.216.34", "original_proxied": "true"},
+      ])
+      machine.succeed(f"printf '%s' '{seed}' | install -o failover-check -g failover-check -m 0600 /dev/stdin {state_file}")
+      machine.succeed(f"chown failover-check:failover-check {state_dir}")
+
+      # One bad PATCH must fail loudly, not exit 0 with state wiped.
+      machine.succeed("set +e; systemctl start failover-check >/tmp/revert.out 2>&1; echo $? > /tmp/revert.code")
+      assert machine.succeed("cat /tmp/revert.code").strip() != "0", "partial revert must fail loudly"
+      status = machine.succeed("systemctl show failover-check --property=ExecMainStatus --value").strip()
+      assert status != "0", f"ExecMainStatus should be non-zero, got {status}"
+
+      journal = machine.succeed("journalctl -u failover-check --no-pager")
+      assert "Failed to revert fail.example.test" in journal, f"fail domain should error:\n{journal}"
+      assert "Revert incomplete" in journal, "should report incomplete revert"
+
+      api_log = machine.succeed(f"cat {request_log}")
+      assert 'PATCH /zones/test-zone-id/dns_records/rec-ok.example.test' in api_log, (
+          f"ok domain should get a revert PATCH:\n{api_log}"
+      )
+      assert '"content":"93.184.216.34"' in api_log.replace(" ", ""), (
+          f"revert PATCH should restore the original IP:\n{api_log}"
+      )
+
+      # Only the failed domain's state survives; the converged one is pruned.
+      state = json.loads(machine.succeed(f"cat {state_file}"))
+      assert [e["domain"] for e in state] == ["fail.example.test"], f"unexpected state: {state}"
+
+      # Retry is safe and converges no further until the API heals: same loud
+      # failure, same single-entry state.
+      machine.succeed("systemctl reset-failed failover-check")
+      machine.succeed("set +e; systemctl start failover-check >/dev/null 2>&1; echo $? > /tmp/revert2.code")
+      assert machine.succeed("cat /tmp/revert2.code").strip() != "0", "retry must still fail loudly"
+      state2 = json.loads(machine.succeed(f"cat {state_file}"))
+      assert [e["domain"] for e in state2] == ["fail.example.test"], f"retry mutated state: {state2}"
+
+      print("✓ Partial revert test passed: loud failure, pruned state, safe retry")
     '';
   };
 
