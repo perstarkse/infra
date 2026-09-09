@@ -2,7 +2,6 @@
   config.flake.nixosModules.router-monitoring = {
     lib,
     config,
-    pkgs,
     ...
   }: let
     cfg = config.my.router;

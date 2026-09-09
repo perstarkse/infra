@@ -171,6 +171,7 @@ in {
 
       noctalia = {
         enable = true;
+        airExhaust.enable = true;
       };
 
       agentTooling = {
@@ -322,9 +323,18 @@ in {
     };
 
     secrets = {
+      exposeUserSecrets = [
+        {
+          enable = true;
+          secretName = "air-exhaust-mqtt";
+          file = "charon-ro.env";
+          user = config.my.mainUser.name;
+          dest = "/home/${config.my.mainUser.name}/.config/air-exhaust/mqtt.env";
+        }
+      ];
       discover = {
         enable = true;
-        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt"];
       };
 
       allowReadAccess = [

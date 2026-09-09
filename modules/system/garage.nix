@@ -8,7 +8,11 @@ _: {
   }: let
     cfg = config.my.garage;
     lanSources = ["10.0.0.0/8" "127.0.0.0/8"];
-    mkPortRules = port: (mkRestrictedPortRules {inherit port; allowedSources = lanSources;}).iptables;
+    mkPortRules = port:
+      (mkRestrictedPortRules {
+        inherit port;
+        allowedSources = lanSources;
+      }).iptables;
   in {
     options.my.garage = {
       enable = lib.mkEnableOption "Enable Garage S3 Service";

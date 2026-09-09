@@ -175,9 +175,9 @@ in {
       # Push-side visibility: io is up but the path is down => alert locally.
       # (Sedna-side timers cover io being down.)
       failureNtfy = {
-            serverUrl = "https://ntfy.lan.stark.pub";
-            topic = "heartbeat";
-            tokenFile = config.my.secrets.getPath "ntfy" "heartbeat-token";
+        serverUrl = "https://ntfy.lan.stark.pub";
+        topic = "heartbeat";
+        tokenFile = config.my.secrets.getPath "ntfy" "heartbeat-token";
       };
     };
 
@@ -262,7 +262,7 @@ in {
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload" "frigate" "b2" "grafana"];
+        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload" "frigate" "b2" "air-exhaust-mqtt" "grafana"];
       };
 
       allowReadAccess = [

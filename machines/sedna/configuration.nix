@@ -291,7 +291,7 @@ in {
   ];
 
   my.backupMx.enable = true;
-      my.backupMx.queueWatch.smtpEnvFile = config.my.secrets.getPath "gatus" "env";
+  my.backupMx.queueWatch.smtpEnvFile = config.my.secrets.getPath "gatus" "env";
 
   users = {
     groups.heartbeat = {};

@@ -16,24 +16,24 @@ _: {
         local subject="$1"
         local body="$2"
         ${lib.optionalString (cfg.queueWatch.smtpEnvFile != null) ''
-          set -a
-          # shellcheck disable=SC1090
-          . ${cfg.queueWatch.smtpEnvFile}
-          set +a
-          rcpts=()
-          IFS=',' read -ra _rcpts <<< "''${GATUS_ALERT_EMAIL_TO:?GATUS_ALERT_EMAIL_TO not set}"
-          for r in "''${_rcpts[@]}"; do rcpts+=(--mail-rcpt "$r"); done
-          {
-            printf 'From: %s\r\nTo: %s\r\nSubject: [backup-mx] %s\r\n\r\n' "''${GATUS_SMTP_FROM:?}" "''${GATUS_ALERT_EMAIL_TO:?}" "$subject"
-            printf '%s\r\n' "$body"
-          } | ${pkgs.curl}/bin/curl -fsS --max-time 30 \
-            "smtp://''${GATUS_SMTP_HOST:?}:587" --ssl-reqd \
-            --mail-from "''${GATUS_SMTP_FROM:?}" "''${rcpts[@]}" \
-            --user "''${GATUS_SMTP_USERNAME:?}:''${GATUS_SMTP_PASSWORD:?}" -T -
-        ''}
+        set -a
+        # shellcheck disable=SC1090
+        . ${cfg.queueWatch.smtpEnvFile}
+        set +a
+        rcpts=()
+        IFS=',' read -ra _rcpts <<< "''${GATUS_ALERT_EMAIL_TO:?GATUS_ALERT_EMAIL_TO not set}"
+        for r in "''${_rcpts[@]}"; do rcpts+=(--mail-rcpt "$r"); done
+        {
+          printf 'From: %s\r\nTo: %s\r\nSubject: [backup-mx] %s\r\n\r\n' "''${GATUS_SMTP_FROM:?}" "''${GATUS_ALERT_EMAIL_TO:?}" "$subject"
+          printf '%s\r\n' "$body"
+        } | ${pkgs.curl}/bin/curl -fsS --max-time 30 \
+          "smtp://''${GATUS_SMTP_HOST:?}:587" --ssl-reqd \
+          --mail-from "''${GATUS_SMTP_FROM:?}" "''${rcpts[@]}" \
+          --user "''${GATUS_SMTP_USERNAME:?}:''${GATUS_SMTP_PASSWORD:?}" -T -
+      ''}
         ${lib.optionalString (cfg.queueWatch.smtpEnvFile == null) ''
-          echo "(no smtpEnvFile configured: alert [$subject] visible via failed unit only)" >&2
-        ''}
+        echo "(no smtpEnvFile configured: alert [$subject] visible via failed unit only)" >&2
+      ''}
       }
 
       now=$(date +%s)

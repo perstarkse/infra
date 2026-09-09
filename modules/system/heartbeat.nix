@@ -40,7 +40,11 @@ _: {
       # opts in via receiver.gatusApiTokenEnvVar. Falls back to the push token
       # (with a loud journal warning) so a missing value can never crash-loop
       # the receiver into a false failover — worst case is the pre-split behavior.
-      _GATUS_VAR = "${if cfg.receiver.gatusApiTokenEnvVar == null then "" else cfg.receiver.gatusApiTokenEnvVar}"
+      _GATUS_VAR = "${
+        if cfg.receiver.gatusApiTokenEnvVar == null
+        then ""
+        else cfg.receiver.gatusApiTokenEnvVar
+      }"
       if _GATUS_VAR and os.environ.get(_GATUS_VAR):
           GATUS_TOKEN = os.environ[_GATUS_VAR]
           print(f"heartbeat-receiver: using dedicated gatus token from {_GATUS_VAR}", flush=True)
