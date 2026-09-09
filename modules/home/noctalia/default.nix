@@ -22,8 +22,10 @@
     infraPluginsRoot = pkgs.runCommand "noctalia-infra-plugins" {} ''
       mkdir -p $out
       cp -r ${./plugins/voxtype-status} $out/voxtype-status
+      cp -r ${./plugins/air-exhaust-status} $out/air-exhaust-status
     '';
     voxtypePluginId = "infra/voxtype-status";
+    airExhaustPluginId = "infra/air-exhaust-status";
     voxtypeCmd =
       if lib.hasAttrByPath ["programs" "voxtype" "package"] config
       then lib.getExe config.programs.voxtype.package
@@ -41,6 +43,7 @@
 
     options.my.noctalia = {
       enable = lib.mkEnableOption "Noctalia desktop shell";
+      airExhaust.enable = lib.mkEnableOption "air-exhaust fan status widget (needs the charon-ro MQTT credential)";
     };
 
     config = lib.mkIf cfg.enable {
@@ -82,7 +85,7 @@
             padding = 8;
             scale = 0.9;
             widget_spacing = 4;
-            start = ["sysmon" "active_window" "media"];
+            start = lib.optionals cfg.airExhaust.enable ["air-exhaust-status"] ++ ["sysmon" "active_window" "media"];
             center = ["workspaces"];
             end = [
               "tray"
@@ -98,11 +101,13 @@
           };
 
           plugins = {
-            enabled = [
-              screenRecorderPluginId
-              kaomojiPluginId
-              voxtypePluginId
-            ];
+            enabled =
+              [
+                screenRecorderPluginId
+                kaomojiPluginId
+                voxtypePluginId
+              ]
+              ++ lib.optionals cfg.airExhaust.enable [airExhaustPluginId];
             source = [
               {
                 name = "official";
@@ -136,6 +141,10 @@
               voxtype_cmd = voxtypeCmd;
               systemctl_cmd = systemctlCmd;
             };
+            air-exhaust-status = lib.mkIf cfg.airExhaust.enable {
+              type = "${airExhaustPluginId}:status";
+              mosquitto_sub_cmd = "${pkgs.mosquitto}/bin/mosquitto_sub";
+            };
           };
 
           control_center.shortcuts = [
@@ -163,13 +172,15 @@
         fi
       '';
 
-      home.packages = with pkgs; [
-        ddcutil
-        gpu-screen-recorder
-        noctaliaLaunch
-        libsForQt5.qt5.qtwayland
-        qt6.qtwayland
-      ];
+      home.packages = with pkgs;
+        [
+          ddcutil
+          gpu-screen-recorder
+          noctaliaLaunch
+          libsForQt5.qt5.qtwayland
+          qt6.qtwayland
+        ]
+        ++ lib.optionals cfg.airExhaust.enable [mosquitto];
     };
   };
 }

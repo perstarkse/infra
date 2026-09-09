@@ -1,0 +1,41 @@
+id = "infra/air-exhaust-status"
+name = "Air Exhaust Status"
+version = "1.0.0"
+min_noctalia = "5.0.0"
+author = "infra"
+license = "MIT"
+description = "Shows the air-exhaust fan duty and room temp in the Noctalia bar."
+
+[[widget]]
+id = "status"
+entry = "status.luau"
+
+  [[widget.setting]]
+  key = "mosquitto_sub_cmd"
+  type = "string"
+  default = "mosquitto_sub"
+
+  [[widget.setting]]
+  key = "mqtt_host"
+  type = "string"
+  default = "10.0.0.1"
+
+  [[widget.setting]]
+  key = "mqtt_port"
+  type = "string"
+  default = "1883"
+
+  [[widget.setting]]
+  key = "mqtt_username"
+  type = "string"
+  default = "charon-ro"
+
+  [[widget.setting]]
+  key = "mqtt_topic"
+  type = "string"
+  default = "air-exhaust/fan/status"
+
+  [[widget.setting]]
+  key = "cred_file"
+  type = "string"
+  default = "~/.config/air-exhaust/mqtt.env"
