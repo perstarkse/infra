@@ -136,6 +136,44 @@
         touch $out
       '';
 
+    # Structural guard for rotation path watchers: every systemd.paths entry
+    # must have a resolvable target service and at least one watched path.
+    # systemd defaults the target to "<name>.service" when Unit is omitted, so
+    # a typo there fails open only at runtime; this catches it at eval time.
+    # (Behaviour is covered separately by tests/secret-rotation-bounce.nix.)
+    rotationWiringViolations = lib.flatten (lib.mapAttrsToList (
+        machine: cfg: let
+          paths = cfg.config.systemd.paths or {};
+          services = cfg.config.systemd.services or {};
+        in
+          lib.mapAttrsToList (
+            unitName: unit: let
+              target = unit.pathConfig.Unit or "${unitName}.service";
+              # systemd.services is keyed without the .service suffix.
+              targetKey = lib.removeSuffix ".service" target;
+              watched =
+                lib.toList (unit.pathConfig.PathChanged or [])
+                ++ lib.toList (unit.pathConfig.PathModified or [])
+                ++ lib.toList (unit.pathConfig.PathExists or []);
+            in
+              lib.optional (!(services ? ${targetKey}))
+              "${machine}: systemd.paths.${unitName} -> ${target}, which is not a defined service"
+              ++ lib.optional (watched == [])
+              "${machine}: systemd.paths.${unitName} watches no paths"
+          )
+          paths
+      )
+      systemNixosConfigs);
+
+    rotationWiringCheck = pkgs.runCommand "rotation-wiring-check" {} (
+      lib.optionalString (rotationWiringViolations != []) ''
+        echo "rotation wiring violations:"
+        ${lib.concatMapStringsSep "\n" (v: "echo ${lib.escapeShellArg v}") rotationWiringViolations}
+        exit 1
+      ''
+      + "touch $out\n"
+    );
+
     endpointsManifestCheck =
       pkgs.runCommand "endpoints-manifest-check" {
         nativeBuildInputs = [pkgs.python3];
@@ -226,6 +264,7 @@
     localCheckTargets = {
       endpoints-manifest-check = endpointsManifestCheck;
       secrets-discovery-check = secretsDiscoveryCheck;
+      rotation-wiring-check = rotationWiringCheck;
       router-checks = mkCheckBundle "router-checks" routerChecks;
       predeploy-check = mkCheckBundle "predeploy-check" ioPredeployChecks;
       final-checks = mkCheckBundle "final-checks" (routerChecks // ioPredeployChecks);
@@ -946,7 +985,7 @@
     };
 
     checks =
-      {inherit endpointsManifestCheck secretsDiscoveryCheck;}
+      {inherit endpointsManifestCheck secretsDiscoveryCheck rotationWiringCheck;}
       // buildChecks
       // routerChecks
       // ioPredeployChecks
