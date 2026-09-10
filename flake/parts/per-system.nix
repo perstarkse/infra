@@ -121,6 +121,11 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    rotationWiringChecks = import ../../tests/rotation-wiring.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+    };
     endpointsManifestData = inputs.self.lib.endpoints.mkEndpointsManifest systemNixosConfigs;
 
     endpointsManifest = pkgs.writeText "endpoints-manifest.json" (builtins.toJSON endpointsManifestData);
@@ -289,6 +294,7 @@
       accounted-checks = mkCheckBundle "accounted-checks" accountedSystemChecks;
       heartbeat-checks = mkCheckBundle "heartbeat-checks" heartbeatChecks;
       secrets-rotation-checks = mkCheckBundle "secrets-rotation-checks" rotationBounceChecks;
+      rotation-wiring-checks = mkCheckBundle "rotation-wiring-checks" rotationWiringChecks;
     };
 
     machineUpdatePlanResolverPy = pkgs.writeText "machine-update-plan-resolver.py" ''
@@ -1003,6 +1009,7 @@
       // monitorResumeChecks
       // accountedSystemChecks
       // heartbeatChecks
-      // rotationBounceChecks;
+      // rotationBounceChecks
+      // rotationWiringChecks;
   };
 }
