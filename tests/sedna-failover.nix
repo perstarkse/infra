@@ -118,6 +118,12 @@
       };
     };
 
+    # SMTP credentials for failover/revert notices. Host points at a closed
+    # port so notice delivery fails fast and deterministically in the VM.
+    systemd.tmpfiles.rules = [
+      "f /var/lib/sedna-failover/alert-env 0644 root root - GATUS_SMTP_HOST=127.0.0.1\\nGATUS_SMTP_FROM=tests@example.test\\nGATUS_SMTP_USERNAME=u\\nGATUS_SMTP_PASSWORD=p\\nGATUS_ALERT_EMAIL_TO=ops@example.test\\n"
+    ];
+
     my.sedna-failover = {
       enable = true;
 
@@ -146,6 +152,11 @@
         cloudflareApiTokenFile = "/var/lib/sedna-failover/cf-token";
         cloudflareApiBaseUrl = "http://127.0.0.1:8787";
         heartbeatTimestampFile = "/var/lib/sedna-failover/last-heartbeat";
+        # Point the notice path at a closed port: curl fails fast, which lets
+        # the tests assert the two properties that matter — the notice was
+        # ATTEMPTED on transition, and its failure did not fail the failover
+        # or revert it was reporting on.
+        alertEnvFile = "/var/lib/sedna-failover/alert-env";
         zones = [
           {
             zone = "example.test";
@@ -247,6 +258,21 @@ in {
       # Verify state file has non-empty content
       content = machine.succeed("cat /var/lib/sedna-failover/dns-state.json")
       print(f"DNS state content: {content}")
+
+      # The failover must have ANNOUNCED itself: production DNS was rewritten.
+      # This is the signal that was missing entirely before (the Gatus deadman
+      # reports a different fact and travels a correlated path).
+      journal = machine.succeed("journalctl -u failover-check --no-pager")
+      assert "failover-notice [failover engaged]" in journal, (
+          f"failover must emit a transition notice:\n{journal}"
+      )
+
+      # And a notice-delivery failure must not fail the failover itself: the
+      # PATCH already landed, so a dead SMTP path cannot be allowed to abort
+      # or mask an operation that already changed production DNS.
+      assert "WARNING: failover notice could not be sent" in journal, (
+          f"undeliverable notice must warn, not fail the operation:\n{journal}"
+      )
 
       print("✓ DNS failover check test passed")
     '';
@@ -372,6 +398,14 @@ in {
       journal = machine.succeed("journalctl -u failover-check --no-pager")
       assert "Failed to revert fail.example.test" in journal, f"fail domain should error:\n{journal}"
       assert "Revert incomplete" in journal, "should report incomplete revert"
+
+      # A partial revert must also ANNOUNCE itself: this is the case that hides
+      # (traffic partly stuck at sedna while the unit merely looks failed).
+      # Delivery is asserted separately from the name: the notice must be
+      # ATTEMPTED, and its delivery failure must not mask the operator signal.
+      assert "failover-notice [revert INCOMPLETE]" in journal, (
+          f"partial revert must attempt an alert naming the stuck domains:\n{journal}"
+      )
 
       api_log = machine.succeed(f"cat {request_log}")
       assert 'PATCH /zones/test-zone-id/dns_records/rec-ok.example.test' in api_log, (

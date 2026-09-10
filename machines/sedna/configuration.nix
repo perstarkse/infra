@@ -293,6 +293,11 @@ in {
   my.backupMx.enable = true;
   my.backupMx.queueWatch.smtpEnvFile = config.my.secrets.getPath "gatus" "env";
 
+  # Failover/revert notices ride the same off-LAN smtp2go leg as the backup-MX
+  # queue watch: it is the one publisher proven to survive both io and
+  # makemake being down. Transition-only (see modules/system/sedna-failover.nix).
+  my.sedna-failover.dnsFailover.alertEnvFile = config.my.secrets.getPath "gatus" "env";
+
   users = {
     groups.heartbeat = {};
     users = {

@@ -216,6 +216,53 @@ _: {
       '';
     };
 
+    # Failover/revert are the highest-consequence actions this repo takes, and
+    # until now they were silent: the only signal was the Gatus deadman email,
+    # which reports "io heartbeat missing" (a different fact) and travels a
+    # path correlated with the failure it reports. This emits a notice on state
+    # TRANSITION only. Deliberately not using the LAN-bound ntfy publisher:
+    # the one path already proven to survive io AND makemake death is the
+    # backup-MX smtp2go route, so reuse its env-file shape.
+    alertScript = pkgs.writeShellScript "failover-alert" ''
+      set -euo pipefail
+
+      subject="''${1:?subject required}"
+      body="''${2:-}"
+
+      ${lib.optionalString (cfg.dnsFailover.alertEnvFile == null) ''
+        echo "failover-notice [$subject] $body" >&2
+        echo "(no alertEnvFile configured: notice is journal-only)" >&2
+        exit 0
+      ''}
+
+      ${lib.optionalString (cfg.dnsFailover.alertEnvFile != null) ''
+        set -a
+        # shellcheck disable=SC1090
+        . ${cfg.dnsFailover.alertEnvFile}
+        set +a
+
+        # Log the attempt first: if delivery fails, the journal still names
+        # what was being reported (otherwise the only trace is curl's error).
+        echo "failover-notice [$subject] delivering to alertEnvFile recipients..."
+
+        rcpt_list="''${ALERT_TO:-''${GATUS_ALERT_EMAIL_TO:?GATUS_ALERT_EMAIL_TO not set}}"
+        rcpts=()
+        IFS=',' read -ra _rcpts <<< "$rcpt_list"
+        for r in "''${_rcpts[@]}"; do rcpts+=(--mail-rcpt "$r"); done
+
+        {
+          printf 'From: %s\r\nTo: %s\r\nSubject: [sedna-failover] %s\r\n\r\n' \
+            "''${GATUS_SMTP_FROM:?GATUS_SMTP_FROM not set}" "$rcpt_list" "$subject"
+          printf '%s\r\n' "$body"
+        } | ${pkgs.curl}/bin/curl -fsS --max-time 30 \
+          "smtp://''${GATUS_SMTP_HOST:?GATUS_SMTP_HOST not set}:587" --ssl-reqd \
+          --mail-from "''${GATUS_SMTP_FROM}" "''${rcpts[@]}" \
+          --user "''${GATUS_SMTP_USERNAME:?}:''${GATUS_SMTP_PASSWORD:?}" -T -
+
+        echo "failover-notice sent [$subject]"
+      ''}
+    '';
+
     # Cloudflare DNS update script (failover: point domains → Sedna)
     dnsFailoverScript = pkgs.writeShellScript "cloudflare-dns-failover" ''
       ${scriptPreamble}
@@ -291,6 +338,14 @@ _: {
       else
         mv "$STATE_FILE.tmp" "$STATE_FILE"
         echo "=== Failover complete ==="
+        # Transition notice: production DNS was just rewritten. Silent failure
+        # here must not fail the failover itself (the PATCH already landed).
+        printf '%s\n' "Failover engaged on ${config.networking.hostName} ($(date -Is))." \
+          "Domains now point at ${cfg.dnsFailover.sednaPublicIp}:" \
+          "$(${pkgs.jq}/bin/jq -r '[.[].domain] | join(", ")' "$STATE_FILE")" \
+          > /tmp/failover-notice-body \
+          && ${alertScript} "failover engaged" "$(cat /tmp/failover-notice-body)" \
+          || echo "WARNING: failover notice could not be sent (see above)" >&2
       fi
     '';
 
@@ -390,9 +445,15 @@ _: {
       elif [ "$REVERT_FAILED" = "0" ] && [ "$(${pkgs.jq}/bin/jq 'length' "$STATE_FILE")" = "0" ]; then
         rm -f "$STATE_FILE"
         echo "=== Revert complete ==="
+        ${alertScript} "revert complete" "DNS reverted to original IPs on ${config.networking.hostName} ($(date -Is)). No domains remain pointed at sedna." \
+          || echo "WARNING: revert notice could not be sent (see above)" >&2
       else
         remaining=$(${pkgs.jq}/bin/jq -r '[.[].domain] | join(", ")' "$STATE_FILE")
         echo "=== Revert incomplete: keeping state for retry ($remaining) ===" >&2
+        # This is the case that hides: traffic partially stuck at sedna while
+        # the service merely looks failed. Say so out loud.
+        ${alertScript} "revert INCOMPLETE" "Partial DNS revert on ${config.networking.hostName} ($(date -Is)).\nStill pointed at sedna: $remaining\nState kept for retry; check the Cloudflare token scope and API reachability." \
+          || echo "WARNING: revert-incomplete notice could not be sent (see above)" >&2
         exit 1
       fi
     '';
@@ -569,6 +630,24 @@ _: {
           type = lib.types.str;
           default = "https://api.cloudflare.com/client/v4";
           description = "Cloudflare API base URL. Override in tests with a local mock server.";
+        };
+
+        alertEnvFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.path;
+          default = null;
+          description = ''
+            Environment file with GATUS_SMTP_* credentials for failover/revert
+            notices (same shape as my.backupMx.queueWatch.smtpEnvFile). Leave
+            null to log transitions to the journal only. Notices are emitted
+            only on state TRANSITION (failover started, revert complete,
+            revert incomplete), never per timer tick.
+          '';
+        };
+
+        alertTo = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = "Recipient(s) for failover notices, comma-separated. Defaults to GATUS_ALERT_EMAIL_TO from alertEnvFile.";
         };
 
         heartbeatTimestampFile = lib.mkOption {
