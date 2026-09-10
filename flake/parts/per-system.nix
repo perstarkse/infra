@@ -116,11 +116,25 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    rotationBounceChecks = import ../../tests/secret-rotation-bounce.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+    };
     endpointsManifestData = inputs.self.lib.endpoints.mkEndpointsManifest systemNixosConfigs;
 
     endpointsManifest = pkgs.writeText "endpoints-manifest.json" (builtins.toJSON endpointsManifestData);
 
     endpointsManifestValidator = ../../lib/endpoints-manifest-validator.py;
+
+    secretsDiscoveryCheck =
+      pkgs.runCommand "secrets-discovery-check" {
+        nativeBuildInputs = [pkgs.python3];
+        src = ../..;
+      } ''
+        python3 ${../../lib/secrets-discovery-check.py} "$src"
+        touch $out
+      '';
 
     endpointsManifestCheck =
       pkgs.runCommand "endpoints-manifest-check" {
@@ -211,6 +225,7 @@
 
     localCheckTargets = {
       endpoints-manifest-check = endpointsManifestCheck;
+      secrets-discovery-check = secretsDiscoveryCheck;
       router-checks = mkCheckBundle "router-checks" routerChecks;
       predeploy-check = mkCheckBundle "predeploy-check" ioPredeployChecks;
       final-checks = mkCheckBundle "final-checks" (routerChecks // ioPredeployChecks);
@@ -234,6 +249,7 @@
       monitor-resume-checks = mkCheckBundle "monitor-resume-checks" monitorResumeChecks;
       accounted-checks = mkCheckBundle "accounted-checks" accountedSystemChecks;
       heartbeat-checks = mkCheckBundle "heartbeat-checks" heartbeatChecks;
+      secrets-rotation-checks = mkCheckBundle "secrets-rotation-checks" rotationBounceChecks;
     };
 
     machineUpdatePlanResolverPy = pkgs.writeText "machine-update-plan-resolver.py" ''
@@ -930,7 +946,7 @@
     };
 
     checks =
-      {inherit endpointsManifestCheck;}
+      {inherit endpointsManifestCheck secretsDiscoveryCheck;}
       // buildChecks
       // routerChecks
       // ioPredeployChecks
@@ -947,6 +963,7 @@
       // tetherChecks
       // monitorResumeChecks
       // accountedSystemChecks
-      // heartbeatChecks;
+      // heartbeatChecks
+      // rotationBounceChecks;
   };
 }

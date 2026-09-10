@@ -768,4 +768,24 @@
       DynamicUser = lib.mkForce false;
     };
   };
+
+  # The daemon reads the ntfy token only at startup: restart it when the
+  # token file actually changes on disk (restartTriggers on /run/secrets
+  # paths are inert strings that never fire — see mosquitto.nix).
+  systemd.paths.indicator-token-rotation = {
+    description = "Restart indicator-alert-daemon when its ntfy token rotates";
+    wantedBy = ["multi-user.target"];
+    pathConfig = {
+      PathChanged = [(config.my.secrets.getPath "ntfy" "indicator-token")];
+      Unit = "indicator-token-rotation-restart.service";
+    };
+  };
+
+  systemd.services.indicator-token-rotation-restart = {
+    description = "Restart indicator-alert-daemon after token rotation";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.systemd}/bin/systemctl try-restart indicator-alert-daemon.service";
+    };
+  };
 }

@@ -187,56 +187,88 @@
 
     config = lib.mkMerge [
       (lib.mkIf (enabledInstances != {}) {
-        systemd.services =
+        systemd.services = lib.mkMerge [
+          (lib.mapAttrs' (
+              name: instance: let
+                serviceName = "politikerstod-worker-${name}";
+                userName = serviceName;
+                groupName = serviceName;
+                dataDir = instance.dataDir or "/var/lib/${serviceName}";
+              in
+                lib.nameValuePair serviceName {
+                  description = "Politikerstöd Remote Worker (${name}) — OCR + Embeddings";
+                  wantedBy = ["multi-user.target"];
+                  after = ["network-online.target" "systemd-resolved.service"] ++ wireguardTunnelUnits;
+                  wants = ["network-online.target" "systemd-resolved.service"] ++ wireguardTunnelUnits;
+
+                  serviceConfig = {
+                    Type = "simple";
+                    User = userName;
+                    Group = groupName;
+                    WorkingDirectory = dataDir;
+
+                    ExecStart = let
+                      workerArgs =
+                        if (instance.workerTags or []) != []
+                        then "--worker=${lib.concatStringsSep "," (instance.workerTags or [])}"
+                        else "--worker";
+                      pkg = config.my.politikerstod-remote-worker.package;
+                      startCmd = "${pkg}/bin/politikerstod-cli start ${workerArgs}";
+                      passwordFile = instance.database.passwordFile or null;
+                      dbUser = instance.database.user or "politikerstod";
+                      dbHost = instance.database.host or "10.0.0.10";
+                      dbPort = instance.database.port or 5432;
+                      dbName = instance.database.name or "politikerstod_prod";
+                    in
+                      if passwordFile != null
+                      then
+                        pkgs.writeShellScript "politikerstod-worker-${name}-start" ''
+                          set -euo pipefail
+                          export DATABASE_URL="postgres://${dbUser}:$(cat ${passwordFile})@${dbHost}:${toString dbPort}/${dbName}"
+                          exec ${startCmd}
+                        ''
+                      else startCmd;
+
+                    Restart = "always";
+                    RestartSec = "10";
+
+                    Environment = mkWorkerEnv name instance;
+
+                    EnvironmentFile = [
+                      (config.my.secrets.getPath (instance.secretsNamespace or "politikerstod-${name}") "env")
+                    ];
+                  };
+                }
+            )
+            enabledInstances)
+
+          # One restart service per worker instance.
+          (lib.mapAttrs' (
+              name: _instance:
+                lib.nameValuePair "politikerstod-worker-${name}-env-rotation-restart" {
+                  description = "Restart politikerstod-worker-${name} after env rotation";
+                  serviceConfig = {
+                    Type = "oneshot";
+                    ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+                    ExecStart = "${pkgs.systemd}/bin/systemctl try-restart politikerstod-worker-${name}.service";
+                  };
+                }
+            )
+            enabledInstances)
+        ];
+
+        # Workers read their env file only at startup: restart them when it
+        # actually changes on disk (restartTriggers on /run/secrets paths are
+        # inert strings that never fire — see mosquitto.nix).
+        systemd.paths =
           lib.mapAttrs' (
-            name: instance: let
-              serviceName = "politikerstod-worker-${name}";
-              userName = serviceName;
-              groupName = serviceName;
-              dataDir = instance.dataDir or "/var/lib/${serviceName}";
-            in
-              lib.nameValuePair serviceName {
-                description = "Politikerstöd Remote Worker (${name}) — OCR + Embeddings";
+            name: instance:
+              lib.nameValuePair "politikerstod-worker-${name}-env-rotation" {
+                description = "Restart politikerstod-worker-${name} when its env rotates";
                 wantedBy = ["multi-user.target"];
-                after = ["network-online.target" "systemd-resolved.service"] ++ wireguardTunnelUnits;
-                wants = ["network-online.target" "systemd-resolved.service"] ++ wireguardTunnelUnits;
-
-                serviceConfig = {
-                  Type = "simple";
-                  User = userName;
-                  Group = groupName;
-                  WorkingDirectory = dataDir;
-
-                  ExecStart = let
-                    workerArgs =
-                      if (instance.workerTags or []) != []
-                      then "--worker=${lib.concatStringsSep "," (instance.workerTags or [])}"
-                      else "--worker";
-                    pkg = config.my.politikerstod-remote-worker.package;
-                    startCmd = "${pkg}/bin/politikerstod-cli start ${workerArgs}";
-                    passwordFile = instance.database.passwordFile or null;
-                    dbUser = instance.database.user or "politikerstod";
-                    dbHost = instance.database.host or "10.0.0.10";
-                    dbPort = instance.database.port or 5432;
-                    dbName = instance.database.name or "politikerstod_prod";
-                  in
-                    if passwordFile != null
-                    then
-                      pkgs.writeShellScript "politikerstod-worker-${name}-start" ''
-                        set -euo pipefail
-                        export DATABASE_URL="postgres://${dbUser}:$(cat ${passwordFile})@${dbHost}:${toString dbPort}/${dbName}"
-                        exec ${startCmd}
-                      ''
-                    else startCmd;
-
-                  Restart = "always";
-                  RestartSec = "10";
-
-                  Environment = mkWorkerEnv name instance;
-
-                  EnvironmentFile = [
-                    (config.my.secrets.getPath (instance.secretsNamespace or "politikerstod-${name}") "env")
-                  ];
+                pathConfig = {
+                  PathChanged = [(config.my.secrets.getPath (instance.secretsNamespace or "politikerstod-${name}") "env")];
+                  Unit = "politikerstod-worker-${name}-env-rotation-restart.service";
                 };
               }
           )

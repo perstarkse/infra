@@ -345,6 +345,27 @@
 
         systemd.services.atticd.serviceConfig.DynamicUser = lib.mkForce false;
 
+        # atticd reads server.env only at startup: restart it when the file
+        # actually changes on disk (restartTriggers on /run/secrets paths are
+        # inert strings that never fire — see mosquitto.nix). Client key files
+        # are read per invocation by configure scripts, so they need no wiring.
+        systemd.paths.atticd-env-rotation = {
+          description = "Restart atticd when its server env rotates";
+          wantedBy = ["multi-user.target"];
+          pathConfig = {
+            PathChanged = [serverEnvFile];
+            Unit = "atticd-env-rotation-restart.service";
+          };
+        };
+
+        systemd.services.atticd-env-rotation-restart = {
+          description = "Restart atticd after server env rotation";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${pkgs.systemd}/bin/systemctl try-restart atticd.service";
+          };
+        };
+
         systemd.services.atticd-prepare = {
           description = "Prepare Attic server state";
           wantedBy = ["atticd.service"];

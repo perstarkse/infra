@@ -2,6 +2,7 @@
   config.flake.nixosModules.router-monitoring = {
     lib,
     config,
+    pkgs,
     ...
   }: let
     cfg = config.my.router;
@@ -84,6 +85,27 @@
           inherit (mon.prometheus) port;
           inherit (mon.prometheus) exporters;
           inherit (mon.prometheus) scrapeConfigs;
+        };
+      };
+
+      # Grafana expands $__file{...} at startup only; the unit is
+      # byte-identical across content rotations, so watch the key file
+      # (restartTriggers on /run/secrets paths would be inert).
+      systemd.paths.grafana-secret-rotation = lib.mkIf mon.grafana.enable {
+        description = "Restart grafana on secret_key rotation";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = [(config.my.secrets.getPath "grafana" "secret_key")];
+          Unit = "grafana-secret-rotation-restart.service";
+        };
+      };
+
+      systemd.services.grafana-secret-rotation-restart = lib.mkIf mon.grafana.enable {
+        description = "Restart grafana after secret_key rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart grafana.service";
         };
       };
     };

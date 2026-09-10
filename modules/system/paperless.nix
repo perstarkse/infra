@@ -450,6 +450,29 @@ _: {
       # S3 consumption mount (for distributed document ingestion)
       environment.systemPackages = lib.mkIf cfg.s3Consumption.enable [pkgs.rclone];
 
+      # Paperless units read PAPERLESS_DBPASS from passwordEnvFile only at
+      # startup: bounce them when it (or the raw password file) actually
+      # changes on disk (restartTriggers on /run/secrets paths are inert
+      # strings that never fire — see mosquitto.nix). try-restart touches
+      # only active units, so native-vs-container topologies are both safe.
+      systemd.paths.paperless-db-rotation = lib.mkIf (cfg.database.passwordEnvFile != null) {
+        description = "Restart paperless units when the DB password rotates";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = [cfg.database.passwordEnvFile] ++ lib.optionals (cfg.database.passwordFile != null) [cfg.database.passwordFile];
+          Unit = "paperless-db-rotation-restart.service";
+        };
+      };
+
+      systemd.services.paperless-db-rotation-restart = lib.mkIf (cfg.database.passwordEnvFile != null) {
+        description = "Restart paperless units after DB password rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart paperless-web.service paperless-consumer.service paperless-scheduler.service paperless-task-queue.service";
+        };
+      };
+
       my.secrets.allowReadAccess = lib.mkIf cfg.s3Consumption.enable [
         {
           readers = ["paperless"];

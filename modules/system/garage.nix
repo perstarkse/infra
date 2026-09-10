@@ -146,6 +146,27 @@ _: {
         ]);
       };
 
+      # Garage reads rpc_secret_file only at startup: a rotation must restart
+      # it or the node keeps the pre-rotation secret and the cluster splits.
+      # restartTriggers on /run/secrets paths are inert strings that never
+      # fire (see mosquitto.nix) — hence the path watcher below.
+      systemd.paths.garage-rpc-rotation = {
+        description = "Restart garage when its RPC secret rotates";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = [(config.my.secrets.getPath "garage" "rpc_secret")];
+          Unit = "garage-rpc-rotation-restart.service";
+        };
+      };
+
+      systemd.services.garage-rpc-rotation-restart = {
+        description = "Restart garage after RPC secret rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart garage.service";
+        };
+      };
+
       users.users.garage = {
         isSystemUser = true;
         group = "garage";

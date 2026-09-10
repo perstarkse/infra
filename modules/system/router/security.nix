@@ -2,6 +2,7 @@
   config.flake.nixosModules.router-security = {
     lib,
     config,
+    pkgs,
     ...
   }: let
     inherit (lib) mkEnableOption mkOption types mkIf mkMerge optionalAttrs;
@@ -393,6 +394,32 @@
             path = config.my.secrets.getPath "journal-upload" "ca.pem";
           }
         ];
+
+        # nginx reads these certs at startup/reload only; the unit is
+        # byte-identical across content rotations, so watch the files and
+        # reload (not restart — keep connections). restartTriggers on
+        # /run/secrets paths would be inert.
+        systemd.paths.nginx-journal-upload-rotation = {
+          description = "Reload nginx on journal-upload TLS rotation";
+          wantedBy = ["multi-user.target"];
+          pathConfig = {
+            PathChanged = [
+              (config.my.secrets.getPath "journal-upload" "server.pem")
+              (config.my.secrets.getPath "journal-upload" "server.key")
+              (config.my.secrets.getPath "journal-upload" "ca.pem")
+            ];
+            Unit = "nginx-journal-upload-rotation-reload.service";
+          };
+        };
+
+        systemd.services.nginx-journal-upload-rotation-reload = {
+          description = "Reload nginx after journal-upload TLS rotation";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+            ExecStart = "${pkgs.systemd}/bin/systemctl reload nginx.service";
+          };
+        };
 
         # Bind journal-remote to the loopback only; the LAN-facing endpoint is
         # nginx (above). The leading "" is systemd's list-reset marker: it

@@ -212,6 +212,48 @@
           };
         };
 
+        # SurrealDB SaaS reads its credentials file only at startup, and the
+        # server/worker read the minne-saas env file only at startup: restart
+        # them when the files actually change on disk (restartTriggers on
+        # /run/secrets paths are inert strings that never fire — see
+        # mosquitto.nix).
+        paths.surrealdb-saas-credentials-rotation = {
+          description = "Restart surrealdb-saas when its credentials rotate";
+          wantedBy = ["multi-user.target"];
+          pathConfig = {
+            PathChanged = [(config.my.secrets.getPath "surrealdb-credentials" "credentials")];
+            Unit = "surrealdb-saas-credentials-rotation-restart.service";
+          };
+        };
+
+        paths.minne-saas-env-rotation = {
+          description = "Restart minne-saas server+worker when env rotates";
+          wantedBy = ["multi-user.target"];
+          pathConfig = {
+            PathChanged = [(config.my.secrets.getPath "minne-saas" "env")];
+            Unit = "minne-saas-env-rotation-restart.service";
+          };
+        };
+
+        services.surrealdb-saas-credentials-rotation-restart = {
+          description = "Restart surrealdb-saas after credentials rotation";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${pkgs.systemd}/bin/systemctl try-restart surrealdb-saas.service";
+          };
+        };
+
+        services.minne-saas-env-rotation-restart = {
+          description = "Restart minne-saas server+worker after env rotation";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = [
+              "${pkgs.systemd}/bin/systemctl try-restart minne-saas-server.service"
+              "${pkgs.systemd}/bin/systemctl try-restart minne-saas-worker.service"
+            ];
+          };
+        };
+
         # Ensure data directories exist
         tmpfiles.rules = [
           "d ${cfg.dataDir} 0755 minne-saas minne-saas -"

@@ -315,6 +315,26 @@
           )
           enabledInstances)
 
+        # Each instance reads its env file (and optional DB password file)
+        # only at startup: restart it when they actually change on disk
+        # (restartTriggers on /run/secrets paths are inert strings that never
+        # fire — see mosquitto.nix). The db-proxy has no secrets; the
+        # garage-provision unit is a point-in-time oneshot, not re-run.
+        # (Path units live under systemd.paths below; restart services stay
+        # in this services merge.)
+        (lib.mapAttrs' (
+            name: _instance:
+              lib.nameValuePair "politikerstod-${name}-env-rotation-restart" {
+                description = "Restart politikerstod-${name} after secret rotation";
+                serviceConfig = {
+                  Type = "oneshot";
+                  ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+                  ExecStart = "${pkgs.systemd}/bin/systemctl try-restart politikerstod-${name}.service";
+                };
+              }
+          )
+          enabledInstances)
+
         (lib.mapAttrs' (
             name: instance: let
               containerName = instance.database.container.name or "politikerstod-db-${name}";
@@ -374,6 +394,24 @@
                       --key "$AWS_ACCESS_KEY_ID"
                   fi
                 '';
+              }
+          )
+          enabledInstances)
+      ];
+
+      systemd.paths = lib.mkMerge [
+        (lib.mapAttrs' (
+            name: instance: let
+              secretName = "politikerstod-${name}";
+              passwordFile = instance.database.passwordFile or null;
+            in
+              lib.nameValuePair "politikerstod-${name}-env-rotation" {
+                description = "Restart politikerstod-${name} when its secrets rotate";
+                wantedBy = ["multi-user.target"];
+                pathConfig = {
+                  PathChanged = [(config.my.secrets.getPath secretName "env")] ++ lib.optionals (passwordFile != null) [passwordFile];
+                  Unit = "politikerstod-${name}-env-rotation-restart.service";
+                };
               }
           )
           enabledInstances)

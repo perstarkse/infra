@@ -2,6 +2,7 @@ _: {
   config.flake.nixosModules.remote-monitoring = {
     config,
     lib,
+    pkgs,
     ...
   }: let
     cfg = config.my.remote-monitoring;
@@ -60,6 +61,27 @@ _: {
         enable = true;
         environmentFile = envFile;
         settings = lib.recursiveUpdate {web.port = cfg.webPort;} cfg.settings;
+      };
+
+      # Gatus reads the env file only at startup; the unit is byte-identical
+      # across content rotations, so watch the file (restartTriggers on
+      # /run/secrets paths would be inert).
+      systemd.paths.gatus-env-rotation = {
+        description = "Restart gatus on secret rotation";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = [envFile];
+          Unit = "gatus-env-rotation-restart.service";
+        };
+      };
+
+      systemd.services.gatus-env-rotation-restart = {
+        description = "Restart gatus after secret rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart gatus.service";
+        };
       };
 
       # Gatus upstream uses DynamicUser; setfacl needs a static passwd entry.

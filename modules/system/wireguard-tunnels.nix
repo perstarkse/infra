@@ -141,11 +141,23 @@
 
       # wg-quick needs iproute2 and iptables in PATH
       systemd.services =
-        lib.mapAttrs' (
-          name: tunnel:
-            lib.nameValuePair "wg-tunnel-${name}" (mkTunnelService name tunnel)
-        )
-        enabledTunnels;
+        (lib.mapAttrs' (
+            name: tunnel:
+              lib.nameValuePair "wg-tunnel-${name}" (mkTunnelService name tunnel)
+          )
+          enabledTunnels)
+        // (lib.mapAttrs' (
+            name: _:
+              lib.nameValuePair "wg-tunnel-${name}-rotation-restart" {
+                description = "Re-up WireGuard tunnel ${name} after config rotation";
+                serviceConfig = {
+                  Type = "oneshot";
+                  ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+                  ExecStart = "${pkgs.systemd}/bin/systemctl try-restart wg-tunnel-${name}.service";
+                };
+              }
+          )
+          enabledTunnels);
 
       # Grant root access to the secrets (wg-quick runs as root)
       my.secrets.allowReadAccess =
@@ -153,6 +165,24 @@
           readers = ["root"];
           path = config.my.secrets.getPath "wireguard-tunnels-${name}" "wg.conf";
         })
+        enabledTunnels;
+
+      # wg-quick reads wg.conf only at (re)start; the unit is byte-identical
+      # across content rotations, so watch each tunnel config. try-restart:
+      # active tunnels re-up with fresh keys, manual-down tunnels stay down
+      # (their next manual start reads fresh) instead of being activated.
+      systemd.paths =
+        lib.mapAttrs' (
+          name: _:
+            lib.nameValuePair "wg-tunnel-${name}-rotation" {
+              description = "Re-up WireGuard tunnel ${name} on config rotation";
+              wantedBy = ["multi-user.target"];
+              pathConfig = {
+                PathChanged = [(config.my.secrets.getPath "wireguard-tunnels-${name}" "wg.conf")];
+                Unit = "wg-tunnel-${name}-rotation-restart.service";
+              };
+            }
+        )
         enabledTunnels;
 
       # Generate secrets for all enabled tunnels

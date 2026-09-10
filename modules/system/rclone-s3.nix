@@ -123,6 +123,30 @@ _: {
         };
       };
 
+      # rclone reads the S3 keys only at mount start: remount when they
+      # actually change on disk (restartTriggers on /run/secrets paths are
+      # inert strings that never fire — see mosquitto.nix).
+      systemd.paths.rclone-s3-keys-rotation = {
+        description = "Remount rclone-s3 when its S3 keys rotate";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = [
+            (config.my.secrets.getPath "garage-s3" "access_key_id")
+            (config.my.secrets.getPath "garage-s3" "secret_access_key")
+          ];
+          Unit = "rclone-s3-keys-rotation-restart.service";
+        };
+      };
+
+      systemd.services.rclone-s3-keys-rotation-restart = {
+        description = "Remount rclone-s3 after key rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart rclone-s3-mount.service";
+        };
+      };
+
       programs.fuse.userAllowOther = true;
     };
   };

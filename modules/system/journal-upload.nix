@@ -2,6 +2,7 @@ _: {
   config.flake.nixosModules.journal-upload = {
     config,
     lib,
+    pkgs,
     ...
   }: {
     options.my.journalUpload = {
@@ -62,6 +63,32 @@ _: {
           # full re-read on the next restart.
           WatchdogSec = lib.mkForce "5min";
           TimeoutStartSec = lib.mkForce "5min";
+        };
+      };
+
+      # The uploader reads the mTLS client key/cert only at startup: restart
+      # it when the files actually change on disk (restartTriggers on
+      # /run/secrets paths are inert strings that never fire — see
+      # mosquitto.nix).
+      systemd.paths.journal-upload-certs-rotation = {
+        description = "Restart journal-upload when its client certs rotate";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = [
+            (config.my.secrets.getPath "journal-upload" "client.key")
+            (config.my.secrets.getPath "journal-upload" "client.pem")
+            (config.my.secrets.getPath "journal-upload" "ca.pem")
+          ];
+          Unit = "journal-upload-certs-rotation-restart.service";
+        };
+      };
+
+      systemd.services.journal-upload-certs-rotation-restart = {
+        description = "Restart journal-upload after client cert rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart systemd-journal-upload.service";
         };
       };
     };

@@ -2,6 +2,7 @@ _: {
   config.flake.nixosModules.ntfy = {
     config,
     lib,
+    pkgs,
     mkStandardEndpointsOptions,
     ...
   }: let
@@ -94,6 +95,27 @@ _: {
             listen-http = "${cfg.address}:${toString cfg.port}";
           }
           // cfg.settings;
+      };
+
+      # ntfy reads the env file only at startup; the unit is byte-identical
+      # across content rotations, so watch the file when one is configured
+      # (restartTriggers on /run/secrets paths would be inert).
+      systemd.paths.ntfy-env-rotation = lib.mkIf (envFile != null) {
+        description = "Restart ntfy-sh on env rotation";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = [envFile];
+          Unit = "ntfy-env-rotation-restart.service";
+        };
+      };
+
+      systemd.services.ntfy-env-rotation-restart = lib.mkIf (envFile != null) {
+        description = "Restart ntfy-sh after env rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart ntfy-sh.service";
+        };
       };
 
       my.endpoints.services.ntfy = lib.mkIf cfg.endpoints.enable {

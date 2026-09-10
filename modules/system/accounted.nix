@@ -296,6 +296,36 @@ _: {
         '';
       };
 
+      # Containers read the rendered .env only at (re)start, and the render
+      # reads Clan secrets only when it runs: re-render and recreate the
+      # stack when the secrets actually change on disk (restartTriggers on
+      # /run/secrets paths are inert strings that never fire — see
+      # mosquitto.nix). migrate is a point-in-time oneshot, not re-run.
+      systemd.paths.accounted-env-rotation = {
+        description = "Recreate accounted stack when its secrets rotate";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = [supabaseSecrets accountedSecrets];
+          Unit = "accounted-env-rotation-restart.service";
+        };
+      };
+
+      systemd.services.accounted-env-rotation-restart = {
+        description = "Re-render accounted env and recreate stack after rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+          ExecStart = [
+            # render is oneshot: restart re-runs it (try-restart would no-op
+            # on a finished oneshot and leave the env stale); the stack is
+            # long-running, so try-restart converges it without failing when
+            # it is already down.
+            "${pkgs.systemd}/bin/systemctl restart accounted-env-render.service"
+            "${pkgs.systemd}/bin/systemctl try-restart accounted-stack.service"
+          ];
+        };
+      };
+
       my.endpoints.services.accounted = lib.mkIf cfg.endpoints.enable {
         upstream = {
           host = cfg.address;

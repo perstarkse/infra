@@ -520,6 +520,32 @@ _: {
 
         systemd.services.gatus.serviceConfig.EnvironmentFile = lib.mkAfter [envFile];
 
+        # The receiver reads env + TLS files only at startup (paths are baked
+        # into the python script), and gatus reads this same env file via the
+        # appended EnvironmentFile above — so a content rotation that changes
+        # the unit derivation not at all must restart both. restartTriggers
+        # on /run/secrets paths are inert strings; watch the files instead.
+        systemd.paths.heartbeat-rotation = {
+          description = "Restart heartbeat receiver (and gatus) on secret rotation";
+          wantedBy = ["multi-user.target"];
+          pathConfig = {
+            PathChanged = [envFile] ++ lib.optionals tlsEnabled [cfg.receiver.tls.certFile cfg.receiver.tls.keyFile];
+            Unit = "heartbeat-rotation-restart.service";
+          };
+        };
+
+        systemd.services.heartbeat-rotation-restart = {
+          description = "Restart heartbeat receiver after secret rotation";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+            ExecStart = "${pkgs.systemd}/bin/systemctl try-restart heartbeat-receiver.service";
+            # gatus consumes this env file too when co-located (token split);
+            # try-restart is a no-op where gatus is absent or stopped.
+            ExecStartPost = "${pkgs.systemd}/bin/systemctl try-restart gatus.service";
+          };
+        };
+
         systemd.services.heartbeat-receiver = {
           description = "Heartbeat receiver forwarding to Gatus deadman endpoint";
           wantedBy = ["multi-user.target"];

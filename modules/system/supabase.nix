@@ -346,6 +346,40 @@ _: {
         '';
       };
 
+      # Containers read the rendered .env only at (re)start, and the render
+      # reads Clan secrets only when it runs: re-render and recreate the
+      # stack when the secrets actually change on disk (restartTriggers on
+      # /run/secrets paths are inert strings that never fire — see
+      # mosquitto.nix).
+      systemd.paths.supabase-env-rotation = {
+        description = "Recreate supabase stack when its secrets rotate";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = [
+            secretsEnv
+            garageS3AccessKey
+            garageS3SecretKey
+          ];
+          Unit = "supabase-env-rotation-restart.service";
+        };
+      };
+
+      systemd.services.supabase-env-rotation-restart = {
+        description = "Re-render supabase env and recreate stack after rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+          ExecStart = [
+            # render is oneshot: restart re-runs it (try-restart would no-op
+            # on a finished oneshot and leave the env stale); the stack is
+            # long-running, so try-restart converges it without failing when
+            # it is already down.
+            "${pkgs.systemd}/bin/systemctl restart supabase-env-render.service"
+            "${pkgs.systemd}/bin/systemctl try-restart supabase-stack.service"
+          ];
+        };
+      };
+
       systemd.services.garage-provision-supabase = lib.mkIf (cfg.storage.provision && config.services.garage.enable) {
         description = "Provision Garage bucket + key for Supabase Storage";
         wantedBy = ["multi-user.target"];

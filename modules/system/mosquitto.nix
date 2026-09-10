@@ -113,7 +113,13 @@ _: {
           # Let a multi-file write batch settle: clan writes the three
           # hashes in quick succession, and one restart must see all of them.
           ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
-          ExecStart = "${pkgs.systemd}/bin/systemctl restart mosquitto.service";
+          # try-restart, not restart: converge a running broker, and no-op
+          # when it is stopped or mid-crash-loop. A hard `restart` fails the
+          # unit when the target cannot come up (e.g. crash-looping because a
+          # secret is still missing), which strands the rotation until the
+          # next file change; a stopped broker already reads fresh hashes on
+          # its next start anyway.
+          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart mosquitto.service";
         };
       };
     };
