@@ -27,6 +27,17 @@
       # my.heartbeat.push.caCertFile; the server cert carries SAN IP
       # 130.61.55.4 (sedna's WAN address). Regenerate + redeploy both
       # machines to rotate.
+      #
+      # clan runs this script with a FRESH EMPTY $out and requires every
+      # declared file in the output, so the script cannot preserve previous
+      # values — any execution mints a brand-new CA + cert + key. clan only
+      # executes it when a file is missing (or on explicit --regenerate),
+      # which means: ADDING a file to this generator rotates the whole PKI
+      # set (the 2026-09-08 air-exhaust shape). Keep this generator at
+      # exactly these three files; a fourth file belongs in its own
+      # generator. Deliberate rotation: delete ca.pem, server-cert.pem and
+      # server-key.pem from the generator output, re-run the generator, then
+      # redeploy io + sedna together.
       tmp=$(mktemp -d)
       trap 'rm -rf "$tmp"' EXIT
 

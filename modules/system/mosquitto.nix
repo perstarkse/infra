@@ -2,9 +2,15 @@ _: {
   config.flake.nixosModules.mosquitto = {
     config,
     lib,
+    pkgs,
     ...
   }: let
     cfg = config.my.mosquitto;
+    hashFiles = [
+      (config.my.secrets.getPath cfg.secretName "air-exhaust.hash")
+      (config.my.secrets.getPath cfg.secretName "hass.hash")
+      (config.my.secrets.getPath cfg.secretName "charon-ro.hash")
+    ];
   in {
     options.my.mosquitto = {
       enable = lib.mkEnableOption "Mosquitto MQTT broker";
@@ -84,17 +90,32 @@ _: {
       # hass.env into Home Assistant's mqtt: block. charon-ro.env is exposed
       # to user p on charon for the Noctalia widget.
       #
-      # Mosquitto loads the password/ACL files only at startup: a secret
-      # content change (clan vars re-deploy) must restart it or it keeps
-      # serving the pre-rotation hashes and refuses every client. The unit is
+      # Mosquitto loads the password files only at startup: a secret content
+      # change (clan vars re-deploy) must restart it or it keeps serving the
+      # pre-rotation hashes and refuses every client. The unit is
       # byte-identical across such deploys (same paths, same ACLs), so
-      # nothing else restarts it — hence the explicit restartTriggers on the
-      # hash files (declarative reload on secret rotation).
-      systemd.services.mosquitto.restartTriggers = [
-        (config.my.secrets.getPath cfg.secretName "air-exhaust.hash")
-        (config.my.secrets.getPath cfg.secretName "hass.hash")
-        (config.my.secrets.getPath cfg.secretName "charon-ro.hash")
-      ];
+      # restartTriggers on the hash paths are inert strings that never fire —
+      # hence the path watcher below, which restarts mosquitto whenever any
+      # hash file actually changes on disk.
+      systemd.paths.mosquitto-hash-rotation = {
+        description = "Restart mosquitto when its password hashes rotate";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = hashFiles;
+          Unit = "mosquitto-hash-rotation-restart.service";
+        };
+      };
+
+      systemd.services.mosquitto-hash-rotation-restart = {
+        description = "Restart mosquitto after password hash rotation";
+        serviceConfig = {
+          Type = "oneshot";
+          # Let a multi-file write batch settle: clan writes the three
+          # hashes in quick succession, and one restart must see all of them.
+          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+          ExecStart = "${pkgs.systemd}/bin/systemctl restart mosquitto.service";
+        };
+      };
     };
   };
 }

@@ -21,8 +21,12 @@
         neededFor = "users";
       };
     };
-    # Idempotent: each file is generated only when absent, so re-running this
-    # generator (e.g. while deploying an unrelated secret) never rotates the
+    # clan executes this script with a FRESH EMPTY $out and requires every
+    # declared file, so any execution regenerates all six files: never add
+    # a file here (or run --regenerate) unless rotating the fan/HA/widget
+    # credentials is the intent — the failure mode that broke every consumer
+    # repeatedly. clan runs it only when a file is missing (or on explicit
+    # --regenerate), so routine deploys leave existing values alone.
     # fan/HA credentials out from under the firmware (compiled-in) and HA
     # (config entry) — the failure mode that broke every consumer repeatedly.
     # Deliberate rotation: `clan vars generate <m> --generator
@@ -35,11 +39,10 @@
 
       # $1 = username, $2 = output base ("*.hash"). Writes "$2" (bcrypt hash
       # only) and "$(basename $2 .hash).env" (username= / password= cleartext
-      # for the firmware .env and HA) — but only when the hash is absent.
+      # for the firmware .env and HA). NOTE: $out always starts empty, so
+      # there is no "only when absent" fast path — every execution mints
+      # fresh credentials for all users.
       gen() {
-        if [ -f "$out/$2" ]; then
-          return
-        fi
         p="$(head -c 24 /dev/urandom | base64 -w0 | tr -d '/+=')"
         # mosquitto_passwd writes "user:<hash>"; strip the username.
         mosquitto_passwd -b -c "$out/.tmp-$2" "$1" "$p"

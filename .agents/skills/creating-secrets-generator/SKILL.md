@@ -21,7 +21,9 @@ Create generators at: `vars/generators/<secret-name>.nix`
     files = {
       "<filename>" = {
         mode = "0400";           # File permissions
-        neededFor = "users";     # Required for systemd services
+        # "services" (default): deployed to /run/secrets/vars/... for systemd units.
+        # "users": deployed to /run/secrets-for-users/vars/... for user-scope consumers.
+        neededFor = "services";
       };
     };
     

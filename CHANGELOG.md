@@ -63,6 +63,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **secrets rotation is honest now: mosquitto bounces on hash change, generator guards corrected** — `modules/system/mosquitto.nix`: the old `restartTriggers` on `/run/secrets/...` paths was inert (unit derivation never changes on content rotation, so nothing restarted the broker after a password change). Replaced with a `systemd.path` watcher that restarts mosquitto whenever a password hash actually changes on disk. `vars/generators/{heartbeat-tls,air-exhaust-mqtt,db-passwords}.nix`: removed `$out`-existence guards that could never fire (clan always executes generator scripts with a fresh empty `$out`) and replaced the false "idempotent" comments with the true rule — any execution regenerates all files, so never add a file to an occupied generator unless rotating its siblings is the intent. Standing policy agreed: rotation is manual and scoped (expiry — heartbeat server cert expires 11/2028 — compromise, rebuild); gap-fill generation stays automatic. SKILL.md `neededFor` guidance corrected (`services` vs `users` were swapped).
+
 - **kea reservation `exhaust-c6` held the wrong MAC** (`machines/io/configuration.nix`):
   `44:1b:f6:d6:27:30` @ 10.0.0.101 is a different, unidentified ESP32 —
   every OTA post and `OTA_HOST` hit it instead of the controller.
