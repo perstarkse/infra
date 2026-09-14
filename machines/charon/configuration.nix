@@ -116,6 +116,7 @@ in {
 
     home.packages = [
       pkgs.agent-browser
+      pkgs.gh
     ];
 
     my = {
