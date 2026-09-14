@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Sibling flake inputs now fetched over `git+ssh`** — `agent-microvm` and `digikey-mcp` moved from `git+file:///home/p/repos/*` to private GitHub mirrors, so the lockfile no longer bakes local dirty state into narHashes and fresh clones evaluate with only documented SSH access. Prerequisites table added to README.
+
 ### Fixed
 
 - **io degraded: stale `grafana` secret reader removed** (`machines/io/configuration.nix`) — the `allowReadAccess` entry granted the grafana `secret_key` to a `grafana` user that exists on no machine, so the generated `setfacl` unit failed with `Invalid argument` into `start-limit-hit` (io sat at `degraded` since Sep 13). No grafana runs anywhere, so the block was deleted outright.

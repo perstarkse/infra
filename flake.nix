@@ -103,12 +103,12 @@
     };
 
     agent-microvm = {
-      url = "git+file:///home/p/repos/agent-microvm";
+      url = "git+ssh://git@github.com/perstarkse/agent-microvm.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     digikey-mcp = {
-      url = "git+file:///home/p/repos/digikey-mcp";
+      url = "git+ssh://git@github.com/perstarkse/digikey-mcp.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

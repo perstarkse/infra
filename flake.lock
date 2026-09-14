@@ -33,11 +33,11 @@
         "rev": "65819fcb49b694bb5ed56dc6c7d28b5286109fed",
         "revCount": 3,
         "type": "git",
-        "url": "file:///home/p/repos/agent-microvm"
+        "url": "ssh://git@github.com/perstarkse/agent-microvm.git"
       },
       "original": {
         "type": "git",
-        "url": "file:///home/p/repos/agent-microvm"
+        "url": "ssh://git@github.com/perstarkse/agent-microvm.git"
       }
     },
     "agent-tooling": {
@@ -286,11 +286,11 @@
         "rev": "ed5d3f2970e87d085a71f23129340eddb78f3e6c",
         "revCount": 8,
         "type": "git",
-        "url": "file:///home/p/repos/digikey-mcp"
+        "url": "ssh://git@github.com/perstarkse/digikey-mcp.git"
       },
       "original": {
         "type": "git",
-        "url": "file:///home/p/repos/digikey-mcp"
+        "url": "ssh://git@github.com/perstarkse/digikey-mcp.git"
       }
     },
     "disko": {

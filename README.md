@@ -64,6 +64,23 @@ my.secrets.allowReadAccess = [
 ];
 ```
 
+## Prerequisites
+
+Evaluating this flake requires GitHub SSH access. The following private inputs are fetched over `git+ssh` — a fresh clone without an SSH key authorized on the `perstarkse` GitHub account fails at eval time:
+
+| Input | Repo |
+| --- | --- |
+| `private-infra` | `git@github.com:perstarkse/private-infra.git` |
+| `saas-minne` | `git@github.com:perstarkse/saas-minne.git` (with submodules) |
+| `nous` | `git@github.com:perstarkse/nous.git` |
+| `politikerstod` | `git@github.com:perstarkse/politikerstod.git` |
+| `wol-web-proxy` | `git@github.com:perstarkse/wol-web-proxy.git` |
+| `agent-tooling` | `git@github.com:perstarkse/agent-tooling.git` |
+| `agent-microvm` | `git@github.com:perstarkse/agent-microvm.git` |
+| `digikey-mcp` | `git@github.com:perstarkse/digikey-mcp.git` |
+
+No `git+file` (absolute local path) inputs remain — sibling repos arrive as versioned flakes, so the lockfile reproduces the running system.
+
 ## Machines
 
 - `machines/io`: Router (LAN bridge, DHCP, DNS, WireGuard, nginx)
