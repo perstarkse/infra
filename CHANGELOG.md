@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **io degraded: stale `grafana` secret reader removed** (`machines/io/configuration.nix`) — the `allowReadAccess` entry granted the grafana `secret_key` to a `grafana` user that exists on no machine, so the generated `setfacl` unit failed with `Invalid argument` into `start-limit-hit` (io sat at `degraded` since Sep 13). No grafana runs anywhere, so the block was deleted outright.
+
 ### Added
 
 - **charon: air-exhaust fan status at the left edge of the Noctalia bar** — new

@@ -274,10 +274,9 @@ in {
           readers = ["nginx"];
           path = config.my.secrets.getPath "webdav-htpasswd" "htpasswd";
         }
-        {
-          readers = ["grafana"];
-          path = config.my.secrets.getPath "grafana" "secret_key";
-        }
+        # No grafana reader: no grafana service/user exists on this box, and a
+        # stale entry here generates a setfacl unit that fails forever
+        # (io sat at degraded with start-limit-hit since Sep 13).
       ];
     };
 
