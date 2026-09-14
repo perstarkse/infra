@@ -9,11 +9,14 @@
 
     enabledInstances = lib.filterAttrs (_: i: i.enable) config.my.politikerstod-remote-worker.instances;
 
+    # Only auto-pull tunnels with activationPolicy == "up": a "manual"
+    # tunnel must never be started by the worker at boot (Wants= would
+    # otherwise defeat the manual policy and hijack the default route).
     wireguardTunnelUnits =
       if config.my.wireguard-tunnels.enable or false
       then
         lib.map (name: "wg-tunnel-${name}.service") (
-          lib.attrNames (lib.filterAttrs (_: t: t.enable) (config.my.wireguard-tunnels.tunnels or {}))
+          lib.attrNames (lib.filterAttrs (_: t: t.enable && (t.activationPolicy or "manual") == "up") (config.my.wireguard-tunnels.tunnels or {}))
         )
       else [];
 
