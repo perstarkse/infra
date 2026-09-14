@@ -609,6 +609,25 @@ in {
     }
   ];
 
+  # sda (/mnt/sdb) enters standby on its own (~42x this boot, 3-4s per wake)
+  # and on every suspend (STANDBY IMMEDIATE even times out after 5s). The
+  # swapfile (2+GB used, priority 10 above zram) lives there, so the first
+  # post-resume page faults stall with the display already shown — the
+  # few-seconds resume freeze. Disable the internal standby timer (-S 0) and
+  # APM spindown (-B 255); the resume hook re-applies it since the drive
+  # resets to defaults on power cycle.
+  # ponytail: drive standby off, not ALPM tuning; revisit if power draw matters.
+  systemd.services.sda-disable-standby = {
+    description = "Disable sda internal standby (swap lives on /mnt/sdb)";
+    wantedBy = ["multi-user.target"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.hdparm}/sbin/hdparm -S 0 -B 255 /dev/disk/by-id/ata-INTEL_SSDSC2KB038TZ_PHYI329101K03P8EGN";
+    };
+  };
+  powerManagement.resumeCommands = "${pkgs.hdparm}/sbin/hdparm -S 0 -B 255 /dev/disk/by-id/ata-INTEL_SSDSC2KB038TZ_PHYI329101K03P8EGN || true";
+
   boot.loader.systemd-boot.configurationLimit = 5;
 
   services.journald.extraConfig = ''

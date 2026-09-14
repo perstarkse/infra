@@ -12,6 +12,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **makemake restic: `nous_prod.dump` / `paperless.dump` are actually snapshotted again** — since Aug 6 both dumps were written into the restic source dir, then excluded from the snapshot, then deleted: the DBs had zero backup coverage (found via the paperless users/extinction investigation; document files were always covered). Dropped both `exclude` lines (`machines/makemake/configuration.nix`). The old rationale was wrong on both counts: prepare runs to completion before restic scans in the same unit (no mid-write race), and restic chunk-dedups an unchanged dump to ~0 bytes per snapshot. Pre–Aug-06 snapshots may still hold older dumps (check `restic find paperless.dump` before they age out of retention).
 
+- **charon: few-seconds freeze after resume with display already shown** —
+  sda (`INTEL SSDSC2KB038TZ`, backing `/mnt/sdb`) enters standby on its own
+  (~42x this boot, 3–4s per wake) and on every suspend (`STANDBY IMMEDIATE`
+  even times out after 5s). The swapfile (2+GB used, priority 10 above zram)
+  lives there, so the first post-resume page faults stall while the desktop
+  is already visible. `machines/charon/configuration.nix` now disables the
+  drive's internal standby timer (`hdparm -S 0 -B 255` on the stable
+  `/dev/disk/by-id` path) via a boot oneshot plus `powerManagement.resumeCommands`
+  (the drive resets to defaults on power cycle). Monitor path untouched —
+  `monitor-power-resume` already runs `--no-block` and finishes in ~3s in
+  parallel. Deploy charon, then confirm no new `Entering standby` for sda in
+  `journalctl -k` across a suspend cycle.
+
 ### Added
 
 - **charon: air-exhaust fan status at the left edge of the Noctalia bar** — new
