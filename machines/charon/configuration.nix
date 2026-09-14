@@ -670,7 +670,19 @@ in {
     localsend
     bluetuith
     discord
-    unstable.prismlauncher
+    # PrismLauncher is Qt6: the global qt5ct platformtheme + kvantum style
+    # override segfault it on startup (each var alone crashes, even --version).
+    # Strip both; PrismLauncher falls back to Fusion + its builtin themes.
+    (symlinkJoin {
+      name = "prismlauncher-no-qt5ct";
+      paths = [ unstable.prismlauncher ];
+      buildInputs = [ makeWrapper ];
+      postBuild = ''
+        wrapProgram $out/bin/prismlauncher \
+          --unset QT_STYLE_OVERRIDE \
+          --unset QT_QPA_PLATFORMTHEME
+      '';
+    })
     virt-manager
     gamescope
     bun
