@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **io degraded: stale `grafana` secret reader removed** (`machines/io/configuration.nix`) — the `allowReadAccess` entry granted the grafana `secret_key` to a `grafana` user that exists on no machine, so the generated `setfacl` unit failed with `Invalid argument` into `start-limit-hit` (io sat at `degraded` since Sep 13). No grafana runs anywhere, so the block was deleted outright.
 
+- **makemake restic: `nous_prod.dump` / `paperless.dump` are actually snapshotted again** — since Aug 6 both dumps were written into the restic source dir, then excluded from the snapshot, then deleted: the DBs had zero backup coverage (found via the paperless users/extinction investigation; document files were always covered). Dropped both `exclude` lines (`machines/makemake/configuration.nix`). The old rationale was wrong on both counts: prepare runs to completion before restic scans in the same unit (no mid-write race), and restic chunk-dedups an unchanged dump to ~0 bytes per snapshot. Pre–Aug-06 snapshots may still hold older dumps (check `restic find paperless.dump` before they age out of retention).
+
 ### Added
 
 - **charon: air-exhaust fan status at the left edge of the Noctalia bar** — new

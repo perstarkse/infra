@@ -182,11 +182,10 @@
       nous =
         (mkB2 config.my.nous.dataDir)
         // {
-          # The pg_dump artifact lives inside the restic data dir; exclude it so
-          # each snapshot doesn't embed a redundant copy of the dump (and can
-          # never capture it mid-write). The dump itself is still created for
-          # the backup and removed by backupCleanupCommand.
-          exclude = ["${config.my.nous.dataDir}/nous_prod.dump"];
+          # The pg_dump artifact lives inside the restic data dir and MUST be
+          # snapshotted: it is the only DB coverage this job has. Prepare runs
+          # to completion before restic scans (same unit, no mid-write race),
+          # and restic dedups an unchanged dump to ~0 bytes per snapshot.
           backupPrepareCommand = ''
             ${pkgs.sudo}/bin/sudo -u nous \
               ${pkgs.postgresql}/bin/pg_dump -Fc -f ${config.my.nous.dataDir}/nous_prod.dump nous_prod
@@ -221,10 +220,10 @@
           };
         };
         restore.backend = "garage";
-        # The pg_dump artifact lives inside the restic data dir; exclude it so
-        # each snapshot doesn't embed a redundant copy of the dump (and can
-        # never capture it mid-write).
-        exclude = ["${config.my.paperless.dataDir}/paperless.dump"];
+        # The pg_dump artifact lives inside the restic data dir and MUST be
+        # snapshotted: it is the only DB coverage this job has. Prepare runs
+        # to completion before restic scans (same unit, no mid-write race),
+        # and restic dedups an unchanged dump to ~0 bytes per snapshot.
         backupPrepareCommand = ''
           PGPASSWORD=$(cat ${config.my.secrets.getPath "db-passwords" "paperless"}) \
           ${pkgs.postgresql}/bin/pg_dump \
