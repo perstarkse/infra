@@ -100,7 +100,10 @@
           withExtraConfigDefault = ''
             client_max_body_size 55M;
             # The app serves /app/* assets from /assets/app/* (the old io-side
-            # /app/ location rewrite, now declared with the service).
+            # /app/ location rewrite, now declared with the service). The
+            # landing page links bare /app, so normalise it to /app/ before the
+            # asset rewrite (which requires the trailing slash).
+            rewrite ^/app$ /app/ permanent;
             rewrite ^/app/(.*)$ /assets/app/$1 break;
           '';
         }

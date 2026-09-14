@@ -25,6 +25,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   parallel. Deploy charon, then confirm no new `Entering standby` for sda in
   `journalctl -k` across a suspend cycle.
 
+- **`nous.fyi/app` returned 404** (`modules/system/nous.nix`): the router-side
+  rewrite that maps the SPA onto Loco's `/assets/app/*` mount only matched
+  `/app/` with the trailing slash, but the landing page CTA links bare `/app`,
+  so nginx proxied it through untouched and `loco.rs` answered 404. Added
+  `rewrite ^/app$ /app/ permanent;` ahead of the asset rewrite. Verified with
+  the store nginx against the generated location block (`/app` → 301 `/app/`,
+  `/app/` → 200, `/app/assets/*` → 200); io and makemake toplevels still eval.
+
 ### Added
 
 - **charon: air-exhaust fan status at the left edge of the Noctalia bar** — new
