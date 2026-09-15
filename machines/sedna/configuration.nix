@@ -67,6 +67,10 @@ in {
           "cloudflare"
         ];
       };
+      # Fail closed when an expected generator is absent after merge
+      # (tag typo, missing includeTags) instead of deploying a machine
+      # whose services reference secrets that exist nowhere.
+      requireGenerators = ["api-key-cloudflare-dns" "gatus" "heartbeat" "heartbeat-tls"];
 
       allowReadAccess = [
         {

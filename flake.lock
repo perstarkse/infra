@@ -2191,11 +2191,11 @@
         "treefmt-nix": "treefmt-nix_9"
       },
       "locked": {
-        "lastModified": 1783331540,
-        "narHash": "sha256-MHnemQjrHBn6AzvR4PM1TLirxdq6V6744HbnCw/Xe9E=",
+        "lastModified": 1789453279,
+        "narHash": "sha256-fJx1N1Apn7GNvcTN1Pak0izIQ5CbNqf2WvKhCPWFMmY=",
         "owner": "perstarkse",
         "repo": "clan-vars-helper",
-        "rev": "44e4a9ded7459d29899c75a8cb9a1e49a9d75bd3",
+        "rev": "6a6e21018c25e9bd475a5f7eccca56105f6397fe",
         "type": "github"
       },
       "original": {

@@ -46,6 +46,12 @@
       inherit pkgs;
       inherit (inputs.self) nixosModules;
     };
+    helperRealChecks = import ../../tests/helper-real.nix {
+      inherit lib;
+      inherit pkgs;
+      inherit (inputs.self) nixosModules;
+      inherit inputs;
+    };
     garageChecks = import ../../tests/garage.nix {
       inherit lib;
       inherit pkgs;
@@ -295,6 +301,7 @@
       heartbeat-checks = mkCheckBundle "heartbeat-checks" heartbeatChecks;
       secrets-rotation-checks = mkCheckBundle "secrets-rotation-checks" rotationBounceChecks;
       rotation-wiring-checks = mkCheckBundle "rotation-wiring-checks" rotationWiringChecks;
+      helper-real-checks = mkCheckBundle "helper-real-checks" helperRealChecks;
     };
 
     machineUpdatePlanResolverPy = pkgs.writeText "machine-update-plan-resolver.py" ''
@@ -1010,6 +1017,7 @@
       // accountedSystemChecks
       // heartbeatChecks
       // rotationBounceChecks
-      // rotationWiringChecks;
+      // rotationWiringChecks
+      // helperRealChecks;
   };
 }

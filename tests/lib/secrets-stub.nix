@@ -16,6 +16,65 @@
         type = lib.types.anything;
         default = getPathDefault;
       };
+      # New helper API (strict getPath era): stubbed as pass-throughs so
+      # modules referencing them eval under test. requireGenerators is
+      # accepted and ignored — the stub provides no generators to check.
+      requireGenerators = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+      };
+      mkRestartOnRotation = lib.mkOption {
+        type = lib.types.anything;
+        default = {
+          service,
+          secretName,
+          file,
+        }: let
+          path = getPathDefault secretName file;
+        in {
+          paths."${service}-env-rotation" = {
+            description = "Restart ${service} when its secret file rotates (stub)";
+            wantedBy = ["multi-user.target"];
+            pathConfig = {
+              PathChanged = [path];
+              Unit = "${service}-env-rotation-restart.service";
+            };
+          };
+          services."${service}-env-rotation-restart" = {
+            description = "Restart ${service} after secret rotation (stub)";
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = "systemctl restart ${service}.service";
+            };
+          };
+        };
+      };
+      mkTryRestartOnRotation = lib.mkOption {
+        type = lib.types.anything;
+        default = {
+          service,
+          secretName,
+          file,
+        }: let
+          path = getPathDefault secretName file;
+        in {
+          paths."${service}-env-rotation" = {
+            description = "Re-apply ${service} when its secret file rotates (stub)";
+            wantedBy = ["multi-user.target"];
+            pathConfig = {
+              PathChanged = [path];
+              Unit = "${service}-env-rotation-restart.service";
+            };
+          };
+          services."${service}-env-rotation-restart" = {
+            description = "Try-restart ${service} after secret rotation (stub)";
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = "systemctl try-restart ${service}.service";
+            };
+          };
+        };
+      };
       mkMachineSecret = lib.mkOption {
         type = lib.types.anything;
         default = mkMachineSecretDefault;

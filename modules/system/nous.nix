@@ -204,22 +204,18 @@
       # Nous reads the env file only at startup: restart it when the file
       # actually changes on disk (restartTriggers on /run/secrets paths are
       # inert strings that never fire — see mosquitto.nix).
-      systemd.paths.nous-env-rotation = {
-        description = "Restart nous when its env file rotates";
-        wantedBy = ["multi-user.target"];
-        pathConfig = {
-          PathChanged = [(config.my.secrets.getPath "nous" "env")];
-          Unit = "nous-env-rotation-restart.service";
-        };
-      };
-
-      systemd.services.nous-env-rotation-restart = {
-        description = "Restart nous after env rotation";
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart nous.service";
-        };
-      };
+      systemd.paths.nous-env-rotation =
+        (config.my.secrets.mkRestartOnRotation {
+          service = "nous";
+          secretName = "nous";
+          file = "env";
+        }).paths.nous-env-rotation;
+      systemd.services.nous-env-rotation-restart =
+        (config.my.secrets.mkRestartOnRotation {
+          service = "nous";
+          secretName = "nous";
+          file = "env";
+        }).services.nous-env-rotation-restart;
 
       # Create nous user and group
       users.users.nous = {

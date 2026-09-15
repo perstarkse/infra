@@ -95,22 +95,18 @@
       # SurrealDB reads the credentials file only at startup: restart it when
       # the file actually changes on disk (restartTriggers on /run/secrets
       # paths are inert strings that never fire — see mosquitto.nix).
-      systemd.paths.surrealdb-credentials-rotation = {
-        description = "Restart surrealdb when its credentials rotate";
-        wantedBy = ["multi-user.target"];
-        pathConfig = {
-          PathChanged = [(config.my.secrets.getPath "surrealdb-credentials" "credentials")];
-          Unit = "surrealdb-credentials-rotation-restart.service";
-        };
-      };
-
-      systemd.services.surrealdb-credentials-rotation-restart = {
-        description = "Restart surrealdb after credentials rotation";
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart surrealdb.service";
-        };
-      };
+      systemd.paths.surrealdb-env-rotation =
+        (config.my.secrets.mkRestartOnRotation {
+          service = "surrealdb";
+          secretName = "surrealdb-credentials";
+          file = "credentials";
+        }).paths.surrealdb-env-rotation;
+      systemd.services.surrealdb-env-rotation-restart =
+        (config.my.secrets.mkRestartOnRotation {
+          service = "surrealdb";
+          secretName = "surrealdb-credentials";
+          file = "credentials";
+        }).services.surrealdb-env-rotation-restart;
 
       # Create surrealdb user and group
       users.users.surrealdb = {

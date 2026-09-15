@@ -337,6 +337,11 @@ in {
         enable = true;
         includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt"];
       };
+      # Fail closed when an expected generator is absent after merge
+      # (tag typo, missing includeTags). Static names only: dynamic
+      # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
+      # covered by lib/secrets-discovery-check.py instead.
+      requireGenerators = ["accounted-mcp-key" "attic-cache" "context7" "db-passwords" "digikey" "garage-s3" "journal-upload" "ntfy" "politikerstod-lekeberg" "politikerstod-orebro" "wake-proxy-keep-awake-ssh" "z-ai-env"];
 
       allowReadAccess = [
         {
@@ -675,8 +680,8 @@ in {
     # Strip both; PrismLauncher falls back to Fusion + its builtin themes.
     (symlinkJoin {
       name = "prismlauncher-no-qt5ct";
-      paths = [ unstable.prismlauncher ];
-      buildInputs = [ makeWrapper ];
+      paths = [unstable.prismlauncher];
+      buildInputs = [makeWrapper];
       postBuild = ''
         wrapProgram $out/bin/prismlauncher \
           --unset QT_STYLE_OVERRIDE \

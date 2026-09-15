@@ -83,22 +83,18 @@
       # Vaultwarden reads the env file only at startup: restart it when the
       # file actually changes on disk (restartTriggers on /run/secrets paths
       # are inert strings that never fire — see mosquitto.nix).
-      systemd.paths.vaultwarden-env-rotation = {
-        description = "Restart vaultwarden when its env file rotates";
-        wantedBy = ["multi-user.target"];
-        pathConfig = {
-          PathChanged = [(config.my.secrets.getPath "vaultwarden" "env")];
-          Unit = "vaultwarden-env-rotation-restart.service";
-        };
-      };
-
-      systemd.services.vaultwarden-env-rotation-restart = {
-        description = "Restart vaultwarden after env rotation";
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart vaultwarden.service";
-        };
-      };
+      systemd.paths.vaultwarden-env-rotation =
+        (config.my.secrets.mkRestartOnRotation {
+          service = "vaultwarden";
+          secretName = "vaultwarden";
+          file = "env";
+        }).paths.vaultwarden-env-rotation;
+      systemd.services.vaultwarden-env-rotation-restart =
+        (config.my.secrets.mkRestartOnRotation {
+          service = "vaultwarden";
+          secretName = "vaultwarden";
+          file = "env";
+        }).services.vaultwarden-env-rotation-restart;
 
       my.endpoints.services.vaultwarden = lib.mkIf cfg.endpoints.enable {
         upstream = {

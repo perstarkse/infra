@@ -114,6 +114,11 @@
         enable = true;
         includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords"];
       };
+      # Fail closed when an expected generator is absent after merge
+      # (tag typo, missing includeTags). Static names only: dynamic
+      # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
+      # covered by lib/secrets-discovery-check.py instead.
+      requireGenerators = ["accounted" "attic-cache" "db-passwords" "garage" "garage-s3" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
 
       allowReadAccess = [
         {

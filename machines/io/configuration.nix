@@ -264,6 +264,11 @@ in {
         enable = true;
         includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload" "frigate" "b2" "air-exhaust-mqtt" "grafana"];
       };
+      # Fail closed when an expected generator is absent after merge
+      # (tag typo, missing includeTags). Static names only: dynamic
+      # consumers (wireguard-tunnels-$name, wireguard-peer-$name) are
+      # covered by lib/secrets-discovery-check.py instead.
+      requireGenerators = ["air-exhaust-mqtt" "api-key-cloudflare-dns" "attic-cache" "ddclient" "frigate" "garage" "heartbeat" "heartbeat-tls" "ntfy" "wake-proxy" "wake-proxy-keep-awake-ssh" "webdav-htpasswd"];
 
       allowReadAccess = [
         {

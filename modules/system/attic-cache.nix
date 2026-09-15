@@ -349,22 +349,21 @@
         # actually changes on disk (restartTriggers on /run/secrets paths are
         # inert strings that never fire — see mosquitto.nix). Client key files
         # are read per invocation by configure scripts, so they need no wiring.
-        systemd.paths.atticd-env-rotation = {
-          description = "Restart atticd when its server env rotates";
-          wantedBy = ["multi-user.target"];
-          pathConfig = {
-            PathChanged = [serverEnvFile];
-            Unit = "atticd-env-rotation-restart.service";
-          };
-        };
-
-        systemd.services.atticd-env-rotation-restart = {
-          description = "Restart atticd after server env rotation";
-          serviceConfig = {
-            Type = "oneshot";
-            ExecStart = "${pkgs.systemd}/bin/systemctl try-restart atticd.service";
-          };
-        };
+        # NOTE: secretName is configurable, but the watcher hardcodes the
+        # default generator layout (secretName/server.env); a custom
+        # secretName with a different file name needs a hand-rolled watcher.
+        systemd.paths =
+          (config.my.secrets.mkRestartOnRotation {
+            service = "atticd";
+            inherit secretName;
+            file = "server.env";
+          }).paths;
+        systemd.services.atticd-env-rotation-restart =
+          (config.my.secrets.mkRestartOnRotation {
+            service = "atticd";
+            inherit secretName;
+            file = "server.env";
+          }).services.atticd-env-rotation-restart;
 
         systemd.services.atticd-prepare = {
           description = "Prepare Attic server state";
