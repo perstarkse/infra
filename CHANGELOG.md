@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **charon: default pi model → `meta/muse-spark-1.3-contributor` (high thinking)** — `machines/charon/configuration.nix` sets `defaultModel` plus all `subagentOverrides` models (scout/context-builder/planner/researcher/reviewer/delegate) to the Muse Spark 1.3 contributor model on the `commandcode` provider. The module default `defaultThinkingLevel` is already `high`, so no thinking override was needed. `defaultProvider` stays `commandcode` (unchanged).
+
 - **Sibling flake inputs now fetched over `git+ssh`** — `agent-microvm` and `digikey-mcp` moved from `git+file:///home/p/repos/*` to private GitHub mirrors, so the lockfile no longer bakes local dirty state into narHashes and fresh clones evaluate with only documented SSH access. Prerequisites table added to README.
 
 ### Fixed

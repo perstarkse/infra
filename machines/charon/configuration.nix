@@ -205,11 +205,12 @@ in {
           };
           shellAlias = "PI_FFF_MODE=override command pi";
           defaultProvider = "commandcode";
-          defaultModel = "MiniMaxAI/MiniMax-M3";
+          defaultModel = "meta/muse-spark-1.3-contributor";
           extraPackages = [];
           models = {};
           subagentOverrides = lib.genAttrs ["scout" "context-builder" "planner" "researcher" "reviewer" "delegate"] (_: {
-            model = "commandcode/MiniMaxAI/MiniMax-M3";
+            model = "commandcode/meta/muse-spark-1.3-contributor";
+            thinking = "high";
             fallbackModels = [];
             defaultContext = "fresh";
             systemPromptMode = "append";
