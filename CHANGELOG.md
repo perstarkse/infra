@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Off-LAN alert relay + backup deadmen + boot barrier (next-targets #1,2,4,5)** — joint pi+agy implementation, see `.agent/reviews/next-targets.md`:
+  - sedna runs `my.ntfy` behind `ntfy.stark.pub` (direct-A 130.61.55.4, DNS-only; explicit nginx vhost reusing the `*.stark.pub` DNS-01 wildcard; fail2ban `ntfy` jail on `ntfy-sh.service`); ntfy generator gains a gated `phone-token` (`phone-subscriber:ro`, anonymous read stays closed) for the phone with no VPN.
+  - one shared `flake/lib/alert-fanout.nix` publisher (LAN 3s → WAN 5s, warn-only) replaces the three drifted curl blocks; `fallbackUrl`/`fallbackServerUrl` added on backupFailureNtfy, storage-alerts, heartbeat failureNtfy.
+  - backup coverage: `accounted` (file-level), `politikerstod-lekeberg` (`pg_dump` in prepare, mirroring nous), `unifi` on io (`/var/lib/unifi-os`, live-mongo caveat); restic timers gain `Persistent=true`.
+  - freshness deadman: restic units ping sedna's heartbeat receiver (`POST /heartbeat?job=<name>`, same WAN bearer, IP-literal, CA-pinned, warn-only `ExecStartPost`); receiver routes `?job=` to Gatus `backups_backup-<job>` (36h, email) without touching the failover timestamp; endpoint list is the `flake.lib.backupJobs` constant (no cross-machine eval); makemake + io provision `heartbeat`/`heartbeat-tls` secrets, workstations auto-opt-out.
+  - `garage-ready.service` barrier (30s `garage status` probe) gates provisioners/bootstrap/FUSE mounts; `replicationMode` accepts `"none"`; apps stay on `Restart=` backoff.
+  - sedna eval-decoupled via `flake.lib.publicDomains` (proven: sedna evals with io's config deliberately broken); `.agent/project.json` gains a `mid` tier; `docs/drill-log.md` template added.
+  - DNS to create: `ntfy.stark.pub → 130.61.55.4` (DNS-only, unproxied). Phone onboarding: ntfy app → `https://ntfy.stark.pub`, user `phone-subscriber` + phone-password (`clan vars get sedna ntfy/phone-password`; the stock iOS app has username/password login only, no token field — phone-token stays the Bearer credential for API clients), subscribe storage-alerts/backup-alerts/indicator-alerts/heartbeat, verify on cellular.
+
 ### Changed
 
 - **charon: default pi model → `meta/muse-spark-1.3-contributor` (high thinking)** — `machines/charon/configuration.nix` sets `defaultModel` plus all `subagentOverrides` models (scout/context-builder/planner/researcher/reviewer/delegate) to the Muse Spark 1.3 contributor model on the `commandcode` provider. The module default `defaultThinkingLevel` is already `high`, so no thinking override was needed. `defaultProvider` stays `commandcode` (unchanged).

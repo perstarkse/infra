@@ -372,9 +372,6 @@
                     default = null;
                     description = "Router-local DNS-01 ACME override for imported vhosts.";
                   };
-                  rateLimit =
-                    mkOption {
-                    };
                 };
               });
               default = {};
