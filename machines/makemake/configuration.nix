@@ -112,13 +112,13 @@
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords"];
+        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted" "attic-cache" "db-passwords" "garage" "garage-s3" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
+      requireGenerators = ["accounted" "attic-cache" "db-passwords" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
 
       allowReadAccess = [
         {
@@ -177,6 +177,7 @@
         };
       };
     in {
+      accounted = mkB2 config.my.accounted.dataDir;
       minne-saas = mkB2 config.my.minne-saas.dataDir;
       vaultwarden = mkB2 config.my.vaultwarden.backupDir;
 
@@ -238,6 +239,28 @@
           rm -f ${config.my.paperless.dataDir}/paperless.dump
         '';
       };
+
+      politikerstod-lekeberg =
+        (mkB2 config.my.politikerstod.instances.lekeberg.dataDir)
+        // {
+          # The pg_dump artifact lives inside the restic data dir and MUST be
+          # snapshotted: it is the only DB coverage this job has. Prepare runs
+          # to completion before restic scans (same unit, no mid-write race),
+          # and restic dedups an unchanged dump to ~0 bytes per snapshot.
+          backupPrepareCommand = ''
+            PGPASSWORD=$(cat ${config.my.secrets.getPath "db-passwords" "politikerstod"}) \
+              ${pkgs.postgresql}/bin/pg_dump \
+              -h 192.168.100.12 -U politikerstod -Fc \
+              -f ${config.my.politikerstod.instances.lekeberg.dataDir}/politikerstod.dump \
+              politikerstod_prod
+          '';
+          backupCleanupCommand = ''
+            rm -f ${config.my.politikerstod.instances.lekeberg.dataDir}/politikerstod.dump
+          '';
+          exclude = [
+            "${config.my.politikerstod.instances.lekeberg.dataDir}/fastembed_cache"
+          ];
+        };
     };
 
     vaultwarden = {

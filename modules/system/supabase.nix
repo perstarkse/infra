@@ -383,9 +383,9 @@ _: {
       systemd.services.garage-provision-supabase = lib.mkIf (cfg.storage.provision && config.services.garage.enable) {
         description = "Provision Garage bucket + key for Supabase Storage";
         wantedBy = ["multi-user.target"];
-        after = ["garage.service" "supabase-env-render.service"];
+        after = ["garage-ready.service" "supabase-env-render.service"];
         before = ["supabase-stack.service"];
-        requires = ["garage.service"];
+        wants = ["garage-ready.service"];
         path = [pkgs.garage];
         environment = {
           GARAGE_RPC_SECRET_FILE = config.my.secrets.getPath "garage" "rpc_secret";

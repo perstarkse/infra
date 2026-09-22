@@ -361,7 +361,8 @@
               lib.nameValuePair "garage-provision-${name}" {
                 description = "Provision S3 bucket + key for ${name}";
                 wantedBy = ["multi-user.target"];
-                after = ["garage.service"];
+                after = ["garage-ready.service"];
+                wants = ["garage-ready.service"];
                 before = ["politikerstod-${name}.service"];
                 requiredBy = ["politikerstod-${name}.service"];
                 serviceConfig = {

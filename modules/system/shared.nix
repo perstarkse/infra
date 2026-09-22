@@ -84,6 +84,11 @@
 
     services.avahi.enable = true;
     services.fstrim.enable = true;
+    # Fleet-wide DNS-01 default: io's Blocky/Unbound intercepts port 53 and
+    # returns NODATA for _acme-challenge lookups, so lego must ask public
+    # resolvers directly. Merges with per-cert flags (e.g. mail.stark.pub
+    # propagation-wait) via listOf concatenation.
+    security.acme.defaults.extraLegoFlags = ["--dns.resolvers=1.1.1.1:53,1.0.0.1:53"];
     users = {
       mutableUsers = false;
       defaultUserShell = pkgs.fish;
