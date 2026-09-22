@@ -4,13 +4,15 @@
   lib,
   ...
 }: let
-  # Public-domain registry is derived on io (my.publicDomains is a projection
-  # of the endpoints layer — see modules/system/options.nix), so there is no
-  # mirror to drift. Failover and gatus consume explicit subsets of it; the
-  # assertions at the bottom keep those subsets in sync with the registry so a
-  # forgotten domain fails the build instead of silently skipping
-  # failover/gatus coverage.
-  publicDomains = ctx.flake.nixosConfigurations.io.config.my.publicDomains;
+  # Public-domain registry is mirrored in flake.lib.publicDomains (pure
+  # constant, no cross-machine eval — arch #6). The derived projection here
+  # MUST equal it: io's registry-equality lint fails the build on drift, and
+  # sedna's subset assertions fail if a failover/gatus domain leaves the
+  # registry. Failover and gatus consume explicit subsets; a forgotten domain
+  # fails the build instead of silently skipping failover/gatus coverage.
+  # NOTE: when adding a public domain, update BOTH this derivation chain
+  # (endpoints vhost or my.publicDnsRecords) AND flake.lib.publicDomains.
+  publicDomains = ctx.flake.lib.publicDomains;
   # Domains that should repoint to sedna's maintenance page during an io outage.
   failoverDomains = [
     "minne.stark.pub"
@@ -42,6 +44,7 @@ in {
       remote-monitoring
       sedna-failover
       backup-mx
+      ntfy
     ])
     ++ (with ctx.inputs.varsHelper.nixosModules; [default]);
 
@@ -65,12 +68,13 @@ in {
           "gatus"
           "heartbeat"
           "cloudflare"
+          "ntfy"
         ];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags) instead of deploying a machine
       # whose services reference secrets that exist nowhere.
-      requireGenerators = ["api-key-cloudflare-dns" "gatus" "heartbeat" "heartbeat-tls"];
+      requireGenerators = ["api-key-cloudflare-dns" "gatus" "heartbeat" "heartbeat-tls" "ntfy"];
 
       allowReadAccess = [
         {
@@ -263,6 +267,36 @@ in {
       deadmanAlert.description = "io heartbeat missing";
       # /var/lib/heartbeat/ via StateDirectory (outside PrivateTmp namespace)
       heartbeatTimestampFile = "/var/lib/heartbeat/last-heartbeat";
+      # Freshness deadmen for every server backup job (single source:
+      # flake.lib.backupJobs — no cross-machine eval, arch #6).
+      backupJobs = ctx.flake.lib.backupJobs;
+    };
+
+    # Off-LAN alert relay (direct-A ntfy.stark.pub → 130.61.55.4, DNS-only).
+    # my.ntfy.endpoints is internal-only, so no endpoint import applies here;
+    # TLS reuses the *.stark.pub DNS-01 wildcard from sedna-failover.
+    ntfy = {
+      enable = true;
+      address = "127.0.0.1";
+      port = 2586;
+      baseUrl = "https://ntfy.stark.pub";
+      endpoints.enable = false;
+    };
+  };
+
+  services.nginx.virtualHosts."ntfy.stark.pub" = {
+    useACMEHost = "stark.pub";
+    forceSSL = true;
+    locations."/" = {
+      proxyPass = "http://127.0.0.1:2586";
+      proxyWebsockets = true;
+      extraConfig = ''
+        client_max_body_size 0;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+      '';
     };
   };
 
@@ -288,7 +322,48 @@ in {
       port = 22;
       openFirewall = true;
     };
+
+    # Direct-A publish endpoint (ntfy.stark.pub, no Cloudflare shield), so
+    # auth-failure scanning gets a jail on the ntfy journal (makemake runs
+    # the same stock-filter pattern for postfix/dovecot).
+    fail2ban = {
+      enable = true;
+      maxretry = 5;
+      bantime = "1h";
+      ignoreIP = [
+        "127.0.0.0/8"
+        "::1"
+      ];
+      jails = {
+        ntfy = {
+          settings = {
+            enabled = true;
+            filter = "ntfy";
+            backend = "systemd";
+            journalmatch = "_SYSTEMD_UNIT=ntfy-sh.service";
+            maxretry = 5;
+            findtime = "10m";
+            bantime = "1h";
+          };
+        };
+      };
+    };
   };
+
+  # NOTE: exactly one <HOST> per failregex line. fail2ban expands <HOST> to
+  # named ip4/ip6/dns groups, so two <HOST> on one line fails to compile and
+  # takes the whole fail2ban server (incl. the sshd jail) down with exit 255
+  # — seen 2026-09-21 on first deploy. Separate lines are ORed in their own
+  # group namespace and are safe. Shapes are generic on purpose: ntfy-sh has
+  # emitted no auth-failure line to the journal yet, so tighten to its exact
+  # log format once the first 401/403 is observed (fail2ban-regex to verify).
+  environment.etc."fail2ban/filter.d/ntfy.local".text = ''
+    [Definition]
+    failregex = ^<HOST> - \S+ \[[^\]]+\] "(?:GET|POST|PUT|DELETE) [^"]*" (?:401|403)\b
+                ^\S+ .* ip=<HOST> .* (?:401|403|unauthorized|access denied)\b
+                ^\S+ .* client:\s*<HOST> .* (?:401|403)\b
+    ignoreregex =
+  '';
 
   networking.firewall.allowedTCPPorts = [
     2222
