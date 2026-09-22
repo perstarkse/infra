@@ -152,6 +152,18 @@ in {
       };
     };
 
+    # Live MongoDB crash-consistency caveat: unifi-os is backed up live;
+    # MongoDB recovers via WiredTiger journal replay on restore.
+    backups.unifi = {
+      enable = true;
+      path = "/var/lib/unifi-os";
+      frequency = "daily";
+      backend = {
+        type = "b2";
+        lifecycleKeepPriorVersionsDays = 30;
+      };
+    };
+
     atuin = {
       enable = true;
       syncAddress = "http://10.0.0.10:8888";
@@ -262,7 +274,7 @@ in {
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "ntfy" "attic-cache" "journal-upload" "frigate" "b2" "air-exhaust-mqtt" "grafana"];
+        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "heartbeat-tls" "ntfy" "attic-cache" "journal-upload" "frigate" "b2" "air-exhaust-mqtt" "grafana"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
@@ -566,10 +578,12 @@ in {
   # SystemMaxUse configured, so the journal grew to 4 GiB unbounded.
   services.journald.extraConfig = "SystemMaxUse=512M\nSystemMaxFileSize=64M\n";
 
-  # Wildcard *.lan.stark.pub ACME renewal: the router's own resolver
-  # (blocky→unbound, lan.stark.pub is a static local zone) answers NODATA for
-  # _acme-challenge.lan.stark.pub, so lego's DNS-01 propagation check would
-  # fail. Query public resolvers for the challenge TXT record instead.
+  # Wildcard *.lan.stark.pub ACME renewal: covered by the fleet-wide
+  # security.acme.defaults.extraLegoFlags in modules/system/shared.nix
+  # (public resolvers for the _acme-challenge TXT). Kept here as a redundant
+  # belt-and-braces pin: if the shared default ever changes, this cert must
+  # keep public resolvers or its renewal fails against the router's own
+  # NODATA-answering local zone.
   security.acme.certs."lan.stark.pub".extraLegoFlags = ["--dns.resolvers=1.1.1.1:53,1.0.0.1:53"];
 
   # Escape hatch: raw services.nginx.virtualHosts writes must not introduce

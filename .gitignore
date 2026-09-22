@@ -9,3 +9,7 @@ nohup.out
 .pi-subagents/
 # Security review working doc (never commit)
 SECURITY-REVIEW.md
+# Disaster-recovery drill log stays local-only (owner decision 2026-09-22).
+docs/drill-log.md
+# Local generator outputs hold plaintext secrets (never commit).
+outputs/

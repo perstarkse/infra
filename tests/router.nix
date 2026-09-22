@@ -212,6 +212,80 @@
     };
   };
 
+  # Fake Cast receiver on iot (static .11, mirroring the planned tv
+  # reservation shape): DIAL/SSDP + control ports trusted phones use.
+  iotCastTvNode = lib.recursiveUpdate commonNode {
+    virtualisation.vlans = [2];
+
+    systemd = {
+      network = {
+        netdevs."10-vlan20" = {
+          netdevConfig = {
+            Name = "vlan20";
+            Kind = "vlan";
+          };
+          vlanConfig.Id = 20;
+        };
+
+        networks."10-eth1" = {
+          matchConfig.Name = "eth1";
+          networkConfig = {
+            ConfigureWithoutCarrier = true;
+            VLAN = ["vlan20"];
+          };
+        };
+
+        networks."20-vlan20" = {
+          matchConfig.Name = "vlan20";
+          address = ["10.0.20.11/24"];
+          networkConfig.ConfigureWithoutCarrier = true;
+          routes = [
+            {
+              Gateway = "10.0.20.1";
+            }
+          ];
+        };
+      };
+
+      services.cast-fake = {
+        description = "Fake Cast receiver (DIAL/SSDP + control ports)";
+        wantedBy = ["multi-user.target"];
+        serviceConfig = {
+          Type = "simple";
+          Restart = "always";
+          RestartSec = "2s";
+        };
+        script = ''
+          mkdir -p /var/lib/cast-fake
+          printf 'cast-fake\n' > /var/lib/cast-fake/device-desc.xml
+          ${pkgs.busybox}/bin/httpd -f -p 8008 -h /var/lib/cast-fake &
+          ${pkgs.busybox}/bin/httpd -f -p 8009 -h /var/lib/cast-fake &
+          exec ${pkgs.busybox}/bin/httpd -f -p 8443 -h /var/lib/cast-fake
+        '';
+      };
+    };
+  };
+
+  # Plex stand-in on trusted: adds TCP 32400 next to the existing :8080.
+  # The iot TV client must reach 32400 after the canReach rule lands;
+  # unlisted ports on the same host must still fail (selective allow).
+  lanServerPlexNode = lib.recursiveUpdate lanServerRoutedHttpNode {
+    systemd.services.lan-plex = {
+      description = "Plex stand-in on TCP 32400";
+      wantedBy = ["multi-user.target"];
+      serviceConfig = {
+        Type = "simple";
+        Restart = "always";
+        RestartSec = "2s";
+      };
+      script = ''
+        mkdir -p /var/lib/lan-plex
+        printf 'plex-ok\n' > /var/lib/lan-plex/index.html
+        exec ${pkgs.busybox}/bin/httpd -f -p 32400 -h /var/lib/lan-plex
+      '';
+    };
+  };
+
   accessIotClientNode = lib.recursiveUpdate commonNode {
     virtualisation.vlans = [2];
     systemd.network.networks."10-eth1" = {
@@ -485,6 +559,120 @@ in {
       camClient.fail("ping -c1 -W2 192.168.100.1")
       router.succeed("nft list ruleset | grep -q 'tcp dport 8008 accept'")
       router.succeed("nft list ruleset | grep -q 'udp dport 1900 accept'")
+    '';
+  };
+
+  router-iot-tv-cast = pkgs.testers.runNixOSTest {
+    name = "router-iot-tv-cast";
+    nodes = {
+      wan = wanNode;
+      router = mkRouterNode {
+        extraRouterConfig = {
+          casting = {
+            enable = true;
+            sourceSegment = "trusted";
+            targetSegments = ["iot"];
+          };
+          machines = [
+            {
+              name = "lan-server";
+              ip = "10";
+              mac = "02:00:00:00:10:00";
+              portForwards = [];
+            }
+            {
+              name = "iot-tv";
+              segment = "iot";
+              ip = "11";
+              mac = "02:00:00:00:20:11";
+              portForwards = [];
+            }
+          ];
+        };
+      };
+      lanClient = lanClientNode;
+      iotTv = iotCastTvNode;
+    };
+    testScript = ''
+      start_all()
+
+      wan.wait_for_unit("dnsmasq.service")
+      iotTv.wait_for_unit("cast-fake.service")
+      router.wait_for_unit("systemd-networkd.service")
+      router.wait_for_unit("kea-dhcp4-server.service")
+
+      lanClient.wait_until_succeeds("ip -4 -o addr show dev eth1 | grep -q '10\\.0\\.0\\.'", timeout=180)
+      iotTv.wait_until_succeeds("ip -4 -o addr show dev vlan20 | grep -q '10\\.0\\.20\\.11'", timeout=180)
+
+      # Forward (trusted phone -> iot TV): all three Cast control ports open.
+      lanClient.succeed("curl --fail -sS --max-time 5 http://10.0.20.11:8008/device-desc.xml | grep -q '^cast-fake$'")
+      lanClient.succeed("curl --fail -sS --max-time 5 http://10.0.20.11:8009/device-desc.xml | grep -q '^cast-fake$'")
+      lanClient.succeed("curl --fail -sS --max-time 5 http://10.0.20.11:8443/device-desc.xml | grep -q '^cast-fake$'")
+
+      # Casting rules exist in the generated nftables ruleset.
+      router.succeed("nft list ruleset | grep -q 'tcp dport 8008 accept'")
+      router.succeed("nft list ruleset | grep -q 'tcp dport 8009 accept'")
+      router.succeed("nft list ruleset | grep -q 'tcp dport 8443 accept'")
+      router.succeed("nft list ruleset | grep -q 'udp dport 1900 accept'")
+      router.succeed("nft list ruleset | grep -q 'udp dport 5353 accept'")
+
+      # Avahi reflector wiring is asserted at eval time via the io toplevel
+      # (nix eval .#nixosConfigurations.io.config.services.avahi shows
+      # enable=true, reflector=true, allowInterfaces=[vlan1 vlan20]).
+      # No runtime assert here: Type=dbus never activates in the VM harness
+      # and mDNS reflection can't be observed in qemu vlans — discovery is
+      # covered live in phase C (avahi-browse from trusted).
+
+      # kea pins the TV reservation to the iot subnet (not trusted).
+      router.succeed("grep -q '02:00:00:00:20:11' /etc/kea/dhcp4-server.conf")
+      router.succeed("grep -q '10.0.20.11' /etc/kea/dhcp4-server.conf")
+
+      # Negative: TV must not reach an unlisted trusted port.
+      iotTv.fail("curl --fail -sS --max-time 5 http://10.0.0.10:18081/")
+    '';
+  };
+
+  router-iot-tv-plex = pkgs.testers.runNixOSTest {
+    name = "router-iot-tv-plex";
+    nodes = {
+      wan = wanNode;
+      router = mkRouterNode {
+        extraRouterConfig = {
+          segments.iot.policy.canReach = [
+            {
+              segment = "trusted";
+              tcpPorts = [32400];
+              udpPorts = [1900 5353];
+            }
+          ];
+        };
+      };
+      lanServer = lanServerPlexNode;
+      iotTv = iotCastTvNode;
+    };
+    testScript = ''
+      start_all()
+
+      wan.wait_for_unit("dnsmasq.service")
+      lanServer.wait_for_unit("lan-http.service")
+      lanServer.wait_for_unit("lan-plex.service")
+      iotTv.wait_for_unit("cast-fake.service")
+      router.wait_for_unit("systemd-networkd.service")
+      router.wait_for_unit("kea-dhcp4-server.service")
+
+      iotTv.wait_until_succeeds("ip -4 -o addr show dev vlan20 | grep -q '10\\.0\\.20\\.11'", timeout=180)
+
+      # Reverse (iot TV -> trusted Plex): 32400 open via the added canReach
+      # rule. :8080 stays closed here (no such rule in this test) — the
+      # shared-harness :8080 open case is already covered by
+      # router-segment-policy; this test proves selective allow.
+      iotTv.succeed("curl --fail -sS --max-time 5 http://10.0.0.10:32400/ | grep -q '^plex-ok$'")
+
+      # Selective allow: other trusted ports on the same host stay closed.
+      iotTv.fail("curl --fail -sS --max-time 5 http://10.0.0.10:8080/")
+      iotTv.fail("curl --fail -sS --max-time 5 http://10.0.0.10:18081/")
+
+      router.succeed("nft list ruleset | grep -q 'tcp dport 32400 accept'")
     '';
   };
 

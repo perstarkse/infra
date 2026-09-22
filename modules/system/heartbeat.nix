@@ -7,6 +7,7 @@ _: {
     ...
   }: let
     cfg = config.my.heartbeat;
+    inherit ((import ../../flake/lib/alert-fanout.nix {inherit pkgs;})) publishAlert;
     envFile = config.my.secrets.getPath cfg.secretName cfg.secretFile;
     receiverAlert = cfg.receiver.deadmanAlert;
     receiverEndpointApiId =
@@ -63,6 +64,7 @@ _: {
         else ""
       }"
       GATUS_URL = "http://127.0.0.1:${toString cfg.receiver.gatusPort}/api/v1/endpoints/${receiverEndpointApiId}/external?success=true&duration=1ms"
+      GATUS_HOST = "127.0.0.1:${toString cfg.receiver.gatusPort}"
       TIMESTAMP_FILE = "${lib.optionalString (cfg.receiver.heartbeatTimestampFile != null) cfg.receiver.heartbeatTimestampFile}"
 
 
@@ -101,18 +103,34 @@ _: {
                   self.end_headers()
                   return
 
+              target_url = GATUS_URL
+              is_host_heartbeat = True
+              query_params = urllib.parse.parse_qs(parsed.query)
+              job_list = query_params.get("job")
+              if job_list and job_list[0]:
+                  job = job_list[0].strip()
+                  if not job or not all(c.isalnum() or c in "-_" for c in job):
+                      self.send_response(400)
+                      self.end_headers()
+                      return
+                  target_url = "http://" + GATUS_HOST + "/api/v1/endpoints/backups_backup-" + job + "/external?success=true&duration=1ms"
+                  is_host_heartbeat = False
+
               req = urllib.request.Request(
-                  GATUS_URL,
+                  target_url,
                   method="POST",
                   headers={"Authorization": f"Bearer {GATUS_TOKEN}"},
               )
+              # Backup freshness pings arrive as POST <path>?job=<name> with
+              # the same WAN bearer. They forward to backups_backup-<name>
+              # and NEVER touch the host timestamp (failover source of truth).
               # Timestamp is the source of truth for DNS failover; gatus is
               # best-effort. A prior version wrote the timestamp only after a
               # successful gatus forward, so a gatus outage made every push
               # return 502 and the health-check saw "heartbeat lost" even
               # though io was healthy. Write first, then forward.
               try:
-                  if TIMESTAMP_FILE:
+                  if is_host_heartbeat and TIMESTAMP_FILE:
                       _write_timestamp()
               except Exception:
                   pass
@@ -198,17 +216,23 @@ _: {
       body="''${2:?body required}"
 
       ${lib.optionalString (cfg.push.failureNtfy.serverUrl != null) ''
-        args=(
-          -fsS --max-time 30
-          -H "Title: $subject"
-          -H "Priority: high"
-          -H "Tags: heartbeat"
-        )
-        ${lib.optionalString (cfg.push.failureNtfy.tokenFile != null) ''
-          args+=( -H "Authorization: Bearer $(<${cfg.push.failureNtfy.tokenFile})" )
-        ''}
-        ${pkgs.curl}/bin/curl "''${args[@]}" --data-binary "$body" \
-          "${cfg.push.failureNtfy.serverUrl}/${cfg.push.failureNtfy.topic}" || true
+        # LAN leg first, off-LAN (sedna) fallback second; never fail the
+        # notifying unit on delivery failure (|| true).
+        token_file="${toString (cfg.push.failureNtfy.tokenFile or "")}"
+        [ -n "$token_file" ] || token_file="-"
+        wan_url="${
+          if cfg.push.failureNtfy.fallbackServerUrl != null
+          then cfg.push.failureNtfy.fallbackServerUrl
+          else ""
+        }"
+        ALERT_LAN_URL="${cfg.push.failureNtfy.serverUrl}" ALERT_WAN_URL="$wan_url" \
+          ${publishAlert} \
+            "${cfg.push.failureNtfy.topic}" \
+            "$token_file" \
+            "$subject" \
+            "$body" \
+            "high" \
+            "heartbeat" || true
       ''}
     '';
 
@@ -355,6 +379,12 @@ _: {
           description = "Gatus external endpoint API id. Null derives <group>_<name>.";
         };
 
+        backupJobs = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          description = "Backup job names watched by Gatus backup-<job> deadman endpoints (group backups, 36h). Pinged via POST <path>?job=<name> on this receiver; never touches the host failover timestamp.";
+        };
+
         gatusApiTokenEnvVar = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
           default = null;
@@ -473,7 +503,13 @@ _: {
           serverUrl = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;
-            description = "Base ntfy URL for push-failure/recovery alerts (e.g. https://ntfy.lan.stark.pub). Null disables remote alerting; failures are still visible via the failed unit.";
+            description = "Base ntfy URL for push-failure/recovery alerts (LAN leg, e.g. https://ntfy.lan.stark.pub). Null disables remote alerting; failures are still visible via the failed unit.";
+          };
+
+          fallbackServerUrl = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = "https://ntfy.stark.pub";
+            description = "Off-LAN fallback ntfy server URL (sedna relay). Null disables the fallback leg.";
           };
 
           topic = lib.mkOption {
@@ -570,26 +606,46 @@ _: {
         };
 
         services.gatus.settings = {
-          "external-endpoints" = [
-            {
-              name = cfg.receiver.externalEndpointName;
-              group = cfg.receiver.deadmanGroup;
-              token =
-                if cfg.receiver.gatusApiTokenEnvVar == null
-                then "\${HEARTBEAT_PUSH_TOKEN}"
-                else "\${" + cfg.receiver.gatusApiTokenEnvVar + "}";
-              heartbeat.interval = cfg.receiver.deadmanInterval;
-              alerts = [
-                {
-                  type = "email";
-                  inherit (receiverAlert) description;
-                  "failure-threshold" = receiverAlert.failureThreshold;
-                  "success-threshold" = receiverAlert.successThreshold;
-                  "send-on-resolved" = receiverAlert.sendOnResolved;
-                }
-              ];
-            }
-          ];
+          "external-endpoints" =
+            [
+              {
+                name = cfg.receiver.externalEndpointName;
+                group = cfg.receiver.deadmanGroup;
+                token =
+                  if cfg.receiver.gatusApiTokenEnvVar == null
+                  then "\${HEARTBEAT_PUSH_TOKEN}"
+                  else "\${" + cfg.receiver.gatusApiTokenEnvVar + "}";
+                heartbeat.interval = cfg.receiver.deadmanInterval;
+                alerts = [
+                  {
+                    type = "email";
+                    inherit (receiverAlert) description;
+                    "failure-threshold" = receiverAlert.failureThreshold;
+                    "success-threshold" = receiverAlert.successThreshold;
+                    "send-on-resolved" = receiverAlert.sendOnResolved;
+                  }
+                ];
+              }
+            ]
+            ++ (map (job: {
+                name = "backup-${job}";
+                group = "backups";
+                token =
+                  if cfg.receiver.gatusApiTokenEnvVar == null
+                  then "\${HEARTBEAT_PUSH_TOKEN}"
+                  else "\${" + cfg.receiver.gatusApiTokenEnvVar + "}";
+                heartbeat.interval = "36h";
+                alerts = [
+                  {
+                    type = "email";
+                    description = "backup-${job} missing";
+                    "failure-threshold" = 1;
+                    "success-threshold" = 1;
+                    "send-on-resolved" = true;
+                  }
+                ];
+              })
+              cfg.receiver.backupJobs);
         };
 
         networking.firewall.allowedTCPPorts = [cfg.receiver.port];

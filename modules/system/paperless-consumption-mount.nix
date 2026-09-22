@@ -104,8 +104,8 @@ _: {
         '';
       in {
         description = "Rclone S3 Mount for Paperless Consumption";
-        after = ["network-online.target"];
-        wants = ["network-online.target"];
+        after = ["network-online.target"] ++ lib.optionals config.services.garage.enable ["garage-ready.service"];
+        wants = ["network-online.target"] ++ lib.optionals config.services.garage.enable ["garage-ready.service"];
         wantedBy = ["multi-user.target"];
 
         serviceConfig = {

@@ -111,12 +111,35 @@
       default = {};
     };
 
+    options.my.backupDeadman = {
+      enable = mkOption {
+        type = types.bool;
+        default = let tags = config.my.secrets.discover.includeTags or []; in tags == [] || builtins.elem "heartbeat" tags || builtins.elem "heartbeat-tls" tags;
+        description = "Ping the sedna heartbeat receiver on backup success so Gatus backup-<job> deadmen stay green. Ping failure warns only and never fails the backup unit. Auto-disables on hosts without heartbeat secrets (workstations).";
+      };
+      endpointUrl = mkOption {
+        type = types.str;
+        default = "https://130.61.55.4:18080/heartbeat";
+        description = "Heartbeat receiver URL (IP literal: no DNS dependency during WAN outages; cert SAN covers 130.61.55.4).";
+      };
+      caCertFile = mkOption {
+        type = types.nullOr types.path;
+        default = config.my.secrets.getPath "heartbeat-tls" "ca.pem";
+        description = "Private-CA bundle for --cacert pinning (same trust as heartbeat push).";
+      };
+    };
+
     options.my.backupFailureNtfy = {
       enable = mkEnableOption "Send ntfy notification on backup failure";
       url = mkOption {
         type = types.str;
         default = "https://ntfy.lan.stark.pub/backup-alerts";
-        description = "ntfy topic URL for backup failure notifications.";
+        description = "ntfy topic URL for backup failure notifications (LAN leg; WAN fallback is derived from it).";
+      };
+      fallbackUrl = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Off-LAN fallback ntfy topic URL (e.g. https://ntfy.stark.pub/backup-alerts). Null derives it from url by swapping the LAN host for ntfy.stark.pub.";
       };
       tokenFile = mkOption {
         type = types.nullOr types.path;
@@ -126,6 +149,7 @@
     };
 
     config = let
+      inherit ((import ../../flake/lib/alert-fanout.nix {inherit pkgs;})) publishAlert;
       resolveBackends = backup:
         if backup.backends != {}
         then backup.backends
@@ -337,6 +361,9 @@
                             ++ (map (p: "--exclude=" + p) backup.exclude);
                           timerConfig = {
                             OnCalendar = backup.frequency;
+                            # Catch up missed windows on boot/wake (heartbeat and
+                            # storage-alerts timers already persist).
+                            Persistent = true;
                             # Stagger job starts so daily restic runs don't pile
                             # onto attic GC or each other on makemake.
                             RandomizedDelaySec =
@@ -381,8 +408,10 @@
                         wantedBy = ["multi-user.target"];
                         after =
                           ["network-online.target"]
-                          ++ lib.optionals (bkCfg.type == "garage-s3" && config.services.garage.enable) ["garage.service"];
-                        wants = ["network-online.target"];
+                          ++ lib.optionals (bkCfg.type == "garage-s3" && config.services.garage.enable) ["garage-ready.service"];
+                        wants =
+                          ["network-online.target"]
+                          ++ lib.optionals (bkCfg.type == "garage-s3" && config.services.garage.enable) ["garage-ready.service"];
                         path = lib.optionals (bkCfg.type == "garage-s3" && config.services.garage.enable) [pkgs.garage];
                         environment = lib.optionalAttrs (bkCfg.type == "garage-s3" && config.services.garage.enable) {
                           GARAGE_RPC_SECRET_FILE = config.my.secrets.getPath "garage" "rpc_secret";
@@ -457,21 +486,24 @@
             backupNotify = pkgs.writeShellScript "backup-notify" ''
               set -euo pipefail
               job="''${1:?backup job name required}"
-
-              auth_args=()
-              if [ -n "${ntfyCfg.tokenFile or ""}" ] && [ -f "${ntfyCfg.tokenFile or ""}" ]; then
-                auth_args=(-H "Authorization: Bearer $(cat ${ntfyCfg.tokenFile})")
-              fi
-
-              ${pkgs.curl}/bin/curl -fsS \
-                --retry 2 \
-                --retry-delay 2 \
-                -H "Title: ${config.networking.hostName}: restic backup failed" \
-                -H "Priority: high" \
-                -H "Tags: warning,floppy_disk,${config.networking.hostName}" \
-                "''${auth_args[@]}" \
-                --data-binary "Backup job $job failed on ${config.networking.hostName}" \
-                ${lib.escapeShellArg ntfyCfg.url}
+              # LAN leg first, off-LAN (sedna) fallback second; never fail the
+              # notifying unit on delivery failure.
+              lan_url=${lib.escapeShellArg ntfyCfg.url}
+              wan_url=${lib.escapeShellArg (
+                if ntfyCfg.fallbackUrl != null
+                then ntfyCfg.fallbackUrl
+                else builtins.replaceStrings ["ntfy.lan.stark.pub"] ["ntfy.stark.pub"] ntfyCfg.url
+              )}
+              token_file="${toString (ntfyCfg.tokenFile or "")}"
+              [ -n "$token_file" ] || token_file="-"
+              ALERT_LAN_URL="$(dirname "$lan_url")" ALERT_WAN_URL="$(dirname "$wan_url")" \
+                exec ${publishAlert} \
+                  "$(basename "$lan_url")" \
+                  "$token_file" \
+                  "${config.networking.hostName}: restic backup failed" \
+                  "Backup job $job failed on ${config.networking.hostName}" \
+                  "high" \
+                  "warning,floppy_disk,${config.networking.hostName}"
             '';
           in
             mkIf ntfyCfg.enable (lib.mkMerge ([
@@ -503,6 +535,71 @@
                 )
                 cfg))));
         }
+
+        # Backup freshness deadman: ExecStartPost fires only on exit 0, so a
+        # ping means the snapshot exists. Every backend pings the same job
+        # name (idempotent beacon); ping failure warns only.
+        (let
+          deadmanCfg = config.my.backupDeadman;
+          heartbeatEnv = config.my.secrets.getPath "heartbeat" "env";
+          heartbeatCa = deadmanCfg.caCertFile;
+          pingSuccess = pkgs.writeShellScript "backup-ping-success" ''
+            set -euo pipefail
+            job="''${1:?backup job name required}"
+            if [ ! -f "${heartbeatEnv}" ]; then
+              echo "WARNING: heartbeat env missing; skipping deadman ping for $job" >&2
+              exit 0
+            fi
+            token="$(grep '^HEARTBEAT_PUSH_TOKEN=' "${heartbeatEnv}" | cut -d= -f2-)"
+            if [ -z "$token" ] || [ "$token" = "change-me" ]; then
+              echo "WARNING: HEARTBEAT_PUSH_TOKEN unconfigured; skipping deadman ping for $job" >&2
+              exit 0
+            fi
+            ${pkgs.curl}/bin/curl -fsS \
+              --connect-timeout 5 --max-time 15 --retry 2 --retry-delay 2 \
+              --retry-all-errors \
+              ${lib.optionalString (heartbeatCa != null) ''--cacert "${toString heartbeatCa}"''} \
+              -X POST -H "Authorization: Bearer $token" \
+              "${deadmanCfg.endpointUrl}?job=''${job}" >/dev/null 2>&1 || {
+              echo "WARNING: backup deadman ping failed for $job" >&2
+            }
+          '';
+        in
+          mkIf (deadmanCfg.enable && cfg != {}) {
+            my.secrets.allowReadAccess =
+              [
+                {
+                  readers = ["root"];
+                  path = heartbeatEnv;
+                }
+              ]
+              ++ lib.optionals (heartbeatCa != null) [
+                {
+                  readers = ["root"];
+                  path = heartbeatCa;
+                }
+              ];
+
+            systemd.services = lib.mkMerge (concatLists (mapAttrsToList (
+                jobName: backup:
+                  if !backup.enable || backup.restore.enable
+                  then []
+                  else let
+                    backends = resolveBackends backup;
+                  in
+                    mapAttrsToList (
+                      bkName: _bkCfg: {
+                        "restic-backups-${jobName}-${bkName}" = {
+                          serviceConfig.ExecStartPost = [
+                            "${pingSuccess} ${jobName}"
+                          ];
+                        };
+                      }
+                    )
+                    backends
+              )
+              cfg));
+          })
 
         {
           # Scheduled backups keep running while a job is in restore mode:

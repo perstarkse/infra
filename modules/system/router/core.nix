@@ -206,7 +206,7 @@
         dns.profile = mkOption {
           type = types.str;
           default = "default";
-          description = "Reserved for future per-segment DNS policy selection";
+          description = "Blocky DNS policy profile selector matching keys in my.router.dns.profiles, consumed by router/dns.nix.";
         };
 
         policy = {

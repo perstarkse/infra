@@ -48,7 +48,7 @@ _: {
       };
 
       replicationMode = lib.mkOption {
-        type = lib.types.int;
+        type = lib.types.either (lib.types.enum ["none"]) lib.types.int;
         default = 2;
         description = "Replication mode: 'none' for single node, or 2/3 for cluster";
       };
@@ -123,6 +123,38 @@ _: {
       systemd = {
         services.garage = {
           serviceConfig.DynamicUser = lib.mkForce false;
+        };
+
+        # Barrier for oneshots + FUSE mounts that need the daemon actually
+        # listening: garage.service is Type=simple, so it reads "active"
+        # the instant the process spawns, before LMDB/admin init. Probe
+        # 127.0.0.1:3903 (admin) with `garage status`, 30s cap.
+        services.garage-ready = {
+          description = "Wait for Garage daemon readiness";
+          wantedBy = ["multi-user.target"];
+          after = ["garage.service"];
+          wants = ["garage.service"];
+          path = [pkgs.garage];
+          environment = {
+            GARAGE_RPC_SECRET_FILE = config.my.secrets.getPath "garage" "rpc_secret";
+            GARAGE_ADMIN_ADDR = "127.0.0.1:3903";
+          };
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            TimeoutSec = 60;
+          };
+          script = ''
+            set -euo pipefail
+            for i in $(seq 1 30); do
+              if ${pkgs.garage}/bin/garage status >/dev/null 2>&1; then
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "garage-ready: daemon unresponsive after 30s" >&2
+            exit 1
+          '';
         };
 
         tmpfiles.rules = [
