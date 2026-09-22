@@ -6,14 +6,8 @@ _: {
     ...
   }: let
     cfg = config.my.storage-alerts;
-    ntfyTopicUrl = "${lib.removeSuffix "/" cfg.ntfy.serverUrl}/${cfg.ntfy.topic}";
+    inherit ((import ../../flake/lib/alert-fanout.nix {inherit pkgs;})) publishAlert;
     ntfyTags = lib.concatStringsSep "," cfg.ntfy.tags;
-    ntfyAuthHeader =
-      if cfg.ntfy.tokenFile == null
-      then ""
-      else ''
-        curl_args+=( -H "Authorization: Bearer $(<${cfg.ntfy.tokenFile})" )
-      '';
     notifier = pkgs.writeShellScript "storage-alerts-notify" ''
       set -euo pipefail
 
@@ -21,19 +15,13 @@ _: {
       message="''${2:?message required}"
       priority="''${3:-${cfg.ntfy.priority}}"
       tags="''${4:-${ntfyTags}}"
-
-      curl_args=(
-        -fsS
-        --retry 2
-        --retry-delay 2
-        -H "Title: $title"
-        -H "Priority: $priority"
-        -H "Tags: $tags"
-      )
-
-      ${ntfyAuthHeader}
-
-      exec ${pkgs.curl}/bin/curl "''${curl_args[@]}" --data-binary "$message" ${lib.escapeShellArg ntfyTopicUrl}
+      token_file="${toString (cfg.ntfy.tokenFile or "")}"
+      [ -n "$token_file" ] || token_file="-"
+      # LAN leg first, off-LAN (sedna) fallback second. Every call is
+      # isolated by callers (|| true) so one dead target or unreachable
+      # ntfy never aborts the sweep under set -e.
+      ALERT_LAN_URL=${lib.escapeShellArg cfg.ntfy.serverUrl} ALERT_WAN_URL=${lib.escapeShellArg cfg.ntfy.fallbackServerUrl} \
+        exec ${publishAlert} "${cfg.ntfy.topic}" "$token_file" "$title" "$message" "$priority" "$tags"
     '';
     smartdNotifier = pkgs.writeShellScript "storage-alerts-smartd" ''
       set -euo pipefail
@@ -254,7 +242,13 @@ _: {
         serverUrl = lib.mkOption {
           type = lib.types.str;
           default = "https://ntfy.lan.stark.pub";
-          description = "Base ntfy server URL used for publishing alerts.";
+          description = "Base ntfy server URL used for publishing alerts (LAN leg).";
+        };
+
+        fallbackServerUrl = lib.mkOption {
+          type = lib.types.str;
+          default = "https://ntfy.stark.pub";
+          description = "Off-LAN fallback ntfy server URL (sedna relay).";
         };
 
         topic = lib.mkOption {
