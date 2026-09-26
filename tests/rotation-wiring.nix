@@ -152,7 +152,7 @@ in {
           "rm -f /tmp/pw-*; for u in air-exhaust hass charon-ro; do "
           "mosquitto_passwd -b -c /tmp/pw-$u $u hunter2-B && "
           "cut -d: -f2 < /tmp/pw-$u > /etc/test-secrets/air-exhaust-mqtt/$u.hash; done",
-          "mosquitto-hash-rotation-restart.service",
+          "mosquitto-env-rotation-restart.service",
           "mosquitto.service",
       )
 
@@ -171,7 +171,7 @@ in {
           "garage",
           "printf '%s\\n' \"$(head -c 32 /dev/urandom | od -v -An -tx1 | tr -d ' \\n')\""
           " > /etc/test-secrets/garage/rpc_secret",
-          "garage-rpc-rotation-restart.service",
+          "garage-env-rotation-restart.service",
           "garage.service",
       )
 

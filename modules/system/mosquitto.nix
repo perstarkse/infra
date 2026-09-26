@@ -2,15 +2,9 @@ _: {
   config.flake.nixosModules.mosquitto = {
     config,
     lib,
-    pkgs,
     ...
   }: let
     cfg = config.my.mosquitto;
-    hashFiles = [
-      (config.my.secrets.getPath cfg.secretName "air-exhaust.hash")
-      (config.my.secrets.getPath cfg.secretName "hass.hash")
-      (config.my.secrets.getPath cfg.secretName "charon-ro.hash")
-    ];
   in {
     options.my.mosquitto = {
       enable = lib.mkEnableOption "Mosquitto MQTT broker";
@@ -97,31 +91,27 @@ _: {
       # restartTriggers on the hash paths are inert strings that never fire —
       # hence the path watcher below, which restarts mosquitto whenever any
       # hash file actually changes on disk.
-      systemd.paths.mosquitto-hash-rotation = {
-        description = "Restart mosquitto when its password hashes rotate";
-        wantedBy = ["multi-user.target"];
-        pathConfig = {
-          PathChanged = hashFiles;
-          Unit = "mosquitto-hash-rotation-restart.service";
-        };
-      };
-
-      systemd.services.mosquitto-hash-rotation-restart = {
-        description = "Restart mosquitto after password hash rotation";
-        serviceConfig = {
-          Type = "oneshot";
-          # Let a multi-file write batch settle: clan writes the three
-          # hashes in quick succession, and one restart must see all of them.
-          ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
-          # try-restart, not restart: converge a running broker, and no-op
-          # when it is stopped or mid-crash-loop. A hard `restart` fails the
-          # unit when the target cannot come up (e.g. crash-looping because a
-          # secret is still missing), which strands the rotation until the
-          # next file change; a stopped broker already reads fresh hashes on
-          # its next start anyway.
-          ExecStart = "${pkgs.systemd}/bin/systemctl try-restart mosquitto.service";
-        };
-      };
+      #
+      # try-restart, not restart: converge a running broker, and no-op
+      # when it is stopped or mid-crash-loop. A hard `restart` fails the
+      # unit when the target cannot come up (e.g. crash-looping because a
+      # secret is still missing), which strands the rotation until the
+      # next file change; a stopped broker already reads fresh hashes on
+      # its next start anyway.
+      systemd.paths.mosquitto-env-rotation =
+        (config.my.secrets.mkTryRestartOnRotation {
+          service = "mosquitto";
+          inherit (cfg) secretName;
+          files = ["air-exhaust.hash" "hass.hash" "charon-ro.hash"];
+          settleSeconds = 5;
+        }).paths.mosquitto-env-rotation;
+      systemd.services.mosquitto-env-rotation-restart =
+        (config.my.secrets.mkTryRestartOnRotation {
+          service = "mosquitto";
+          inherit (cfg) secretName;
+          files = ["air-exhaust.hash" "hass.hash" "charon-ro.hash"];
+          settleSeconds = 5;
+        }).services.mosquitto-env-rotation-restart;
     };
   };
 }

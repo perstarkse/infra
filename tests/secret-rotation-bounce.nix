@@ -36,7 +36,7 @@
   };
 in {
   # Rotating the password hashes on disk must bounce mosquitto WITHOUT any
-  # manual deploy step: the mosquitto-hash-rotation path watcher fires and
+  # manual deploy step: the mosquitto-env-rotation path watcher fires and
   # the broker serves the new credentials (restartTriggers on /run/secrets
   # paths are inert — this test pins the working mechanism).
   secret-rotation-bounce = pkgs.testers.runNixOSTest {
@@ -96,9 +96,9 @@ in {
               break
           if time.time() >= deadline:
               _, diag = machine.execute(
-                  "systemctl status mosquitto-hash-rotation.path --no-pager -l; "
-                  "systemctl status mosquitto-hash-rotation-restart.service --no-pager -l; "
-                  "journalctl -u mosquitto-hash-rotation.path --no-pager | tail -n 20; "
+                  "systemctl status mosquitto-env-rotation.path --no-pager -l; "
+                  "systemctl status mosquitto-env-rotation-restart.service --no-pager -l; "
+                  "journalctl -u mosquitto-env-rotation.path --no-pager | tail -n 20; "
                   "systemctl list-units --all --no-pager | grep -i rotation"
               )
               raise AssertionError(

@@ -5,7 +5,11 @@
   withGenerateManifest ? false,
   mkMachineSecretDefault ? (_: {}),
   ...
-}: {lib, ...}: {
+}: {
+  lib,
+  pkgs,
+  ...
+}: {
   options.my.secrets =
     {
       declarations = lib.mkOption {
@@ -28,24 +32,34 @@
         default = {
           service,
           secretName,
-          file,
+          file ? null,
+          files ? null,
+          settleSeconds ? 0,
         }: let
-          path = getPathDefault secretName file;
+          fileList =
+            if files != null
+            then files
+            else [file];
+          paths = map (f: getPathDefault secretName f) fileList;
         in {
           paths."${service}-env-rotation" = {
             description = "Restart ${service} when its secret file rotates (stub)";
             wantedBy = ["multi-user.target"];
             pathConfig = {
-              PathChanged = [path];
+              PathChanged = paths;
               Unit = "${service}-env-rotation-restart.service";
             };
           };
           services."${service}-env-rotation-restart" = {
             description = "Restart ${service} after secret rotation (stub)";
-            serviceConfig = {
-              Type = "oneshot";
-              ExecStart = "systemctl restart ${service}.service";
-            };
+            serviceConfig =
+              {
+                Type = "oneshot";
+                ExecStart = "systemctl restart ${service}.service";
+              }
+              // (lib.optionalAttrs (settleSeconds > 0) {
+                ExecStartPre = "${pkgs.coreutils}/bin/sleep ${toString settleSeconds}";
+              });
           };
         };
       };
@@ -54,24 +68,34 @@
         default = {
           service,
           secretName,
-          file,
+          file ? null,
+          files ? null,
+          settleSeconds ? 0,
         }: let
-          path = getPathDefault secretName file;
+          fileList =
+            if files != null
+            then files
+            else [file];
+          paths = map (f: getPathDefault secretName f) fileList;
         in {
           paths."${service}-env-rotation" = {
             description = "Re-apply ${service} when its secret file rotates (stub)";
             wantedBy = ["multi-user.target"];
             pathConfig = {
-              PathChanged = [path];
+              PathChanged = paths;
               Unit = "${service}-env-rotation-restart.service";
             };
           };
           services."${service}-env-rotation-restart" = {
-            description = "Try-restart ${service} after secret rotation (stub)";
-            serviceConfig = {
-              Type = "oneshot";
-              ExecStart = "systemctl try-restart ${service}.service";
-            };
+            description = "Re-apply ${service} when its secret file rotates (stub)";
+            serviceConfig =
+              {
+                Type = "oneshot";
+                ExecStart = "systemctl try-restart ${service}.service";
+              }
+              // (lib.optionalAttrs (settleSeconds > 0) {
+                ExecStartPre = "${pkgs.coreutils}/bin/sleep ${toString settleSeconds}";
+              });
           };
         };
       };
@@ -91,6 +115,14 @@
         type = lib.types.bool;
         default = false;
       };
+      exposeUserSecrets = lib.mkOption {
+        type = lib.types.listOf lib.types.anything;
+        default = [];
+      };
+      exposeUserSecret = lib.mkOption {
+        type = lib.types.nullOr lib.types.anything;
+        default = null;
+      };
     })
     // (lib.optionalAttrs withDiscover {
       discover = {
@@ -103,6 +135,10 @@
           default = /tmp;
         };
         includeTags = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+        };
+        excludeTags = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [];
         };
