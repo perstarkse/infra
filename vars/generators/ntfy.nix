@@ -59,45 +59,43 @@
 
       fallback_hash='$2b$10$QqZS0iP8PwNX1ddWX7ynCeLKM72wyx1PQYUt8sOd08mXQIQwe8U9G'
 
-      # Every per-topic token below is a clan FILE output ($out/<name>), so
-      # clan persists each value independently across regenerations. The
-      # generator only mints a token when its file has no kept value AND the
-      # previous env carries none — deployed publishers are never silently
-      # re-keyed (2026-09-21: prompt-env parse-back missed tokens when the
-      # NTFY_AUTH_TOKENS line was absent, and the hard-require guard fired
-      # on a healthy provision).
+      # Clan executes this generator with a FRESH EMPTY $out and requires
+      # every declared file (clan_lib/vars/generator.py: `tmpdir_out` is a
+      # new TemporaryDirectory; missing files are a hard error). There is
+      # NO parse-back of the previous generation: `clan vars generate`
+      # without `--regenerate` only runs generators with files missing
+      # from the store (all_missing_closure), i.e. routine deploys never
+      # re-run this script and never re-key publishers. An explicit
+      # `--regenerate` (or a newly-added file like phone-token/phone-password
+      # in 2026-09-21) re-runs it and MINTS EVERYTHING FRESH — including
+      # all five per-topic tokens. So: never `--regenerate` this generator
+      # (or add a file to it) unless re-keying every ntfy publisher is the
+      # intent; coordinate with the io/makemake/sedna deploys that consume
+      # the tokens. The same shape bit us on 2026-09-26: a regeneration
+      # wrote a malformed env and sedna's ntfy-sh refused to start.
       keep_or_mint_token() {
-        # $1 = file name under $out, $2 = username, $3 = topic scope
-        # Prints the token on stdout.
-        local file="$1" user="$2" scope="$3" prev=""
+        # $1 = file name under $out. Prints the kept token when the file
+        # is already materialized, else mints a fresh one.
+        local file="$1"
         if [ -s "$out/$file" ]; then
           tr -d '\n' < "$out/$file"
           return 0
         fi
-        if [ -n "''${PREV_ENV:-}" ] && [ -s "$PREV_ENV" ]; then
-          prev="$(grep -o 'NTFY_AUTH_TOKENS=.*' \"$PREV_ENV\" | tr ',' '\n' | grep \"^$user:\" | head -n 1 | cut -d: -f2)"
-        fi
-        if [ -n "$prev" ]; then
-          printf '%s' "$prev"
-        else
-          head -c 32 /dev/urandom | od -An -tx1 -v | tr -d ' \n' | cut -c1-29 | sed 's/^/tk_/'
-        fi
+        head -c 32 /dev/urandom | od -An -tx1 -v | tr -d ' \n' | cut -c1-29 | sed 's/^/tk_/'
       }
 
-      # Previous provisioned env, when clan hands us the current generation:
-      # $out/env pre-exists (kept outputs are materialized before the script
-      # runs). Absent on first provision — then everything is minted fresh.
-      if [ -s "$out/env" ]; then
-        PREV_ENV="$out/env"
-      else
-        PREV_ENV=""
-      fi
+      # NOTE: no $out/env parse-back. $out starts empty on every execution,
+      # so a PREV_ENV read here would always miss; a prior version quoted
+      # the path as \"$PREV_ENV\" (literal quote characters in the
+      # filename), which silently disabled even the fallback it intended.
+      # Kept per-file values are the only keep signal. Absent files mean
+      # first provision (or a new file added later) — mint fresh.
 
-      storage_token="$(keep_or_mint_token storage-token storage-publisher storage-alerts)"
-      backup_token="$(keep_or_mint_token backup-token backup-publisher backup-alerts)"
-      indicator_token="$(keep_or_mint_token indicator-token indicator-publisher indicator-alerts)"
-      heartbeat_token="$(keep_or_mint_token heartbeat-token heartbeat-publisher heartbeat)"
-      phone_token="$(keep_or_mint_token phone-token phone-subscriber '*')"
+      storage_token="$(keep_or_mint_token storage-token)"
+      backup_token="$(keep_or_mint_token backup-token)"
+      indicator_token="$(keep_or_mint_token indicator-token)"
+      heartbeat_token="$(keep_or_mint_token heartbeat-token)"
+      phone_token="$(keep_or_mint_token phone-token)"
 
       # Phone password: the kept $out/phone-password file wins, else
       # auto-generate. Never reuses a token. (No prompt: clan does not
@@ -130,6 +128,20 @@
       printf '%s\n' "$indicator_token" > "$out/indicator-token"
       printf '%s\n' "$heartbeat_token" > "$out/heartbeat-token"
       printf '%s\n' "$phone_token" > "$out/phone-token"
+
+      # Fail closed: ntfy parses NTFY_AUTH_USERS strictly — one malformed
+      # entry (2026-09-21: a 2-part phone-subscriber line plus token entries
+      # folded into the users line, no TOKENS line at all) makes ntfy-sh
+      # exit 1 and the alert path goes silent. Validate the assembled env
+      # here, at generate time, instead of on sedna at deploy time.
+      bad_users="$(grep '^NTFY_AUTH_USERS=' "$out/env" | tr ',' '\n' | grep -v -c '^[^:]*:[^:]*:[^:]*$' || true)"
+      users_lines="$(grep -c '^NTFY_AUTH_USERS=' "$out/env" || true)"
+      tokens_lines="$(grep -c '^NTFY_AUTH_TOKENS=' "$out/env" || true)"
+      bad_tokens="$(grep '^NTFY_AUTH_TOKENS=' "$out/env" | tr ',' '\n' | grep -v -c '^[^:]*:[^:]*:[^:]*$' || true)"
+      if [ "$users_lines" != 1 ] || [ "$tokens_lines" != 1 ] || [ "$bad_users" != 0 ] || [ "$bad_tokens" != 0 ]; then
+        printf '%s\n' "ntfy generator: malformed env (users_lines=$users_lines tokens_lines=$tokens_lines bad_users=$bad_users bad_tokens=$bad_tokens)" >&2
+        exit 1
+      fi
     '';
     meta.tags = ["service" "ntfy"];
   };
