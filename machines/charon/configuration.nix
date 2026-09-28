@@ -811,8 +811,15 @@ in {
   # but bounds the journal field so uploads can progress.
   systemd.coredump.settings.Coredump.ProcessSizeMax = "512M";
   users.users.p = {
-    extraGroups = ["dialout"];
+    extraGroups = ["dialout" "plugdev"];
   };
+  users.groups.plugdev = {};
+
+  services.udev.extraRules = lib.mkAfter ''
+    SUBSYSTEM=="usb", ATTR{idVendor}=="0d28", MODE="0664", GROUP="plugdev", TAG+="uaccess"
+    KERNEL=="hidraw*", ATTRS{idVendor}=="0d28", MODE="0666", TAG+="uaccess"
+    SUBSYSTEM=="tty", ATTRS{idVendor}=="0d28", MODE="0666", TAG+="uaccess"
+  '';
 
   my.journalUpload.enable = true;
 }
