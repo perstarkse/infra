@@ -36,6 +36,9 @@
       accounted
       accounted-ocr
       journal-upload
+      agent-ssh-access
+      hermes
+      signal-cli
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
@@ -62,10 +65,28 @@
   };
 
   my = {
+    # Non-sudo fleet SSH for the personal agent. Unprivileged `agent` account,
+    # `restrict`ed key, no wheel/docker/libvirtd, logs only.
+    agent-ssh-access.enable = true;
+
     attic-cache.server = {
       enable = true;
       retentionPeriod = "1 months";
     };
+
+    # Personal agent: Hermes in container mode, /var/lib/hermes on RAID1 xfs
+    # (NOT /storage — the session DB is SQLite and /storage is mergerfs over
+    # HDDs with dropcacheonclose).
+    hermes = {
+      enable = true;
+      model = "anthropic/claude-sonnet-4";
+    };
+
+    # signal-cli HTTP daemon, host-side: the agent's container shares the host
+    # network namespace, so 127.0.0.1 reaches it with no port publishing.
+    # The account number is NOT here — it is read at unit start from the
+    # hermes-env secret, which is also where Hermes reads it from.
+    signal-cli.enable = true;
 
     mainUser = {
       enable = false;
@@ -112,13 +133,13 @@
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls"];
+        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls" "hermes" "agent-ssh-key"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted" "attic-cache" "db-passwords" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
+      requireGenerators = ["accounted" "agent-ssh-key" "attic-cache" "db-passwords" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "hermes-env" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
 
       allowReadAccess = [
         {
@@ -208,6 +229,42 @@
           # generations) — regenerable, worthless in a backup. User state is
           # webui.db + vector_db + uploads (~200M).
           exclude = ["${config.my.openwebui.dataDir}/cache"];
+        };
+
+      # Personal agent state: sessions, session DB, memory, skills, cron store,
+      # mcp-tokens, config.yaml, workspace. One directory, one job — the agent
+      # writes nothing durable outside it (see modules/system/hermes.nix).
+      hermes =
+        (mkB2 config.my.hermes.stateDir)
+        // {
+          # The session DB is SQLite and live-written: a raw restic copy of a
+          # torn database is worse than no copy. Snapshot a consistent .backup
+          # first, inside the snapshotted path — same shape as the pg_dump
+          # prep this block already does for nous, paperless and politikerstod.
+          #
+          # The [ -f ] guard is load-bearing: `sqlite3 missing.db ".backup ..."`
+          # exits 0 and CREATES the source file, so without it a restic run
+          # before the agent's first launch would leave a 0-byte root-owned
+          # state.db that hermes (running as its own user) cannot then open.
+          backupPrepareCommand = ''
+            if [ -f ${config.my.hermes.stateDir}/.hermes/state.db ]; then
+              install -d -m 0700 ${config.my.hermes.stateDir}/.restic-prep
+              ${pkgs.sqlite}/bin/sqlite3 ${config.my.hermes.stateDir}/.hermes/state.db \
+                ".backup '${config.my.hermes.stateDir}/.restic-prep/state.db'"
+            fi
+          '';
+          backupCleanupCommand = "rm -rf ${config.my.hermes.stateDir}/.restic-prep";
+          # $HERMES_HOME/.env is regenerated from the hermes-env generator on
+          # every activation: the generator is the source of truth, so keys
+          # never enter a backup repo.
+          #
+          # The LIVE .hermes/state.db* is deliberately NOT excluded: it may be
+          # torn, but .restic-prep/state.db in the same snapshot is the
+          # consistent copy, and a restore that only recovered the prep would
+          # lose every session taken before the first restic run. If a restore
+          # ever reports a corrupt state.db, replace it with the .restic-prep
+          # copy from the same snapshot.
+          exclude = ["${config.my.hermes.stateDir}/.hermes/.env"];
         };
 
       paperless = {

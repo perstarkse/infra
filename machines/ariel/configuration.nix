@@ -24,6 +24,7 @@
       fonts
       niri
       journal-upload
+      agent-ssh-access
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
@@ -145,6 +146,8 @@
 
   security.polkit.enable = true;
   my = {
+    agent-ssh-access.enable = true;
+
     atuin.enable = true;
 
     stylix.enable = true;
@@ -154,12 +157,12 @@
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["aws" "openai" "openrouter" "user" "b2" "journal-upload"];
+        includeTags = ["aws" "openai" "openrouter" "user" "b2" "journal-upload" "agent-ssh-key"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags) instead of deploying a machine
       # whose services reference secrets that exist nowhere.
-      requireGenerators = ["api-key-openai" "journal-upload"];
+      requireGenerators = ["agent-ssh-key" "api-key-openai" "journal-upload"];
     };
 
     mainUser.name = "p";

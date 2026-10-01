@@ -107,6 +107,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Personal agent runtime. Pinned to a rev: upstream documents Nix as a
+    # Tier 2, best-effort platform, and the Python lock is tied to one
+    # interpreter family, so a moving main can break the build. Evaluates and
+    # builds against this repo's nixos-26.05.
+    hermes-agent = {
+      url = "github:NousResearch/hermes-agent/ea114c3e98c3339e13004adfc6098cf28ed7d754";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     digikey-mcp = {
       url = "git+ssh://git@github.com/perstarkse/digikey-mcp.git";
       inputs.nixpkgs.follows = "nixpkgs";

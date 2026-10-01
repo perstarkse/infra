@@ -49,6 +49,7 @@ in {
       backups
       libvirt
       agent-microvm
+      agent-ssh-access
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default]);
 
@@ -90,6 +91,8 @@ in {
   };
 
   my = {
+    agent-ssh-access.enable = true;
+
     wake-proxy.endpoints = {
       enable = true;
       domain = "wake.stark.pub";
@@ -274,13 +277,13 @@ in {
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "heartbeat-tls" "ntfy" "attic-cache" "journal-upload" "frigate" "b2" "air-exhaust-mqtt" "grafana"];
+        includeTags = ["ddclient" "cloudflare" "wireguard" "router" "garage" "wake-proxy" "keep-awake" "heartbeat" "heartbeat-tls" "ntfy" "attic-cache" "journal-upload" "frigate" "b2" "air-exhaust-mqtt" "grafana" "agent-ssh-key"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, wireguard-peer-$name) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["air-exhaust-mqtt" "api-key-cloudflare-dns" "attic-cache" "ddclient" "frigate" "garage" "heartbeat" "heartbeat-tls" "ntfy" "wake-proxy" "wake-proxy-keep-awake-ssh" "webdav-htpasswd"];
+      requireGenerators = ["agent-ssh-key" "air-exhaust-mqtt" "api-key-cloudflare-dns" "attic-cache" "ddclient" "frigate" "garage" "heartbeat" "heartbeat-tls" "ntfy" "wake-proxy" "wake-proxy-keep-awake-ssh" "webdav-htpasswd"];
 
       allowReadAccess = [
         {
