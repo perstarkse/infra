@@ -5,6 +5,21 @@
   lib,
   ...
 }: let
+  secondUser = "a";
+
+  # GDM's switch-user entry point, used to hand the box over without ending the
+  # running session. gdm-50.1 common/gdm-common.c: gdm_goto_login_session →
+  # create_transient_display → this method (daemon/gdm-local-display-factory.xml).
+  switchUserToGreeter = pkgs.writeShellApplication {
+    name = "switch-user-greeter";
+    text = ''
+      exec ${lib.getExe' pkgs.glib "gdbus"} call --system \
+        --dest org.gnome.DisplayManager \
+        --object-path /org/gnome/DisplayManager/LocalDisplayFactory \
+        --method org.gnome.DisplayManager.LocalDisplayFactory.CreateTransientDisplay
+    '';
+  };
+
   # Battlemage + xe is stable on this kernel branch; newer 6.12.x regressed GPU init.
   # Pinned via the locked `nixpkgs-612` input instead of builtins.getFlake so
   # evals work offline and the pin stays in flake.lock.
@@ -37,7 +52,7 @@ in {
       stylix
       niri
       terminal
-      greetd
+      session-dispatch
       ledger
       libvirt
       fonts
@@ -48,6 +63,7 @@ in {
       attic-cache
       journal-upload
       steam
+      agent-ssh-access
       bambu-studio
       backups
       sunshine
@@ -303,8 +319,72 @@ in {
     };
   };
 
+  # Second account: GNOME on the same seat. The list is deliberately short —
+  # the modules the main account needs for a tiled, terminal-driven desktop
+  # (niri config, noctalia, rofi, qutebrowser, local-ai, agent tooling) either do
+  # nothing in a GNOME session or fight it. Not importing the niri home module
+  # is also what keeps its niri config and the 4s niri IPC wait out of her
+  # activation, since that module gates on the system-wide my.gui.session
+  # rather than anything per user. No `sops`/`mail-clients` either: those carry
+  # an age keyFile at /home/<user>/.config/sops/age/keys.txt and she has no
+  # fleet secrets to decrypt.
+  home-manager.users.${secondUser} = {
+    imports = with ctx.flake.homeModules; [
+      fish
+      starship
+      kitty
+      xdg-userdirs
+      xdg-mimeapps
+      firefox
+      chromium
+      mail
+      bitwarden-client
+      ssh
+    ];
+
+    my = {
+      programs.mail = {
+        enable = true;
+        clients = ["thunderbird"];
+      };
+      bitwarden-client.enable = true;
+      chromium.enable = true;
+      firefox.enable = true;
+      fish.enable = true;
+      starship.enable = true;
+      ssh.enable = true;
+      xdg-mimeapps.enable = true;
+      xdg-userdirs.enable = true;
+    };
+
+    # The main account's lock is a Noctalia keybinding, not an idle trigger.
+    # GNOME's automatic-lock defaults have moved between releases, so both keys
+    # are set rather than inherited: without this her session stays unlocked
+    # whenever she steps away from a seat the other account is using.
+    # idle-delay stays at the schema default (300s) and lock-delay at 0.
+    dconf.settings = {
+      "org/gnome/desktop/screensaver" = {
+        idle-activation-enabled = true;
+        lock-enabled = true;
+      };
+    };
+  };
+
   my = {
     stylix.enable = true;
+
+    # Non-sudo fleet SSH for the personal agent. Unprivileged `agent` account,
+    # `restrict`ed key, no wheel/docker/libvirtd, logs only.
+    #
+    # /home/p is 0700, so without these ACLs the agent cannot reach the repos
+    # at all. --x on the home (traverse only, cannot list it) plus r-x on the
+    # repos themselves: the agent can read and clone infra/homelab without
+    # gaining any visibility into the rest of the home directory.
+    agent-ssh-access = {
+      enable = true;
+      traversePaths = ["/home/p"];
+      readablePaths = ["/home/p/repos"];
+    };
 
     docker.enable = true;
     fonts.enable = true;
@@ -336,13 +416,13 @@ in {
       ];
       discover = {
         enable = true;
-        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt" "agent-ssh-key"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted-mcp-key" "attic-cache" "context7" "db-passwords" "digikey" "garage-s3" "journal-upload" "ntfy" "politikerstod-lekeberg" "politikerstod-orebro" "wake-proxy-keep-awake-ssh" "z-ai-env"];
+      requireGenerators = ["accounted-mcp-key" "agent-ssh-key" "attic-cache" "context7" "db-passwords" "digikey" "garage-s3" "journal-upload" "ntfy" "politikerstod-lekeberg" "politikerstod-orebro" "wake-proxy-keep-awake-ssh" "z-ai-env"];
 
       allowReadAccess = [
         {
@@ -500,9 +580,11 @@ in {
       ];
     };
 
-    greetd = {
+    # One greeter session name, per-user desktop behind it: GDM's
+    # defaultSession is applied to *every* account (see session-dispatch.nix).
+    sessionDispatch = {
       enable = true;
-      greeting = "Enter the heliosphere via charon!";
+      users.${secondUser} = "gnome";
     };
 
     gui = {
@@ -595,6 +677,49 @@ in {
   # PI WEB user services should survive logout/reboot.
   users.users.p.linger = true;
 
+  # GDM replaced greetd here: greetd runs one greeter session at a time, so
+  # handing the machine to the second account meant logging out and losing the
+  # running session. GDM can start an extra greeter on a spare VT and keep both
+  # sessions alive (logind hands the single DRM master to whichever one is on
+  # the active VT). Consequence: her GNOME session lives on its own VT and
+  # this niri session stays on the first one.
+  services.displayManager = {
+    gdm.enable = true;
+    # Replaces greetd's initial_session autologin.
+    autoLogin = {
+      enable = true;
+      user = config.my.mainUser.name;
+    };
+  };
+
+  # Second desktop. Its own mkDefault services (GNOME Online Accounts,
+  # evolution-data-server, power-profiles-daemon, tracker indexer) are all
+  # defaults, so none of them collide with the networkd setup in shared.nix.
+  services.desktopManager.gnome.enable = true;
+
+  # The account, its groups and its password come from the `user-a`
+  # clan users service instance (flake/parts/clan.nix). Only the uid is set
+  # here, so the account is a fixed 1001 like the main account's 1000.
+  users.users.${secondUser}.uid = 1001;
+
+  # CreateTransientDisplay is auth_admin for every caller class
+  # (gdm-50.1 data/org.gnome.displaymanager.policy), which would mean a polkit
+  # agent plus a password prompt from inside a bare niri session. The main
+  # account is admin on its own machine and the action only starts a greeter —
+  # the second user still authenticates to log in. `active` keeps it to a
+  # session that actually holds the seat.
+  security.polkit.extraConfig = ''
+    polkit.addRule(function (action, subject) {
+      if (action.id !== "org.gnome.displaymanager.displayfactory.manage-user-displays") {
+        return undefined;
+      }
+      if (subject.local && subject.active && subject.user === "${config.my.mainUser.name}") {
+        return "yes";
+      }
+      return undefined;
+    });
+  '';
+
   # Battlemage + xe is currently stable on 6.12.74 here; newer 6.12.x regressed GPU init.
   boot.kernelPackages = pinnedKernelPkgs.linuxPackages;
 
@@ -671,6 +796,7 @@ in {
   hardware.rasdaemon.enable = true;
 
   environment.systemPackages = with pkgs; [
+    switchUserToGreeter
     unstable.code-cursor-fhs
     devenv
     localsend

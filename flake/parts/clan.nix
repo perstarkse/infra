@@ -159,6 +159,26 @@
             };
           };
         };
+        user-a = {
+          module = {
+            name = "users";
+            input = "clan-core";
+          };
+          roles.default = {
+            machines = {
+              charon = {};
+            };
+            settings = {
+              user = "a";
+              prompt = true;
+              groups = [
+                "video"
+                "input"
+                "bluetooth"
+              ];
+            };
+          };
+        };
         user-root = {
           module = {
             name = "users";

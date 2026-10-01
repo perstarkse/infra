@@ -100,6 +100,10 @@ binds {
   Mod+Print { spawn "blinkstick-scripts" "white"; }
   Mod+Shift+Print { spawn "blinkstick-scripts" "off"; }
   Mod+Ctrl+L { spawn "system-suspend"; }
+  // Hands the machine to the other account without ending this session: GDM
+  // starts a greeter on a spare VT and keeps this one alive on its own VT.
+  // Plain Ctrl+Alt+F1 gets back here afterwards.
+  Mod+Shift+U { spawn "switch-user-greeter"; }
 
   // Volume & media controls.
   XF86AudioRaiseVolume allow-when-locked=true {
