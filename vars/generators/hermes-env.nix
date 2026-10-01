@@ -18,6 +18,19 @@
 #                                       GEMINI/GOOGLE, GROQ, MISTRAL,
 #                                       DEEPSEEK, XAI, FIREWORKS, NOUS)
 #
+# The agent currently runs on a custom OpenAI-compatible provider (commandcode),
+# declared in machines/makemake/configuration.nix as
+# `providers."custom:commandcode"`. Hermes derives that provider's credential
+# variable from the provider name, so it must be:
+#
+#   HERMES_CUSTOM_COMMANDCODE_API_KEY=<commandcode credential>
+#
+# Name derivation: HERMES_CUSTOM_ + provider name uppercased with every
+# non-alphanumeric run collapsed to _, + _API_KEY. commandcode has no separators,
+# so it is exactly HERMES_CUSTOM_COMMANDCODE_API_KEY (hermes_cli/config.py:
+# custom_endpoint_key_env). The provider entry can also name it explicitly with
+# key_env: if you set that, use the name you set instead.
+#
 # Signal (all four are needed; the daemon reads only the account):
 #
 #   SIGNAL_HTTP_URL=http://127.0.0.1:8080   signal-cli HTTP endpoint

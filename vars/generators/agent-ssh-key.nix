@@ -55,14 +55,18 @@
       rm -f "$out/private_key" "$out/private_key.pub"
       if [ -s "$prompts/private_key" ]; then
         cp "$prompts/private_key" "$out/private_key"
+        # Deriving the public half means RE-READING the private key, and
+        # ssh-keygen refuses to load one that is group/world readable
+        # ("bad permissions", exit 255). The build sandbox hands us 0644, so
+        # tighten before deriving.
+        chmod 0400 "$out/private_key"
+        ssh-keygen -y -f "$out/private_key" > "$out/public_key"
       else
         ssh-keygen -t ed25519 -C "agent-ops" -f "$out/private_key" -N ""
+        chmod 0400 "$out/private_key"
+        # Move the .pub ssh-keygen already wrote rather than deriving it again.
+        mv "$out/private_key.pub" "$out/public_key"
       fi
-      # -y derives the public half and preserves the key's comment. Do not
-      # append one: ssh-keygen already emits a trailing newline, so appending
-      # produces a two-line "key file" that standard parsers reject.
-      ssh-keygen -y -f "$out/private_key" > "$out/public_key"
-      chmod 0400 "$out/private_key"
       chmod 0444 "$out/public_key"
     '';
     meta = {

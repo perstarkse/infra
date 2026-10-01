@@ -31,6 +31,7 @@ _: {
     config,
     lib,
     pkgs,
+    literalExpression,
     ...
   }: let
     cfg = config.my.signal-cli;
@@ -55,7 +56,7 @@ _: {
         echo "signal-cli: SIGNAL_ACCOUNT is missing or not E.164 in ${envFile}" >&2
         exit 1
       fi
-      exec ${pkgs.signal-cli}/bin/signal-cli \
+      exec ${cfg.package}/bin/signal-cli \
         --scrub-log \
         -c ${stateDir} \
         -a "$account" \
@@ -65,6 +66,24 @@ _: {
   in {
     options.my.signal-cli = {
       enable = lib.mkEnableOption "signal-cli daemon for the agent's Signal channel";
+
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = pkgs.callPackage ../../pkgs/signal-cli {};
+        defaultText = literalExpression "pkgs.callPackage ../../pkgs/signal-cli { }";
+        description = ''
+          signal-cli to run.
+
+          Defaults to the release package in pkgs/signal-cli (0.14.8) rather than
+          nixpkgs', because nixos-26.05 ships 0.14.2 and device linking fails on
+          it with `Link request error: StatusCode: 409` — the long-standing
+          MissingCapabilitiesException-on-link bug, which upstream resolved in
+          every reported case by moving to a newer signal-cli.
+
+          Override with `package = pkgs.signal-cli;` once nixpkgs carries a
+          version that links.
+        '';
+      };
 
       accountSecretName = lib.mkOption {
         type = lib.types.str;
@@ -108,6 +127,20 @@ _: {
     };
 
     config = lib.mkIf cfg.enable {
+      # Fail closed if the env file has no ACL entry granting the daemon's own
+      # user. Without it the unit crash-loops on "cannot read …" and the
+      # diagnosis is not obvious from the journal.
+      assertions = [
+        {
+          assertion =
+            lib.any (
+              entry: (entry.path or "") == envFile && lib.elem "signal-cli" (entry.readers or [])
+            )
+            config.my.secrets.allowReadAccess;
+          message = "my.signal-cli needs an allowReadAccess entry for ${envFile} with \"signal-cli\" in readers; add it to modules/system/hermes.nix (one entry per path, all readers listed).";
+        }
+      ];
+
       # A dedicated account, so a flaw in an unauthenticated HTTP surface lands
       # on an unprivileged user owning nothing but its own state directory.
       users.groups.signal-cli = {};
@@ -117,17 +150,11 @@ _: {
         description = "signal-cli daemon for the agent's Signal channel";
       };
 
-      # The daemon runs as its own user, so it needs its own ACL reader on the
-      # env secret. Without this it cannot read SIGNAL_ACCOUNT: the file is
-      # 0400 root:root with setfacl readers, and hermes' entry does not cover
-      # the signal-cli user.
-      my.secrets.allowReadAccess = [
-        {
-          readers = ["signal-cli"];
-          path = envFile;
-        }
-      ];
-
+      # The daemon runs as its own user, so it needs read access to the env
+      # secret. That ACL entry is owned by modules/system/hermes.nix, which
+      # holds the single entry for this path — declaring a second one here would
+      # silently lose, because my.secrets builds one ACL unit per path. The
+      # assertion below turns that silent loss into a failed evaluation.
       systemd.services.signal-cli = {
         description = "signal-cli daemon (HTTP) for the agent's Signal channel";
         wantedBy = ["multi-user.target"];

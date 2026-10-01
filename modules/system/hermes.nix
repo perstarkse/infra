@@ -104,13 +104,113 @@
       model = lib.mkOption {
         type = lib.types.str;
         default = "anthropic/claude-sonnet-4";
-        description = "Model id for the default provider.";
+        description = ''
+          Model id for the default provider.
+
+          When modelProvider is set, this is the BARE model id the endpoint
+          expects — not a `provider/model` pair. Hermes splits `model.default`
+          with split_model_config_default(): it only understands an explicit
+          provider beside the id. Writing `custom:commandcode/meta/muse-…`
+          instead makes it strip just the `custom:` prefix and send
+          `commandcode/meta/muse-…` on the wire, which the endpoint rejects
+          with `400 … is not a valid model ID`.
+        '';
+      };
+
+      modelProvider = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Provider to route the model through, written as `model.provider`.
+          null keeps the provider implicit (OpenRouter-style `provider/model`
+          strings in `model`).
+        '';
       };
 
       baseUrl = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
         description = "Provider base URL. null keeps the provider default (OpenRouter).";
+      };
+
+      customProvider = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Name of a custom OpenAI-compatible provider to register in
+          `providers:`. Hermes supports these natively — no plugin needed. The
+          entry becomes `custom:<name>`, which is the prefix `model` must then
+          use, and Hermes derives the credential env var from the name:
+          `HERMES_CUSTOM_<NAME>_API_KEY` (non-alphanumerics → `_`, uppercased),
+          so `commandcode` → `HERMES_CUSTOM_COMMANDCODE_API_KEY`.
+
+          null registers nothing and uses a built-in provider (OpenRouter by
+          default).
+        '';
+      };
+
+      credentialEnvVar = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Env var holding this custom provider's credential, instead of letting
+          Hermes derive HERMES_CUSTOM_<NAME>_API_KEY from the provider name.
+
+          Set it when the credential already lives under another name (the
+          agent env file may well already carry it) — this avoids rewriting a
+          secret just to match a naming convention.
+        '';
+      };
+
+      apiMode = lib.mkOption {
+        type = lib.types.str;
+        default = "chat_completions";
+        description = ''
+          Transport for a custom provider: chat_completions |
+          anthropic_messages | codex_responses. Only used when customProvider
+          is set.
+        '';
+      };
+
+      reasoningEffort = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        description = ''
+          Global reasoning effort: minimal | low | medium | high | xhigh | max |
+          ultra, or "" for the model default.
+
+          This belongs in `agent.reasoning_effort`, NOT on the provider entry —
+          `reasoning_effort` is not in Hermes' known provider keys, so putting it
+          there is silently dropped with an "unknown config keys ignored"
+          warning. Resolution order is per-model override first, then this
+          global value (hermes_constants.py:resolve_reasoning_config).
+        '';
+      };
+
+      reasoningModelOverrides = lib.mkOption {
+        type = lib.types.attrs;
+        default = {};
+        description = ''
+          Per-model effort overrides, keyed by the full model id (e.g.
+          "custom:commandcode/meta/muse-spark-1.3-contributor"). Takes
+          precedence over reasoningEffort.
+        '';
+      };
+
+      modelOverrides = lib.mkOption {
+        type = lib.types.attrs;
+        default = {};
+        description = ''
+          Per-model metadata for models Hermes does not know, keyed by provider
+          then model id:
+
+            { "custom:commandcode"."meta/muse-spark-1.3-contributor" = {
+                context_window = 1048576; supports_reasoning = true; }; }
+
+          Without this an unknown id is assumed to be 200K context and
+          vision/reasoning support stays unknown (fail-open), which is safe but
+          under-reports the real window.
+        '';
       };
 
       firewallPort = lib.mkOption {
@@ -153,7 +253,33 @@
               {
                 default = cfg.model;
               }
+              // lib.optionalAttrs (cfg.modelProvider != null) {provider = cfg.modelProvider;}
               // lib.optionalAttrs (cfg.baseUrl != null) {base_url = cfg.baseUrl;};
+
+            # Custom OpenAI-compatible endpoint. Native support, not a plugin.
+            # snake_case keys, not camelCase: Hermes auto-maps camelCase but
+            # logs a warning for every key, and the provider entry's key set
+            # (_KNOWN_PROVIDER_KEYS) is snake_case.
+            providers = lib.optionalAttrs (cfg.customProvider != null) {
+              "custom:${cfg.customProvider}" =
+                {
+                  "base_url" = cfg.baseUrl;
+                  "api_mode" = cfg.apiMode;
+                }
+                // lib.optionalAttrs (cfg.credentialEnvVar != null) {
+                  key_env = cfg.credentialEnvVar;
+                };
+            };
+
+            model_overrides = cfg.modelOverrides;
+
+            agent =
+              {
+                reasoning_effort = cfg.reasoningEffort;
+              }
+              // lib.optionalAttrs (cfg.reasoningModelOverrides != {}) {
+                reasoning_overrides = cfg.reasoningModelOverrides;
+              };
             toolsets = ["all"];
             # Non-sudo by construction, so there is no `sudo *` rule here: the
             # `agent` fleet account holds no sudo rule at all, which is the real
@@ -194,7 +320,13 @@
         my.secrets.allowReadAccess =
           [
             {
-              readers = ["hermes"];
+              # ONE entry per path: my.secrets generates a single ACL unit per
+              # path (the unit name is derived from the path alone), so a second
+              # entry for the same file declared elsewhere silently loses. That
+              # is exactly how the signal-cli daemon ended up with a readers
+              # list of only ["hermes"] and could not read the file it reads its
+              # account number from. Every consumer of hermes-env goes here.
+              readers = ["hermes" "signal-cli"];
               path = envFile;
             }
           ]

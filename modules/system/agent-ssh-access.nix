@@ -64,10 +64,17 @@ _: {
 
       home = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/agent";
+        default = "/var/empty/agent";
         description = ''
-          Account home. Deliberately root-owned and NOT writable by the agent:
-          see the note above about ~/.ssh/authorized_keys.
+          Account home. Deliberately a path that is never created: sshd reads
+          ~/.ssh/authorized_keys in addition to
+          /etc/ssh/authorized_keys.d/%u, and services.openssh.authorizedKeysInHomedir
+          is a global option with no per-user override — so the only way to stop
+          the agent authorizing itself is to ensure no such file can exist.
+
+          /var/empty is root-owned 0555 on NixOS, so even if something creates
+          the path, the agent cannot write into it. Writable scratch lives in
+          `workDir` instead.
         '';
       };
 
@@ -127,6 +134,10 @@ _: {
         isNormalUser = true;
         group = cfg.user;
         inherit (cfg) home;
+        # No home directory is created or chowned: see the note on `home`. The
+        # NixOS users-groups activation chowns homes it manages, so a "make the
+        # home root-owned" oneshot loses to activation on every switch.
+        createHome = false;
         # Non-interactive, and a shell that sources nothing: an agent that logs
         # in gets a bare prompt, not a login environment it can shape.
         shell = pkgs.bash;
@@ -137,35 +148,57 @@ _: {
         password = "*";
       };
 
-      # Root-owned home, writable scratch dir. The agent cannot create
-      # ~/.ssh/authorized_keys, so it cannot lift its own restrictions.
-      #
-      # `D`, not `d`: users-groups activation creates the home FIRST (as the
-      # user, 0700), and a plain `d` does not adjust an existing directory — so
-      # the home stayed agent-owned and the restriction was cosmetic. `D` forces
-      # mode and ownership onto an existing path.
-      systemd.tmpfiles.rules = [
-        "D ${cfg.home} 0755 root root -"
-        "d ${cfg.workDir} 0700 ${cfg.user} ${cfg.user} -"
-      ];
+      # Writable scratch space. Created by an idempotent oneshot rather than a
+      # tmpfiles rule because tmpfiles only runs at boot, so a directory created
+      # by a deploy would not appear until the next reboot.
+      systemd.services.agent-workdir = {
+        description = "Create ${cfg.user}'s writable scratch directory";
+        wantedBy = ["multi-user.target"];
+        after = ["local-fs.target"];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          set -euo pipefail
+          install -d -m 0700 -o ${cfg.user} -g ${cfg.user} ${cfg.workDir}
+        '';
+      };
 
-      # Path unit: re-install the key when Clan deploys or rotates it. On a boot
-      # where the secret has not arrived yet, PathChanged on the delivery
-      # directory fires once the file shows up, so the agent is never locked out
-      # until the next deploy.
+      # Path unit: install the key when Clan deploys or rotates it.
+      #
+      # Edge-triggered watches alone miss the initial state: secrets land
+      # during activation, BEFORE the path unit starts, so on a first deploy
+      # the installer never fired and the key sat uninstalled until the next
+      # change. PathExists is level-triggered and fires at unit start when
+      # the file is already there. The generator directory itself is
+      # deliberately NOT watched: the whole /run/secrets tree is one tmpfs
+      # that Clan re-mounts via bind --beneath on every deploy, so a
+      # directory watch fires once per sibling file and trips the trigger
+      # limit (burst 10/30s) into trigger-limit-hit. Three watches on the
+      # file look redundant but are not: at unit start after a re-mount,
+      # all three fire at once, and if the mtime/ctime/inode then stays
+      # identical there is nothing new to react to — the key content is
+      # already installed by activation-time ordering (see the service).
       systemd.paths.install-agent-authorized-key = {
         wantedBy = ["multi-user.target"];
         pathConfig = {
+          PathExists = publicKeyPath;
+          PathChanged = publicKeyPath;
           PathModified = publicKeyPath;
-          PathChanged = builtins.dirOf publicKeyPath;
-          TriggerLimitIntervalSec = "30s";
-          TriggerLimitBurst = 10;
+          TriggerLimitIntervalSec = "5s";
+          TriggerLimitBurst = 50;
         };
       };
 
       systemd.services.install-agent-authorized-key = {
         description = "Install the restricted agent SSH public key for ${cfg.user}";
         after = ["local-fs.target"];
+        # Belt and suspenders next to the path unit: run at every switch so
+        # the key is installed even if the watcher ever trips its limit.
+        # The script is idempotent (install -m 0444 of identical content is
+        # a no-op write), so running it unconditionally costs one process
+        # spawn per deploy, not a key rewrite.
         wantedBy = ["multi-user.target"];
         unitConfig = {
           StartLimitIntervalSec = 300;
@@ -173,7 +206,10 @@ _: {
         };
         serviceConfig = {
           Type = "oneshot";
-          RemainAfterExit = true;
+          # No RemainAfterExit: a path unit activates the service with
+          # `systemctl start`, and an already-active oneshot makes that a no-op.
+          # With RemainAfterExit the installer ran exactly once (before the key
+          # existed) and then ignored every subsequent trigger.
         };
         script = ''
           set -euo pipefail

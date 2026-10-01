@@ -328,7 +328,7 @@ in {
   # rather than anything per user. No `sops`/`mail-clients` either: those carry
   # an age keyFile at /home/<user>/.config/sops/age/keys.txt and she has no
   # fleet secrets to decrypt.
-  home-manager.users.${secondUser} = {
+  home-manager.users.${secondUser} = {lib, ...}: {
     imports = with ctx.flake.homeModules; [
       fish
       starship
@@ -362,7 +362,33 @@ in {
     # are set rather than inherited: without this her session stays unlocked
     # whenever she steps away from a seat the other account is using.
     # idle-delay stays at the schema default (300s) and lock-delay at 0.
+    # Swedish session: GNOME input source plus LANG. System glibc already
+    # ships sv_SE (in supportedLocales via the shared en_US/sv_SE extras),
+    # so only the session default changes; the main account keeps en_US.
+    home.language.base = "sv_SE.UTF-8";
+
+    # Daily user-flatpak updates: Flathub ships its own CVE fixes outside
+    # the NixOS rebuild cycle, so this must not wait for a deploy.
+    systemd.user.services.flatpak-user-update = {
+      Unit.Description = "Update user Flatpaks";
+      Service = {
+        Type = "oneshot";
+        ExecStart = "/run/current-system/sw/bin/flatpak update --noninteractive --assumeyes";
+      };
+    };
+    systemd.user.timers.flatpak-user-update = {
+      Unit.Description = "Daily user Flatpak updates";
+      Timer = {
+        OnCalendar = "daily";
+        Persistent = true;
+      };
+      Install.WantedBy = ["timers.target"];
+    };
+
     dconf.settings = {
+      "org/gnome/desktop/input-sources" = {
+        sources = [(lib.hm.gvariant.mkTuple ["xkb" "se"])];
+      };
       "org/gnome/desktop/screensaver" = {
         idle-activation-enabled = true;
         lock-enabled = true;
@@ -676,6 +702,33 @@ in {
 
   # PI WEB user services should survive logout/reboot.
   users.users.p.linger = true;
+
+  # Flatpak escape hatch for the second account: she gets GNOME Software
+  # (the "app store") with Flathub, user-scope installs so no wheel/sudo is
+  # needed. The system base stays declarative; her day-to-day apps go here.
+  # enabling flatpak also pulls gnome-software via the gnome module.
+  services.flatpak.enable = true;
+
+  # Flathub remote, system scope so every account (including non-wheel ones
+  # installing --user) resolves it. No declarative option exists upstream,
+  # so one idempotent oneshot.
+  systemd.services.flatpak-add-flathub = {
+    description = "Add Flathub remote (system)";
+    wantedBy = ["multi-user.target"];
+    wants = ["network-online.target"];
+    after = ["network-online.target"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.flatpak}/bin/flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo";
+    };
+  };
+
+  # Swedish layout at the greeter too: GDM inherits the system XKB setting,
+  # so Swedish characters work in the password field before any session (and
+  # its dconf below) loads. The niri session sets its own layout and is
+  # unaffected; only the console keymap follows along.
+  services.xserver.xkb.layout = "se";
 
   # GDM replaced greetd here: greetd runs one greeter session at a time, so
   # handing the machine to the second account meant logging out and losing the

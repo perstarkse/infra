@@ -79,7 +79,29 @@
     # HDDs with dropcacheonclose).
     hermes = {
       enable = true;
-      model = "anthropic/claude-sonnet-4";
+
+      # Provider: commandcode, an OpenAI-compatible endpoint. Hermes supports
+      # these natively via `providers:` (no plugin). The credential is read from
+      # HERMES_CUSTOM_COMMANDCODE_API_KEY in the hermes-env var — derive that
+      # name from the provider name, don't guess it.
+      customProvider = "commandcode";
+      baseUrl = "https://api.commandcode.ai/provider/v1";
+      # Bare model id: the provider is named separately (modelProvider),
+      # because Hermes does not split a provider/model pair out of model.default.
+      model = "meta/muse-spark-1.3-contributor";
+      modelProvider = "custom:commandcode";
+      reasoningEffort = "high";
+
+      # The credential is already in the env file as COMMANDCODE_API_KEY.
+      # Pointing at it beats rewriting a secret to match Hermes' derived name.
+      credentialEnvVar = "COMMANDCODE_API_KEY";
+
+      # Hermes does not know this model id, so without metadata it assumes a
+      # 200K context. These are the figures from commandcode's own model list.
+      modelOverrides."custom:commandcode"."meta/muse-spark-1.3-contributor" = {
+        context_window = 1048576;
+        supports_reasoning = true;
+      };
     };
 
     # signal-cli HTTP daemon, host-side: the agent's container shares the host
