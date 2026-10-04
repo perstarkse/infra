@@ -51,11 +51,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1789721467,
-        "narHash": "sha256-HkdYOw9D4BvzeqRvoh3m7EYUmIel64CBDacKcoT0Ess=",
+        "lastModified": 1790941994,
+        "narHash": "sha256-4khNb2N/AORv43BWw+3kyKrdpYfWoOSNURi1g2T5izI=",
         "ref": "refs/heads/main",
-        "rev": "25a075399da30e721785900974580500b60af097",
-        "revCount": 109,
+        "rev": "19681e0c58a226b17faa1ca630c2d0b9c187ef99",
+        "revCount": 112,
         "type": "git",
         "url": "ssh://git@github.com/perstarkse/agent-tooling.git"
       },
@@ -1104,6 +1104,27 @@
         "type": "github"
       }
     },
+    "herdr": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rust-overlay": "rust-overlay"
+      },
+      "locked": {
+        "lastModified": 1791121747,
+        "narHash": "sha256-cI5r17Tnpmj+6WF6ompVQcVqO1jOJW9TdxXUVLdH8a4=",
+        "owner": "herdrdev",
+        "repo": "herdr",
+        "rev": "bce28752adb4eea0788013b9e2b0793d82737dfe",
+        "type": "github"
+      },
+      "original": {
+        "owner": "herdrdev",
+        "repo": "herdr",
+        "type": "github"
+      }
+    },
     "hermes-agent": {
       "inputs": {
         "flake-parts": "flake-parts_3",
@@ -1764,6 +1785,7 @@
         "clan-core": "clan-core",
         "digikey-mcp": "digikey-mcp",
         "flake-parts": "flake-parts_2",
+        "herdr": "herdr",
         "hermes-agent": "hermes-agent",
         "home-manager": "home-manager_3",
         "import-tree": "import-tree",
@@ -1833,6 +1855,27 @@
         "owner": "rust-lang",
         "ref": "nightly",
         "repo": "rust-analyzer",
+        "type": "github"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "herdr",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1783577481,
+        "narHash": "sha256-EWMxOWrJ031f8f/lrcEmhTRs4npw1/5N3Hcjin846c8=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "4cdea398dc491b082dccdce0fad1ed0b75fa3394",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
         "type": "github"
       }
     },

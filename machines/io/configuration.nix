@@ -6,6 +6,9 @@
   ...
 }: let
   endpointsLib = ctx.flake.lib.endpoints or (import ../../flake/lib/endpoints.nix {inherit (pkgs) lib;});
+  # Single source for charon's WOL target, shared with makemake's wake-charon
+  # script (flake/lib/wake-target.nix) so the MAC exists in exactly one file.
+  wakeTarget = ctx.flake.lib.wakeTarget or (import ../../flake/lib/wake-target.nix);
   keepAwakeIdentityFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
   routerImportCfg = config.my.endpoints.imports;
   routerDefaultDnsTarget =
@@ -58,16 +61,16 @@ in {
     listenAddress = "10.0.0.1";
     port = 8091;
 
-    upstreamHost = "10.0.0.15";
+    upstreamHost = wakeTarget.host;
     upstreamPort = 8504;
     healthPath = "/api/pi-web/version";
 
-    wolMac = "f0:2f:74:de:91:0a";
-    wolBroadcastIp = "10.0.0.255";
-    wolBroadcastPort = 9;
+    wolMac = wakeTarget.mac;
+    wolBroadcastIp = wakeTarget.broadcastIp;
+    wolBroadcastPort = wakeTarget.broadcastPort;
 
-    wakeTimeout = 180;
-    pollInterval = 2;
+    inherit (wakeTarget) wakeTimeout;
+    inherit (wakeTarget) pollInterval;
     wakePollIntervalMs = 2000;
     readyCacheTtl = 5;
     trustProxyHeaders = true;
@@ -82,7 +85,7 @@ in {
       maxDurationSeconds = 14400;
       remoteSsh =
         {
-          host = "10.0.0.15";
+          inherit (wakeTarget) host;
         }
         // lib.optionalAttrs (keepAwakeIdentityFile != null) {
           identityFile = keepAwakeIdentityFile;

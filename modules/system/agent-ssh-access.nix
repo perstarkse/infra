@@ -165,45 +165,27 @@ _: {
         '';
       };
 
-      # Path unit: install the key when Clan deploys or rotates it.
-      #
-      # Edge-triggered watches alone miss the initial state: secrets land
-      # during activation, BEFORE the path unit starts, so on a first deploy
-      # the installer never fired and the key sat uninstalled until the next
-      # change. PathExists is level-triggered and fires at unit start when
-      # the file is already there. The generator directory itself is
-      # deliberately NOT watched: the whole /run/secrets tree is one tmpfs
-      # that Clan re-mounts via bind --beneath on every deploy, so a
-      # directory watch fires once per sibling file and trips the trigger
-      # limit (burst 10/30s) into trigger-limit-hit. Three watches on the
-      # file look redundant but are not: at unit start after a re-mount,
-      # all three fire at once, and if the mtime/ctime/inode then stays
-      # identical there is nothing new to react to — the key content is
-      # already installed by activation-time ordering (see the service).
+      # Install-then-watch: the secret arrives DURING activation (clan untars
+      # the secrets tarball into /run/secrets before units start), and
+      # inotify watches only fire on changes AFTER they are established —
+      # so a watch created after the file exists never fires until the next
+      # rotation. The service therefore runs once at activation (idempotent:
+      # rewriting identical authorized_keys content is a no-op write) and
+      # the path unit covers rotations only. PathModified alone: mtime
+      # changes on rotation but not on the bind --beneath re-mount Clan
+      # does on every deploy, so redeploys of identical content stay quiet
+      # instead of tripping the trigger limit.
       systemd.paths.install-agent-authorized-key = {
         wantedBy = ["multi-user.target"];
         pathConfig = {
-          PathExists = publicKeyPath;
-          PathChanged = publicKeyPath;
           PathModified = publicKeyPath;
-          TriggerLimitIntervalSec = "5s";
-          TriggerLimitBurst = 50;
         };
       };
 
       systemd.services.install-agent-authorized-key = {
         description = "Install the restricted agent SSH public key for ${cfg.user}";
         after = ["local-fs.target"];
-        # Belt and suspenders next to the path unit: run at every switch so
-        # the key is installed even if the watcher ever trips its limit.
-        # The script is idempotent (install -m 0444 of identical content is
-        # a no-op write), so running it unconditionally costs one process
-        # spawn per deploy, not a key rewrite.
         wantedBy = ["multi-user.target"];
-        unitConfig = {
-          StartLimitIntervalSec = 300;
-          StartLimitBurst = 60;
-        };
         serviceConfig = {
           Type = "oneshot";
           # No RemainAfterExit: a path unit activates the service with

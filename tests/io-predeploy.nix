@@ -194,6 +194,7 @@
                   nixosModules = testNixosModules;
                   lib = {
                     endpoints = import ../flake/lib/endpoints.nix {inherit (pkgs) lib;};
+                    wakeTarget = import ../flake/lib/wake-target.nix;
                   };
                 };
                 inputs = {

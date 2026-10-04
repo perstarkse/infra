@@ -13,6 +13,9 @@
   # Canonical backup-job inventory for the sedna deadman (pure constant, no
   # cross-machine eval — arch #6).
   flake.lib.backupJobs = import ../lib/backup-jobs.nix;
+  # Wake-on-LAN target for charon, shared by io's wakeproxy and makemake's
+  # wake-charon script (single source: no duplicated MAC).
+  flake.lib.wakeTarget = import ../lib/wake-target.nix;
   # Canonical public-domain registry (pure constant, no cross-machine eval
   # — arch #6). MUST equal io's derived my.publicDomains; enforced by the
   # sedna subset assertions + io's registry-equality lint.

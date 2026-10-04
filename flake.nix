@@ -107,6 +107,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Execution surface on charon (coding-agent workspaces). Upstream herdr
+    # (Apache-2.0), tracked as a normal versioned flake input like every other
+    # public input here — the lockfile pins the rev charon runs. Not a `path:`
+    # input: that would tie the build to whatever is on disk at eval time.
+    herdr = {
+      url = "github:herdrdev/herdr";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Personal agent runtime. Pinned to a rev: upstream documents Nix as a
     # Tier 2, best-effort platform, and the Python lock is tied to one
     # interpreter family, so a moving main can break the build. Evaluates and

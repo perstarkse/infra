@@ -44,6 +44,34 @@
 # Leave SIGNAL_GROUP_ALLOWED_USERS unset: groups stay disabled by default.
 # Signal additionally understands MEDIA: tags, chunking and native formatting
 # with no extra configuration.
+#
+# API server (gateway introspection over HTTP, consumed by Open WebUI and the
+# agent-inspect CLI):
+#
+#   API_SERVER_ENABLED=true
+#   API_SERVER_KEY=<64 hex chars>
+#
+# Mail passwords for himalaya (see vars/generators/hermes-mail.nix, which
+# references them by name from each account's auth.cmd). One line per
+# account; the value is what the mailbox password is:
+#
+#   HIMALAYA_PASS_PERSONAL=<password>       per@<domain>, receive-only
+#   HIMALAYA_PASS_SERVICES=<password>       <alias>@<domain>, can send
+#   HIMALAYA_PASS_GMAIL=<app password>      Gmail app password
+#
+# Do NOT name these EMAIL_PASSWORD / EMAIL_ADDRESS / EMAIL_IMAP_HOST /
+# EMAIL_SMTP_HOST: those are Hermes' own single-account email channel, and it
+# strips exactly those names from every process it spawns, so himalaya would
+# never see the value and every login would fail with "cannot get secret from
+# command: empty output".
+#
+# These are as secret as the provider key above: the same file, the same ACL
+# readers, the same exclusion from the hermes restic job.
+#
+# Present in the live secret since 2026-10-01. `clan vars set` preserves
+# existing lines, so a key added that way survives generator re-runs; only a
+# hand edit of this generator file would re-prompt (and then the operator must
+# re-append both lines before answering the prompt).
 _: {
   "hermes-env" = {
     share = true;

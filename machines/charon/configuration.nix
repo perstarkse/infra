@@ -7,6 +7,15 @@
 }: let
   secondUser = "a";
 
+  # The `agent` account herdr's socket is shared with (see my.herdr.shareWith).
+  agentUser = config.my.agent-ssh-access.user;
+
+  # Socket the herdr server binds and every client resolves. Duplicated from the
+  # Home Manager module's my.herdr.socketDir default ($HOME/.config/herdr)
+  # because sshd config is system-level and cannot read the HM options. Keep the
+  # two in step: changing my.herdr.socketDir means changing this too.
+  herdrSocket = "/home/${config.my.mainUser.name}/.config/herdr/herdr.sock";
+
   # GDM's switch-user entry point, used to hand the box over without ending the
   # running session. gdm-50.1 common/gdm-common.c: gdm_goto_login_session →
   # create_transient_display → this method (daemon/gdm-local-display-factory.xml).
@@ -109,6 +118,7 @@ in {
         xdg-userdirs
         firefox
         chromium
+        hermes-inspect
         niri
         node
         voxtype
@@ -117,6 +127,7 @@ in {
         swayidle
         wow-launcher
         tether
+        herdr
       ]
       ++ (with ctx.inputs.varsHelper.homeModules; [default])
       ++ (with ctx.inputs.privateInfra.homeModules; [
@@ -129,6 +140,17 @@ in {
         shared-skills
         antigravity
       ]);
+
+    my.herdr = {
+      enable = true;
+      package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      # Share the server with the fleet's non-sudo `agent` account: Hermes on
+      # makemake drives charon's agents over plain ssh as `agent`, and herdr
+      # hardcodes its sockets to 0600. The server stays owned by `p` — panes
+      # spawn as the server user, and ~/.pi/agent is 0700 p, so an agent-owned
+      # server would come up with an empty agent config.
+      shareWith = [agentUser];
+    };
 
     home.packages = [
       pkgs.agent-browser
@@ -157,6 +179,7 @@ in {
       firefox.enable = true;
       fish.enable = true;
       git.enable = true;
+      hermes-inspect.enable = true;
       local-ai.enable = true;
       ncspot.enable = true;
       nix-scaffold.enable = true;
@@ -235,13 +258,14 @@ in {
           mcpServers = {
             accounted = {
               url = "https://accounting.lan.stark.pub/api/extensions/ext/mcp-server/mcp?client=pi-code";
-              auth = "bearer";
-              bearerToken = "!cat ${config.my.secrets.getPath "accounted-mcp-key" "env"} | grep '^ACCOUNTED_MCP_API_KEY=' | cut -d= -f2";
-              lifecycle = "lazy";
+              # pi's built-in MCP support has no `bearerToken` field: the
+              # Authorization header is a `!command` value, and that command must
+              # be the WHOLE value (pi runs it through a shell and takes trimmed
+              # stdout), so the Bearer prefix comes from the command itself.
+              headers.Authorization = "!cat ${config.my.secrets.getPath "accounted-mcp-key" "env"} | grep '^ACCOUNTED_MCP_API_KEY=' | cut -d= -f2 | sed 's/^/Bearer /'";
             };
             context7 = {
               url = "https://mcp.context7.com/mcp";
-              lifecycle = "lazy";
               headers = {
                 CONTEXT7_API_KEY = "!cat ${config.my.secrets.getPath "context7" "env"} | grep '^CONTEXT7_API_KEY=' | cut -d= -f2";
               };
@@ -251,7 +275,6 @@ in {
               # OAuth Callback URL set to DIGIKEY_CALLBACK_URL below; the account owner
               # then runs the one-time mylists_authorize consent flow.
               command = "${ctx.inputs.digikeyMcp.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/digikey-mcp";
-              lifecycle = "lazy";
               env = {
                 DIGIKEY_CLIENT_ID = "!cat ${config.my.secrets.getPath "digikey" "env"} | grep '^DIGIKEY_CLIENT_ID=' | cut -d= -f2";
                 DIGIKEY_CLIENT_SECRET = "!cat ${config.my.secrets.getPath "digikey" "env"} | grep '^DIGIKEY_CLIENT_SECRET=' | cut -d= -f2";
@@ -264,7 +287,6 @@ in {
             agentcad = {
               command = "${ctx.inputs.agentTooling.packages.${pkgs.stdenv.hostPlatform.system}.agentcad}/bin/python";
               args = ["-m" "agentcad.mcp"];
-              lifecycle = "lazy";
               # Host workaround: OCP's GL renderer aborts the process with an
               # X error on a live display it cannot use (BadWindow kills the
               # auto-diff PNG phase — agentcad 0.4.0 has no --no-diff). An
@@ -849,6 +871,10 @@ in {
   hardware.rasdaemon.enable = true;
 
   environment.systemPackages = with pkgs; [
+    # On PATH system-wide so `ssh agent@charon 'herdr agent list'` resolves it:
+    # a non-login ssh command gets sshd's default PATH, which does not include
+    # the Nix profile or Home Manager's.
+    ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default
     switchUserToGreeter
     unstable.code-cursor-fhs
     devenv
@@ -880,6 +906,18 @@ in {
   # directory, so pi's agent_browser tool fails with "Managed-session policy
   # coordination is unavailable or busy". Symlink /bin/ps onto procps so the
   # deterministic lock path works without relying on PATH.
+  # The herdr server runs as `p` (its panes spawn pi/agy and need `p`'s
+  # 0700 ~/.pi/agent), and its socket is shared with `agent` via ACL — see
+  # modules/home/herdr.nix. `agent` still has no way to FIND that socket on its
+  # own: its HOME is /var/empty/agent, so herdr would resolve a different path.
+  # SetEnv hands it the real one for every session, which is what makes
+  # `ssh agent@charon 'herdr agent list'` work with no wrapper on the makemake
+  # side. PATH likewise: sshd's default PATH has no /run/current-system/sw.
+  services.openssh.extraConfig = lib.mkAfter ''
+    Match User ${agentUser}
+        SetEnv HERDR_SOCKET_PATH=${herdrSocket} PATH=/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin
+  '';
+
   system.activationScripts.agent-browser-ps = ''
     mkdir -p /bin
     ln -sfn ${pkgs.procps}/bin/ps /bin/ps

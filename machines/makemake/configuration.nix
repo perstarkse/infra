@@ -38,6 +38,7 @@
       journal-upload
       agent-ssh-access
       hermes
+      wake-charon
       signal-cli
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
@@ -69,45 +70,38 @@
     # `restrict`ed key, no wheel/docker/libvirtd, logs only.
     agent-ssh-access.enable = true;
 
+    # Magic-packet script for waking charon before driving it over SSH.
+    # Runs on makemake (same broadcast reachability as io, one less hop).
+    # Constants interpolate from services.wakeproxy option defaults, which
+    # mirror io's values; makemake sets no services.wakeproxy itself.
+    wake-charon.enable = true;
+
     attic-cache.server = {
       enable = true;
       retentionPeriod = "1 months";
     };
 
-    # Personal agent: Hermes in container mode, /var/lib/hermes on RAID1 xfs
-    # (NOT /storage — the session DB is SQLite and /storage is mergerfs over
-    # HDDs with dropcacheonclose).
     hermes = {
       enable = true;
 
-      # Provider: commandcode, an OpenAI-compatible endpoint. Hermes supports
-      # these natively via `providers:` (no plugin). The credential is read from
-      # HERMES_CUSTOM_COMMANDCODE_API_KEY in the hermes-env var — derive that
-      # name from the provider name, don't guess it.
+      mail.enable = true;
+
       customProvider = "commandcode";
       baseUrl = "https://api.commandcode.ai/provider/v1";
-      # Bare model id: the provider is named separately (modelProvider),
-      # because Hermes does not split a provider/model pair out of model.default.
-      model = "meta/muse-spark-1.3-contributor";
+      # model = "meta/muse-spark-1.3-contributor";
+      model = "stealth/space-bunny-alpha";
       modelProvider = "custom:commandcode";
       reasoningEffort = "high";
 
       # The credential is already in the env file as COMMANDCODE_API_KEY.
-      # Pointing at it beats rewriting a secret to match Hermes' derived name.
       credentialEnvVar = "COMMANDCODE_API_KEY";
 
-      # Hermes does not know this model id, so without metadata it assumes a
-      # 200K context. These are the figures from commandcode's own model list.
-      modelOverrides."custom:commandcode"."meta/muse-spark-1.3-contributor" = {
+      modelOverrides."custom:commandcode"."stealth/space-bunny-alpha" = {
         context_window = 1048576;
         supports_reasoning = true;
       };
     };
 
-    # signal-cli HTTP daemon, host-side: the agent's container shares the host
-    # network namespace, so 127.0.0.1 reaches it with no port publishing.
-    # The account number is NOT here — it is read at unit start from the
-    # hermes-env secret, which is also where Hermes reads it from.
     signal-cli.enable = true;
 
     mainUser = {
@@ -155,13 +149,13 @@
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls" "hermes" "agent-ssh-key"];
+        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls" "hermes" "hermes-mail" "agent-ssh-key"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted" "agent-ssh-key" "attic-cache" "db-passwords" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "hermes-env" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
+      requireGenerators = ["accounted" "agent-ssh-key" "attic-cache" "db-passwords" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "hermes-env" "hermes-mail" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
 
       allowReadAccess = [
         {
@@ -278,7 +272,9 @@
           backupCleanupCommand = "rm -rf ${config.my.hermes.stateDir}/.restic-prep";
           # $HERMES_HOME/.env is regenerated from the hermes-env generator on
           # every activation: the generator is the source of truth, so keys
-          # never enter a backup repo.
+          # never enter a backup repo. Same for the installed himalaya
+          # config.toml (re-installed from hermes-mail on activation AND on
+          # rotation — a backup copy would hold live IMAP passwords).
           #
           # The LIVE .hermes/state.db* is deliberately NOT excluded: it may be
           # torn, but .restic-prep/state.db in the same snapshot is the
@@ -286,7 +282,7 @@
           # lose every session taken before the first restic run. If a restore
           # ever reports a corrupt state.db, replace it with the .restic-prep
           # copy from the same snapshot.
-          exclude = ["${config.my.hermes.stateDir}/.hermes/.env"];
+          exclude = ["${config.my.hermes.stateDir}/.hermes/.env" "${config.my.hermes.stateDir}/home/.config/himalaya/config.toml"];
         };
 
       paperless = {

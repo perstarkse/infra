@@ -15,6 +15,9 @@
 #     a GitHub known_hosts so `restrict`-ed key auth never prompts
 #   - the gateway API port gated to the io router, because container mode runs
 #     with --network=host (upstream nixosModules.nix)
+#   - himalaya on PATH in the container (nixpkgs closure mounted at
+#     /opt/himalaya) with its config.toml installed from the hermes-mail
+#     secret — addresses and passwords never enter the flake
 #
 # Channels only: backend.mode (browser dashboard / Hermes Desktop) is not
 # supported in container mode. That is the accepted trade for letting the agent
@@ -32,14 +35,31 @@
     sshDir = "${stateDir}/home/.ssh";
     envFile = config.my.secrets.getPath cfg.envSecretName "env";
     sshKeyFile = config.my.secrets.getPath cfg.sshKeySecretName "private_key";
-    # Re-render $HERMES_HOME/.env from the secret.
+    # Re-render $HERMES_HOME/.env from the secret, then restart BOTH consumers
+    # (the gateway and the signal-cli daemon, which reads SIGNAL_ACCOUNT from
+    # the same file), so the two can never end up on different account numbers.
     #
-    # Upstream merges `environmentFiles` into .env in a *system activation
-    # script* only (nixosModules.nix:455, "each activation writes .env again").
-    # The container's preStart does not re-merge, so a secret rotation followed
-    # by a plain restart leaves the agent on the previous credentials. This
-    # runs before the restart so rotation actually takes effect.
-    renderEnvScript = pkgs.writeShellScript "hermes-render-env" ''
+    # The re-render must live INSIDE this script, not as a second ExecStart:
+    # systemd runs ExecStart lines through separate shells with `;` semantics,
+    # so `render && restart` in ExecStart and a failure in render would be
+    # masked by the restart's exit code. One script, one shell, set -euo.
+    #
+    # Upstream gives no rotation handling at all (no systemd.paths, no
+    # restartTriggers — and restartTriggers on /run/secrets paths would never
+    # fire anyway: the units are byte-identical across content rotations, same
+    # reason ntfy-sh and gatus watch the file). Hand-written rather than spread
+    # from mkTryRestartOnRotation because that helper restarts exactly one
+    # service and would collide with this module's own `systemd.services`
+    # definitions.
+    #
+    # try-restart first, then start: a daemon that is *stopped* (e.g. because
+    # its secret was missing and it exhausted its start limit) is only brought
+    # up by the start fallback.
+    # Signal FIRST, then the agent: the gateway dials signal-cli during its own
+    # startup and logs "Signal: cannot reach signal-cli" if the daemon is not
+    # listening yet. Restarting the agent first guaranteed that race on every
+    # rotation (observed live: 13:58:55, one restart after the secret landed).
+    restartUnitsScript = pkgs.writeShellScript "hermes-env-restart-units" ''
       set -euo pipefail
       target="${stateDir}/.hermes/.env"
       install -d -m 0700 -o ${agentUser} -g ${agentUser} "$(dirname "$target")"
@@ -50,17 +70,12 @@
       install -m 0600 -o ${agentUser} -g ${agentUser} "$tmp" "$target"
       rm -f "$tmp"
       echo "hermes: re-rendered $target from ${envFile}"
-    '';
-    # One restarter for both consumers of the shared secret, so the gateway and
-    # the signal-cli daemon can never end up on different account numbers.
-    restartUnitsScript = pkgs.writeShellScript "hermes-env-restart-units" ''
-      set -euo pipefail
-      # try-restart first, then start: a daemon that is *stopped* (e.g. because
-      # its secret was missing and it exhausted its start limit) is only brought
-      # up by the start fallback.
-      for unit in hermes-agent.service signal-cli.service; do
-        ${lib.getExe pkgs.systemd}/systemctl try-restart "$unit" \
-          || ${lib.getExe pkgs.systemd}/systemctl start "$unit"
+      # getExe' takes the binary name: plain lib.getExe pkgs.systemd already
+      # returns .../bin/systemctl, and appending /systemctl to THAT produced
+      # .../bin/systemctl/systemctl -> status 127 on every rotation.
+      for unit in signal-cli.service hermes-agent.service; do
+        ${lib.getExe' pkgs.systemd "systemctl"} try-restart "$unit" \
+          || ${lib.getExe' pkgs.systemd "systemctl"} start "$unit"
       done
     '';
   in {
@@ -99,6 +114,41 @@
           agent's home so it can reach the other machines and GitHub without a
           prompt.
         '';
+      };
+
+      mail = {
+        enable = lib.mkEnableOption "himalaya mail access for the agent";
+
+        secretName = lib.mkOption {
+          type = lib.types.str;
+          default = "hermes-mail";
+          description = "vars generator holding the himalaya config.toml.";
+        };
+
+        configFile = lib.mkOption {
+          type = lib.types.str;
+          default = "config.toml";
+          description = "File inside secretName's output carrying the himalaya config.";
+        };
+
+        package = lib.mkOption {
+          type = lib.types.package;
+          default = pkgs.himalaya;
+          defaultText = lib.literalExpression "pkgs.himalaya";
+          description = ''
+            Himalaya package. extraPackages would put it on the host wrapper
+            only — the gateway runs inside the container, whose only host
+            inputs are /nix/store mounts, so this is bind-mounted via
+            container.extraVolumes and PATH-prepended in the gateway argv
+            (at mail.mountDir in-container) instead.
+          '';
+        };
+
+        mountDir = lib.mkOption {
+          type = lib.types.str;
+          default = "/opt/himalaya";
+          description = "In-container path the package closure is bind-mounted at.";
+        };
       };
 
       model = lib.mkOption {
@@ -217,9 +267,14 @@
         type = lib.types.port;
         default = 8642;
         description = ''
-          Gateway API server port. It binds 127.0.0.1 by default, but container
-          mode shares the host network, so the port is gated to the router
-          anyway: a later API_SERVER_HOST change must not publish it to the LAN.
+          Gateway API server port (API_SERVER_PORT, default 8642 upstream).
+          It binds 127.0.0.1 by default, but container mode shares the host
+          network, so the port is gated to the router anyway: a later
+          API_SERVER_HOST change must not publish it to the LAN.
+
+          The server itself is enabled via API_SERVER_ENABLED=true +
+          API_SERVER_KEY=… in hermes-env (see vars/generators/hermes-env.nix),
+          not via Nix — the key must never enter the store.
         '';
       };
 
@@ -335,16 +390,9 @@
             path = sshKeyFile;
           };
 
-        # Rotate hermes-env → re-render .env, then restart BOTH consumers (the
-        # gateway and the signal-cli daemon, which reads SIGNAL_ACCOUNT from the
-        # same file). The upstream module ships no rotation handling at all (no
-        # systemd.paths, no restartTriggers) and the units are byte-identical
-        # across content rotations, so a restartTriggers list on /run/secrets
-        # paths would never fire — same reason ntfy-sh and gatus watch the file.
-        #
-        # Hand-written rather than spread from mkTryRestartOnRotation because the
-        # helper restarts exactly one service and would collide with this
-        # module's own `systemd.services` definitions.
+        # Rotate hermes-env → the restart script re-renders .env, then restarts
+        # BOTH consumers (the gateway and the signal-cli daemon, which reads
+        # SIGNAL_ACCOUNT from the same file). Details live on restartUnitsScript.
         systemd.paths.hermes-env-rotation = {
           description = "Restart the agent when hermes-env rotates";
           wantedBy = ["multi-user.target"];
@@ -361,7 +409,7 @@
             Type = "oneshot";
             # Let a multi-file Clan write batch settle before the restarts fire.
             ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
-            ExecStart = "${renderEnvScript} && ${restartUnitsScript}";
+            ExecStart = restartUnitsScript;
           };
         };
       }
@@ -404,6 +452,100 @@
           '';
         };
       })
+
+      (lib.mkIf cfg.mail.enable (let
+        mailSrc = config.my.secrets.getPath cfg.mail.secretName cfg.mail.configFile;
+        mailDir = "${stateDir}/home/.config/himalaya";
+        # Stable in-container absolute path for the agent at
+        # ${mountDir}/himalaya. container-bin holds ONE symlink per mail
+        # binary (not the store path itself), so the volume spec — and with
+        # it the container identity hash — stays stable across himalaya
+        # updates; tmpfiles owns the link, the installer owns the GC root.
+        # SOUL.md points the agent at the absolute path, so no in-container
+        # PATH surgery is needed.
+        binDir = "${stateDir}/container-bin";
+        himalayaBin = "${binDir}/himalaya";
+      in {
+        services.hermes-agent.container.extraVolumes = ["${binDir}:${cfg.mail.mountDir}:ro"];
+
+        # Himalaya has no daemon: it reads config.toml on every invocation,
+        # so rotation only re-installs the file — no hermes-agent restart.
+        # Same install-then-watch shape as install-agent-authorized-key: the
+        # service runs once at activation (secret lands during activation,
+        # before inotify watches exist), the path unit covers rotations.
+        # No RemainAfterExit: a path unit's `start` on an active oneshot is
+        # a no-op, so the re-install would run exactly once and miss rotations.
+        systemd.paths.hermes-mail-rotation = {
+          description = "Re-install the agent's himalaya config when hermes-mail rotates";
+          wantedBy = ["multi-user.target"];
+          pathConfig = {
+            PathModified = [mailSrc];
+            Unit = "hermes-install-mail.service";
+            TriggerLimitIntervalSec = "30s";
+            TriggerLimitBurst = 10;
+          };
+        };
+        systemd.services.hermes-install-mail = {
+          description = "Install the agent's himalaya config and mail binary link";
+          wantedBy = ["multi-user.target"];
+          before = ["hermes-agent.service"];
+          after = ["local-fs.target"];
+          serviceConfig = {
+            Type = "oneshot";
+            Restart = "on-failure";
+            RestartSec = 1;
+          };
+          script = ''
+            set -euo pipefail
+            if [ ! -s "${mailSrc}" ]; then
+              echo "hermes-install-mail: source secret ${mailSrc} missing or empty" >&2
+              exit 1
+            fi
+            ${pkgs.nix}/bin/nix-store --add-root ${stateDir}/.gc-root-himalaya --indirect -r ${cfg.mail.package} 2>/dev/null || true
+            # The binary link is made HERE, not by a tmpfiles rule: tmpfiles
+            # only runs at boot, so a rule left the bind mount empty for
+            # every deploy that was not a reboot — himalaya was simply
+            # absent at ${cfg.mail.mountDir}/himalaya. ln -sfn is idempotent,
+            # so a store-path change on the next deploy is picked up here.
+            install -d -m 0755 -o root -g root ${binDir}
+            ln -sfn ${cfg.mail.package}/bin/himalaya ${himalayaBin}
+            install -d -m 0700 -o ${agentUser} -g ${agentUser} ${mailDir}
+            install -m 0400 -o ${agentUser} -g ${agentUser} ${mailSrc} ${mailDir}/config.toml
+            echo "hermes-install-mail: ${himalayaBin} -> $(readlink ${himalayaBin})"
+          '';
+        };
+      }))
+
+      # wake-charon in the container, same shape as himalaya above: the
+      # gateway's only host inputs are /nix/store mounts and ${stateDir}, so a
+      # systemPackages entry is invisible in there. One symlink under the same
+      # container-bin dir keeps the volume spec (and with it the container
+      # identity hash) stable across wake-charon store-path changes.
+      (lib.mkIf config.my.wake-charon.enable (let
+        binDir = "${stateDir}/container-bin";
+        wakeBin = "${binDir}/wake-charon";
+      in {
+        services.hermes-agent.container.extraVolumes = ["${binDir}:/opt/wake-charon:ro"];
+
+        systemd.services.hermes-install-wake-charon = {
+          description = "Expose the wake-charon script to the agent container";
+          wantedBy = ["multi-user.target"];
+          before = ["hermes-agent.service"];
+          after = ["local-fs.target"];
+          serviceConfig = {
+            Type = "oneshot";
+            Restart = "on-failure";
+            RestartSec = 1;
+          };
+          script = ''
+            set -euo pipefail
+            ${pkgs.nix}/bin/nix-store --add-root ${stateDir}/.gc-root-wake-charon --indirect -r ${config.my.wake-charon.package} 2>/dev/null || true
+            install -d -m 0755 -o root -g root ${binDir}
+            ln -sfn ${config.my.wake-charon.package}/bin/wake-charon ${wakeBin}
+            echo "hermes-install-wake-charon: ${wakeBin} -> $(readlink ${wakeBin})"
+          '';
+        };
+      }))
 
       # Container mode shares the host network namespace, so every port the
       # gateway opens is a port on makemake. Restrict the known one to io.
