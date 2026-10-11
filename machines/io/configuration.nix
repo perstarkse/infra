@@ -227,8 +227,9 @@ in {
     };
 
     endpoints.imports = {
-      # charon publishes herdr.lan.stark.pub here; without it in this list the
-      # endpoint is declared on charon and dropped on the floor at the router.
+      # Both herdr vhosts are declared on charon/makemake and proxied here;
+      # without an entry in this list the declaration is dropped on the floor
+      # at the router.
       machines = [
         "makemake"
         "charon"

@@ -110,23 +110,17 @@
     };
 
     config = lib.mkIf cfg.enable {
-      # bun goes in home.packages rather than into the herdr unit's PATH.
-      # Setting PATH on the unit REPLACES the path the service inherits from
-      # the user manager, and NixOS's set-environment respects an existing PATH
-      # rather than rebuilding it — so panes spawned by the server kept that
-      # PATH and never gained ~/.nix-profile/bin, making agy, zoxide, cargo and
-      # the rest of the user profile disappear inside panes while working in a
-      # normal terminal. ~/.nix-profile/bin is already on the manager's PATH,
-      # so putting bun here satisfies the plugin's [[startup]] hook without
-      # touching PATH at all.
+      # bun goes in home.packages rather than into the herdr unit's PATH:
+      # setting PATH on the unit REPLACES the inherited one, and panes
+      # spawned by the server then lose ~/.nix-profile/bin (agy, zoxide,
+      # cargo gone inside panes, fine in a normal terminal). The manager's
+      # PATH already carries ~/.nix-profile/bin, so this satisfies the
+      # plugin's [[startup]] hook without touching PATH at all.
       home.packages = [bun];
 
       # HOST reaches the `bun scripts/plugin.ts start` startup hook THROUGH
-      # herdr, not around it. The hook is spawned by the server and reads
-      # process.env first (scripts/plugin.ts:104 falls back to 127.0.0.1),
-      # so HOST must be on the server's own environment — there is no other
-      # channel. A `tailscale serve` deployment wants loopback and overrides
-      # bindHost.
+      # herdr (the hook reads process.env, defaulting to 127.0.0.1), so it
+      # must be on the server's own environment — there is no other channel.
       systemd.user.services.herdr.Service.Environment = ["HOST=${cfg.bindHost}"];
 
       # Belt and suspenders: the [[startup]] hook is one-shot per herdr start,

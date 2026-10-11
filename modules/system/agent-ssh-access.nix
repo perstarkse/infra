@@ -37,11 +37,12 @@
 # carrying the tag, because Clan targets whole generators. On the machines that
 # do not run the agent, private_key lands in /run/secrets as root-owned 0400
 # with no ACL reader granted — so it is readable only by root on those hosts, not
-# by any local user. The only reader anywhere is the hermes user on makemake.
+# by any local user. The only non-root reader anywhere is the fleet `agent`
+# account on the agent host (makemake).
 #
-# Tier A (this module): sshd option restrictions in the key line. Shell, git and
-# arbitrary non-sudo commands are allowed; forwarding, ~/.ssh/rc and PTY
-# allocation are refused.
+# Tier A (this module): sshd option restrictions in the key line. PTY and
+# local port-forwarding are re-enabled on top of `restrict` (see
+# authorizedKeysOptions); ~/.ssh/rc and everything else stay refused.
 #
 # Tier B (not implemented): a forced command per host wrapping an allowlist of
 # read-only operations. Add it when the real usage pattern is known well enough
@@ -165,19 +166,6 @@ _: {
           directories still need traversePaths.
         '';
       };
-
-      setEnv = lib.mkOption {
-        type = lib.types.attrsOf lib.types.str;
-        default = {};
-        description = ''
-          Environment variables sshd sets for every login as this user
-          (Match-block SetEnv). Use for per-machine socket defaults — e.g.
-          HERDR_SOCKET/HERDR_SOCKET_PATH pointing at another user's live
-          herdr socket so both the CLI and the web UI's remote bridge land
-          on the same server. Empty by default: most machines want the
-          user's own socket.
-        '';
-      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -242,17 +230,9 @@ _: {
       # user=agent`: Match after -> `/etc/ssh/authorized_keys.d/agent`, Match
       # before -> the global homedir list. Non-matching users keep the global
       # line either way.
-      # Per-machine socket defaults for this user live in the machine config
-      # (`my.agent-ssh-access.setEnv`), not here: this module is fleet-wide
-      # and the right socket differs per host. Empty by default — and it
-      # must STAY empty unless a machine opts in deliberately: a stale
-      # HERDR_SOCKET here redirects every remote bridge started over SSH
-      # (the web UI's Add-PC flow sets no socket of its own) away from the
-      # account's own server.
       services.openssh.extraConfig = lib.mkAfter ''
         Match User ${cfg.user}
             AuthorizedKeysFile ${cfg.authorizedKeysFile}
-            ${lib.concatStringsSep "\n            " (lib.mapAttrsToList (k: v: "SetEnv ${k}=${v}") cfg.setEnv)}
       '';
 
       # Install-then-watch: the secret arrives DURING activation (clan untars

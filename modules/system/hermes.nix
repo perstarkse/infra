@@ -1,31 +1,24 @@
-# Personal agent: Hermes Agent on makemake, running NATIVELY as `agent`.
+# Personal agent: Hermes Agent on makemake, running as `agent`.
 #
 # Upstream ships `nixosModules.default`; this module is the fleet wrapper that
 # pins the pieces the generic module deliberately leaves open:
 #
-#   - Native, not container (roadmap Phase D). The container only walled off the
-#     gateway, not the work, and once panes run as `agent` on the host the LLM
-#     already executes arbitrary code there. Container mode is not offered as an
-#     option: its plumbing (the /data mount, the /opt symlink farm) is gone, so
-#     a flag to turn it back on would only select a broken deployment.
-#   - stateDir IS the agent's home. Native mode sets HOME = stateDir, so
-#     setting it to /home/agent is what makes the gateway an ordinary user of
-#     the machine instead of a service with a private root: ssh, himalaya and
-#     herdr all resolve the same paths a login shell would.
 #   - the gateway runs as the fleet `agent` account, NOT a `hermes` one. The
 #     user is created by agent-ssh-access, so upstream's createUser is off —
 #     which also means upstream's `linger` default (it lives inside the
 #     createUser block) never applies, and cron would silently degrade to
 #     unscoped workers. It is set explicitly below.
-#   - the fleet SSH private key and a GitHub known_hosts land in that same
-#     home, so `restrict`-ed key auth never prompts.
-#   - the gateway API port stays gated to the io router. Native mode binds the
-#     host directly, so this is no longer about --network=host; the port is
-#     still LAN-reachable and must stay restricted.
+#   - stateDir IS the agent's home. The gateway sets HOME = stateDir, so
+#     setting it to /home/agent is what makes the gateway an ordinary user of
+#     the machine instead of a service with a private root: ssh, himalaya and
+#     herdr all resolve the same paths a login shell would.
+#   - the fleet SSH private key and known_hosts land in that same home, so
+#     `restrict`-ed key auth never prompts.
+#   - the gateway API port stays gated to the io router: the gateway binds
+#     the host directly, so the port is LAN-reachable and must stay restricted.
 #   - himalaya and wake-charon ride `services.hermes-agent.extraPackages`
 #     ("more packages on the PATH of the agent"), which upstream also mirrors
-#     into users.users.<user>.packages. In container mode these needed
-#     container-bin symlinks and :ro bind mounts instead; native mode does not.
+#     into users.users.<user>.packages.
 #
 # Why putting the gateway's writable state inside the agent's home is safe:
 # Home Manager does not write its files INTO the home, it links them there
@@ -44,12 +37,10 @@
     inherit (cfg) stateDir;
     agentUser = config.services.hermes-agent.user;
     # The account that actually drives the fleet. The fleet SSH key and
-    # known_hosts belong to `agent`, not to the hermes service user: once herdr
-    # runs as `agent` (roadmap Phase C), `agent` is the identity that reaches
-    # the other machines, and the gateway only ever borrowed the key. Taken from
-    # the agent-ssh-access options rather than hardcoded so the two accounts'
-    # home paths cannot drift (that module's `home` IS
-    # users.users.<user>.home).
+    # known_hosts belong to `agent`: it is the identity that reaches the
+    # other machines. Taken from the agent-ssh-access options rather than
+    # hardcoded so the two accounts' home paths cannot drift (that module's
+    # `home` IS users.users.<user>.home).
     fleetUser = config.my.agent-ssh-access.user or "agent";
     fleetHome = config.my.agent-ssh-access.home or "/home/agent";
     envFile = config.my.secrets.getPath cfg.envSecretName "env";
@@ -280,9 +271,9 @@
         default = 8642;
         description = ''
           Gateway API server port (API_SERVER_PORT, default 8642 upstream).
-          It binds 127.0.0.1 by default, but container mode shares the host
-          network, so the port is gated to the router anyway: a later
-          API_SERVER_HOST change must not publish it to the LAN.
+          It binds 127.0.0.1 by default; the port is gated to the router
+          anyway, so a later API_SERVER_HOST change cannot publish it to
+          the LAN.
 
           The server itself is enabled via API_SERVER_ENABLED=true +
           API_SERVER_KEY=… in hermes-env (see vars/generators/hermes-env.nix),
@@ -310,11 +301,11 @@
             message = "my.hermes: the gateway runs as ${fleetUser} and installs its fleet SSH key and known_hosts under ${fleetHome}, but that account's home is not created. Set my.agent-ssh-access.createHome = true, or point my.hermes.stateDir somewhere writable.";
           }
           {
-            # stateDir is what native mode sets HOME to. If it is not the user's
+            # stateDir is what the gateway sets HOME to. If it is not the user's
             # home, ssh/himalaya/herdr resolve one tree while the installers
             # write another, and nothing fails loudly.
             assertion = cfg.stateDir == fleetHome;
-            message = "my.hermes.stateDir (${cfg.stateDir}) must equal my.agent-ssh-access.home (${fleetHome}): native mode sets HOME = stateDir, so any other value splits the agent's files across two trees.";
+            message = "my.hermes.stateDir (${cfg.stateDir}) must equal my.agent-ssh-access.home (${fleetHome}): the gateway sets HOME = stateDir, so any other value splits the agent's files across two trees.";
           }
         ];
 
@@ -333,13 +324,9 @@
           # `linger = mkDefault (!container.enable)` lives INSIDE the createUser
           # block, so switching it off also switches off the user bus that
           # restart-safe cron dispatch needs. Set explicitly further down.
-          # Native, always. Roadmap Phase D retired container mode rather than
-          # leaving it selectable: the container's whole reason for existing was
-          # a stable /data bind mount and an /opt symlink farm, and with the
-          # gateway running as `agent` in its own home all of that is just the
-          # home. Offering the flag back would offer a mode whose plumbing no
-          # longer exists — himalaya, wake-charon and the herdr client all
-          # arrived through paths that are gone.
+          # Container mode is not offered: its plumbing (/data bind mount,
+          # /opt symlink farm) is gone, so a flag to turn it back on would
+          # only select a broken deployment.
           container.enable = false;
           user = fleetUser;
           group = fleetUser;
@@ -347,14 +334,13 @@
           addToSystemPackages = true;
 
           # The agent's own tools. Upstream puts these on the service PATH and
-          # mirrors them into users.users.<user>.packages. This is what replaces
-          # the container-bin symlinks and :ro mounts native mode does not need.
+          # mirrors them into users.users.<user>.packages.
           extraPackages =
             lib.optional cfg.mail.enable cfg.mail.package
             ++ lib.optional config.my.wake-charon.enable config.my.wake-charon.package;
 
           # Merged into $HERMES_HOME/.env on every activation, so a rotated key
-          # needs a gateway restart, not a container rebuild.
+          # needs a gateway restart, not a rebuild.
           environmentFiles = [envFile];
 
           settings = {
@@ -390,13 +376,9 @@
                 reasoning_overrides = cfg.reasoningModelOverrides;
               };
             toolsets = ["all"];
-            # Non-sudo by construction, so there is no `sudo *` rule here: the
-            # `agent` fleet account holds no sudo rule at all, which is the real
-            # boundary, and denying sudo outright also blocked the container-mode
-            # self-modification (apt/pip/npm via the NOPASSWD rule the upstream
-            # container entrypoint provisions) that container mode was chosen for.
-            # Container-internal sudo is namespaced to the container filesystem;
-            # the host's /etc is not mounted and the store is read-only.
+            # Non-sudo by construction: the `agent` fleet account holds no sudo
+            # rule at all, which is the real boundary, so there is no `sudo *`
+            # rule here either.
             approvals = {
               mode = "smart";
               # Unattended surfaces fail closed instead of waiting out an
@@ -436,7 +418,7 @@
           # defaulted this, but its default sits INSIDE its createUser block,
           # which is off here. mkDefault so a machine can still override.
           linger = true;
-          # stateDir IS this user's home (native mode sets HOME = stateDir), so
+          # stateDir IS this user's home (the gateway sets HOME = stateDir), so
           # upstream's tmpfiles rule `d <stateDir> 2770 <user> <group>` and the
           # NixOS users-groups activation both own this directory's mode --
           # 2770 versus homeMode's 700. tmpfiles only runs at boot, so without
@@ -456,10 +438,8 @@
               # is exactly how the signal-cli daemon ended up with a readers
               # list of only ["hermes"] and could not read the file it reads its
               # account number from. Every consumer of hermes-env goes here.
-              # The gateway is `agent` now (roadmap Phase D), so `hermes` is no
-              # longer a reader of anything here. signal-cli keeps its own
-              # grant: it reads SIGNAL_ACCOUNT out of the same file and stays
-              # its own system user.
+              # signal-cli keeps its own grant: it reads SIGNAL_ACCOUNT out of
+              # the same file and stays its own system user.
               readers = [fleetUser "signal-cli"];
               path = envFile;
             }
@@ -497,28 +477,22 @@
         my.secrets.exposeUserSecrets = [
           {
             enable = true;
-            # The fleet key now belongs to `agent`, not `hermes` (roadmap D7 +
-            # Phase E). Once the herdr server and the toolchain run as `agent`,
-            # `agent` is the identity that actually reaches the other machines —
-            # the gateway was only ever a borrower. Phase D moves the gateway to
-            # the same account, so this stops being a second reader rather than
-            # becoming a stale grant.
+            # The fleet key belongs to `agent`: it is the identity that actually
+            # reaches the other machines.
             user = fleetUser;
             secretName = cfg.sshKeySecretName;
             file = "private_key";
-            # The account's own HOME. `stateDir` was only ever the container's
-            # HOME, and the mesh config on both machines points at
+            # The account's own HOME: the mesh config on both machines points at
             # ~/.ssh/id_ed25519.
             dest = "${fleetHome}/.ssh/id_ed25519";
             mode = "0400";
           }
         ];
 
-        # Host keys for non-interactive `restrict`ed key auth. This has to land
+        # Host keys for non-interactive `restrict`ed key auth. This lands
         # in the driving account's own $HOME/.ssh — its home is
         # ${fleetHome}, and its own mesh config asks ssh to use
-        # ~/.ssh/id_ed25519 from exactly here. It used to target the
-        # container's HOME (${sshDir}); Phase E moved it with the key.
+        # ~/.ssh/id_ed25519 from exactly here.
         # Fleet keys collected with ssh-keyscan over the LAN on 2026-09-29;
         # github's is the same key the workstation pins in programs.ssh.knownHosts
         # (modules/system/shared.nix).
@@ -583,10 +557,9 @@
               echo "hermes-install-mail: source secret ${mailSrc} missing or empty" >&2
               exit 1
             fi
-            # No binary plumbing: himalaya itself arrives through
-            # services.hermes-agent.extraPackages, which puts it on the
-            # gateway's PATH and in the user's profile. This job installs the
-            # config file and nothing else.
+            # himalaya itself arrives through services.hermes-agent.extraPackages,
+            # which puts it on the gateway's PATH and in the user's profile.
+            # This job installs the config file and nothing else.
             # Own the whole chain, not just the leaf: install -d only fixes
             # ownership on directories it creates, so a ~/.config first made by
             # a root-run installer stays root-owned and the agent can then write
@@ -601,31 +574,15 @@
         };
       }))
 
-      # wake-charon needs no plumbing at all in native mode. It used to be a
-      # container-bin symlink plus a :ro mount, because the container's only
-      # host inputs were /nix/store and ${stateDir} and a systemPackages entry
-      # was invisible in there. The gateway is now an ordinary process on the
-      # host, so the script arrives through services.hermes-agent.extraPackages
-      # -- which upstream also mirrors into users.users.<user>.packages, so it
+      # wake-charon arrives through services.hermes-agent.extraPackages —
+      # which upstream also mirrors into users.users.<user>.packages, so it
       # is on the agent's interactive PATH too, not just the gateway's.
 
-      # No herdr client for the agent container any more. It used to need only a
-      # stable binary path, because the socket came for free: herdr ran as
-      # `hermes`, whose stateDir is bind-mounted at /data, so the socket was
-      # /data/.config/herdr/herdr.sock with no wiring at all. That stopped being
-      # true in roadmap Phase C — herdr is now a Home Manager user unit owned by
-      # `agent`, so its socket lives in a 0700 home the `hermes` container user
-      # cannot traverse. Bridging it would mean an ACL plus a new bind mount for
-      # a container that roadmap Phase D removes outright (the gateway runs
-      # natively as `agent`, and reaches the socket directly). So the block is
-      # gone rather than re-plumbed.
-      #
-      # CONSEQUENCE, deliberately accepted and not hidden: until Phase D lands,
-      # the containerised gateway has no herdr client. Do not deploy Phase C on
-      # its own — C and D belong in one deploy.
+      # No herdr client wiring here: the gateway runs as `agent`
+      # and reaches the socket (same user's home) directly.
 
-      # Container mode shares the host network namespace, so every port the
-      # gateway opens is a port on makemake. Restrict the known one to io.
+      # The gateway binds the host directly, so its API port is LAN-reachable
+      # and stays restricted to io.
       {
         networking.firewall = {
           extraInputRules =

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Removed
+
+- **Dead herdr surface deleted: `modules/system/herdr.nix`, `flake/lib/herdr-sockets.nix`, `my.herdr.shareWith` (HM), `my.agent-ssh-access.setEnv`** — each server is now owned by the account that drives it, so cross-user socket sharing and per-login socket overrides have no consumers. The HM `herdr.service` loses its `ExecStartPost` ACL wait and pins `HERDR_SOCKET_PATH` for its own clients unconditionally. Blast radius: **makemake, charon** (unit re-link on next deploy; agent-ssh-access Match block also renders on ariel/io, defaults leave it unobservable there).
+  - Verified: `agent verify mid` 9/9 exit 0; `nix flake check` rc=0 ("all checks passed!"); `agent guard check` rc=0 (deploy-target warnings only). Second-opinion review (agy) agreed on all five proposals and caught one flaw in the draft (delete the sockets lib, don't inline it — `shareWith` removal leaves zero consumers).
+  - NOT verified at runtime: redeploy to makemake/charon (HM unit re-link + `herdr.service` restart) has not been run from here.
+
 ### Changed
 
 - **makemake's `agent` gets the coding-agent toolchain (pi + agy), and a second herdr web frontend** — roadmap Phases F and G. Panes on makemake can now run `pi` and `agy`, and the herdr browser client is published at `https://herdr-mk.lan.stark.pub` alongside charon's untouched `herdr.lan.stark.pub`.

@@ -114,12 +114,8 @@
       ripgrep
     ];
 
-    # herdr as a USER unit here rather than the system unit it used to be. The
-    # system module existed only for machines with no Home Manager user; now
-    # that `agent` has one, the server runs as `agent`, which is the identity
-    # panes must be spawned as (D1/D3) and the one whose home the socket lands
-    # in. No `shareWith`: the server already belongs to the only user that
-    # drives it.
+    # herdr runs as `agent` (the identity panes must be spawned as, and the
+    # home the socket lands in).
     my.herdr = {
       enable = true;
       # No default in the HM module (home modules cannot see flake inputs), so
@@ -127,23 +123,22 @@
       package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
     };
 
-    # Plugin half of the browser client (roadmap Phase G). bindHost is NOT set:
-    # the HM module already defaults it to my.listenNetworkAddress, and a
-    # loopback bind would be unreachable from io's proxy.
+    # Plugin half of the browser client. bindHost is NOT set: the HM module
+    # already defaults it to my.listenNetworkAddress, and a loopback bind
+    # would be unreachable from io's proxy.
     my.herdr-web-ui.enable = true;
 
-    # The ssh client itself (roadmap Phase C prerequisite, not optional).
-    # `home.file.".ssh/conf.d/herdr-mesh"` below is inert without it: nothing
-    # Includes conf.d/* until this module writes ~/.ssh/config, and without
-    # that the outbound mesh fails with "Could not resolve hostname charon"
-    # on first deploy. The ssh-agent user service it also starts is harmless
-    # here (no keys are added to it; the fleet key is used via IdentityFile).
+    # The ssh client itself. `home.file.".ssh/conf.d/herdr-mesh"` below is
+    # inert without it: nothing Includes conf.d/* until this module writes
+    # ~/.ssh/config, and without that the outbound mesh fails with "Could not
+    # resolve hostname charon" on first deploy. The ssh-agent user service it
+    # also starts is harmless here (no keys are added to it; the fleet key is
+    # used via IdentityFile).
     my.ssh.enable = true;
 
-    # herdr mesh, makemake's half. charon's herdr reaches this one as `agent`
-    # over plain ssh; the key it uses is the fleet key, which Phase E installs
-    # into this user's own ~/.ssh. `home.file` rather than the system module's
-    # removed `my.herdr.sshConfig`. known_hosts for charon comes from the same
+    # herdr mesh, makemake's half. charon's side reaches this one as `agent`
+    # over plain ssh; the key it uses is the fleet key, installed into this
+    # user's own ~/.ssh. known_hosts for charon comes from the same
     # installer that ships the key.
     home.file.".ssh/conf.d/herdr-mesh" = {
       text = ''
@@ -191,15 +186,8 @@
       # users.users.agent.home; do not also set that option directly.
       home = "/home/agent";
       createHome = true;
-      # herdr's socket lives under the hermes stateDir, which is drwxrws---
-      # hermes:hermes, so `agent` cannot even traverse into it — the socket's
-      # own ACL is unreachable without these. Traverse only (x, no read), same
-      # reasoning as charon's: the path to a socket is not a licence to list
-      # the directory. Every parent between / and the socket needs it. Phase C
-      # moves herdr into this user's home and retires these.
-      # herdr's socket now lives in this user's own home (Phase C), so the
-      # traverse ACLs into the hermes stateDir that the old system service
-      # needed are gone. Writable scratch still comes from workDir.
+      # herdr's socket now lives in this user's own home, so no traverse ACLs
+      # are needed. Writable scratch still comes from workDir.
       traversePaths = [];
     };
 
@@ -249,16 +237,14 @@
       name = "p";
     };
 
-    # Browser client for herdr. PRIMARY since 2026-10-11: herdr.lan.stark.pub
-    # moved here from charon (always on; charon sleeps). The -mk domain is
-    # kept as an alias so existing bookmarks keep working. Only io proxies
-    # here, so the bridge is reachable from the router alone.
+    # Browser client for herdr. Only io proxies here, so the bridge is
+    # reachable from the router alone.
     #
     # THIS IS AN UNAUTHENTICATED REMOTE SHELL. The plugin's gate is off while
     # HERDR_WEB_TOKEN is unset and /api/health reports role "drive", so anyone
     # who can reach the vhost gets keystrokes into `agent`'s panes. LAN-only and
-    # io-only keeps the blast radius at "already on the LAN", which is not the
-    # same as authentication. Auth is out of scope per decision D6.
+    # io-only bounds the exposure to "already on the LAN", which is not the
+    # same as authentication.
     herdr-web-ui = {
       enable = true;
       allowedFirewallSources = ["10.0.0.1"];

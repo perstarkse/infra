@@ -1,4 +1,4 @@
-# herdr on charon: the coding-agent execution surface.
+# herdr on {charon,makemake}: the coding-agent execution surface.
 #
 # herdr is server + attached clients: panes and agents live in the server and
 # clients attach/detach. `herdr server stop` ends the session AND its panes,
@@ -42,16 +42,6 @@
 
     socketDir = "${cfg.socketDir}";
     apiSocket = "${socketDir}/herdr.sock";
-    clientSocket = "${socketDir}/herdr-client.sock";
-
-    # herdr chmods both sockets 0600 (src/server/socket_paths.rs) and exposes
-    # no knob for it, so sharing means applying an ACL AFTER the bind. With
-    # Type=simple systemd considers the unit started before the socket exists,
-    # hence the wait. Never fails the unit: a missing socket is a warning to
-    # read in the journal, not a reason to kill a healthy server. The script
-    # The script lives in flake/lib so the system-scope module could share it;
-    # roadmap Phase C retired that module, so this is the only consumer left.
-    inherit ((import ../../flake/lib/herdr-sockets.nix {inherit pkgs;})) shareScript;
 
     # Hold a logind sleep blocker while some agent reports `working`. Idle
     # agents do not block, so this does not defeat auto-suspend for an unused
@@ -175,24 +165,7 @@
           Directory holding herdr.sock and herdr-client.sock. This is herdr's
           own default (config_dir() = $XDG_CONFIG_HOME/herdr, else
           $HOME/.config/herdr); override only if you also pin HERDR_SOCKET_PATH
-          for every client. Any machine config that hands the socket to another
-          user must repeat this path.
-        '';
-      };
-
-      shareWith = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [];
-        example = ["agent"];
-        description = ''
-          Local users to grant read/write on the herdr sockets, so they can
-          drive the server as a client (`herdr agent list`, TUI attach) without
-          owning it. The server keeps running as the Home Manager user, which
-          is deliberate: panes are spawned by the server, so an agent-owned
-          server would run pi and agy as `agent` — and ~/.pi/agent is 0700
-          owned by this user, so those panes would silently come up with an
-          empty agent config. Sharing the socket instead gives the second user
-          the client surface without moving the spawn identity.
+          for every client.
         '';
       };
 
@@ -226,57 +199,39 @@
         };
         Service = {
           Type = "simple";
-          # Pin the socket so the server, this user's clients, and anyone the
-          # socket is shared with all resolve the same path even if a desktop
-          # session exports a different XDG_CONFIG_HOME.
-          # Plugins that need more of the server's environment (a [[startup]]
-          # hook's interpreter on PATH, HOST) add to
+          # Pin the socket so the server and this user's clients resolve the
+          # same path even if a desktop session exports a different
+          # XDG_CONFIG_HOME.
+          # Plugins that need more of the server's environment add to
           # systemd.user.services.herdr.Service.Environment directly: Home
           # Manager merges those lists across modules.
-          # __NIXOS_SET_ENVIRONMENT_DONE must be present but EMPTY. The
-          # systemd user manager exports it as 1, and every login shell's
-          # init (/etc/fish/nixos-env-preinit.fish and the bash equivalent)
-          # guards on it: `if [ -z "$__NIXOS_SET_ENVIRONMENT_DONE" ]; then
-          # fenv source .../set-environment`. Panes are spawned by this server
-          # and inherit its environment, so a set guard makes them skip NixOS
-          # env setup entirely — they keep this unit's PATH and never gain
-          # ~/.nix-profile/bin, so agy, zoxide and the whole user profile are
-          # missing inside panes while working fine in a normal terminal.
-          # Empty means "not done yet", which is the correct initial state.
+          # __NIXOS_SET_ENVIRONMENT_DONE must be present but EMPTY — see the
+          # note on the option below; a set guard makes panes spawned by this
+          # server skip NixOS env setup and lose ~/.nix-profile/bin.
           Environment = [
             "HERDR_SOCKET_PATH=${apiSocket}"
             "__NIXOS_SET_ENVIRONMENT_DONE="
           ];
           ExecStart = "${herdrBin} server";
-          ExecStartPost = lib.concatStringsSep " " [
-            (lib.escapeShellArg shareScript)
-            (lib.escapeShellArg apiSocket)
-            (lib.escapeShellArg clientSocket)
-            (lib.escapeShellArgs cfg.shareWith)
-          ];
           Restart = "always";
           RestartSec = 5;
         };
-        # WantedBy default.target, or Home Manager links the file but nothing
-        # ever starts it: `is-active` reports `inactive`, the socket never
-        # binds, and the bridge [[startup]] hook never fires. Verified on
-        # makemake 2026-10-11: herdr.service absent from
-        # default.target.wants after a deploy that re-linked the unit files,
-        # while the server only ran as stray remote-client-bridge children.
+        # WantedBy default.target: without it Home Manager links the file but
+        # nothing ever starts it (verified on makemake 2026-10-11: the unit
+        # was absent from default.target.wants while the server only ran as
+        # stray remote-client-bridge children).
         Install.WantedBy = ["default.target"];
       };
 
       # Clients inherit the same pin, so a plain `herdr …` in any shell of
       # this user attaches to the running server instead of starting one.
-      home.sessionVariables = lib.optionalAttrs (cfg.shareWith != []) {
+      home.sessionVariables = {
         HERDR_SOCKET_PATH = apiSocket;
       };
 
       # Rerun when the flake input moves OR pi-agent's files change: a new
       # herdr rev may bump integration versions, and the install must land in
-      # the directory pi actually loads. (No After on home-manager: HM
-      # activation writes the files before user units start on next login,
-      # and X-Restart-Triggers restarts this unit when they change.)
+      # the directory pi actually loads.
       systemd.user.services.herdr-integrations = {
         Unit = {
           Description = "Install herdr agent integrations (pi, antigravity-cli)";
@@ -286,12 +241,9 @@
         Service = {
           Type = "oneshot";
           RemainAfterExit = true;
-          # herdr.service is Restart=always with a 5s delay: ordering After
-          # it only sequences the first attempt, and if the server is still
-          # in its restart loop the integration install fails against a dead
-          # socket. Rather than failing the unit (which blocks the bridge
-          # [[startup]] hook that needs these files), retry the socket dial
-          # briefly and succeed with a warning if the server never answers.
+          # herdr.service restarts with a 5s delay, so an install racing the
+          # first start retries briefly — then succeeds with a warning rather
+          # than failing the unit and blocking the bridge [[startup]] hook.
           ExecStart = pkgs.writeShellScript "herdr-integrations-wrapped" ''
             set -uo pipefail
             for _ in $(seq 1 12); do

@@ -7,7 +7,7 @@
 }: let
   secondUser = "a";
 
-  # The `agent` account herdr's socket is shared with (see my.herdr.shareWith).
+  # `agent`'s account name, shared with the agent-ssh-access module.
   agentUser = config.my.agent-ssh-access.user;
 
   # GDM's switch-user entry point, used to hand the box over without ending the
@@ -89,11 +89,7 @@ in {
   # Agent's own space on charon: the same toolchain block makemake carries,
   # so agent-owned sessions exist on both machines and p's userspace is only
   # entered by choice. No secrets here (same rule as makemake): agy/pi
-  # authenticate on first interactive run per machine. No herdr-web-ui HM
-  # half: makemake's bridge attaches to this server as a remote PC over SSH
-  # (zero-install path — the descriptor lives in this account's own
-  # registry), so no second vhost is needed. sleepInhibit mirrors p's: agent
-  # workloads hold the same wake lease under the same ceiling.
+  # authenticate on first interactive run per machine.
   home-manager.users.${config.my.agent-ssh-access.user} = {
     imports = with ctx.flake.homeModules;
       [
@@ -210,9 +206,6 @@ in {
     my.herdr = {
       enable = true;
       package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
-      # No shareWith: `agent` has its own server now (second HM block below),
-      # so the cross-user socket sharing is retired. p's server stays owned
-      # by `p` — panes spawn as the server user, and ~/.pi/agent is 0700 p.
       sleepInhibit.enable = true;
     };
 
@@ -508,8 +501,8 @@ in {
   };
 
   my = {
-    # herdr-web-ui's bridge binds loopback, so the LAN IP is what reverse proxies
-    # reach it on. io sets 10.0.0.1, makemake 10.0.0.10; charon is .15.
+    # herdr-web-ui's bridge binds this host's LAN address (needs an inbound
+    # firewall rule: see modules/system/herdr-web-ui.nix), not loopback.
     listenNetworkAddress = "10.0.0.15";
 
     stylix.enable = true;
@@ -567,15 +560,6 @@ in {
         "/home/p/.config/herdr"
       ];
       socketPaths = ["/home/p/.config/herdr/herdr.sock"];
-      # No setEnv: agent's bridge and CLI both resolve agent's own socket by
-      # default, which is the topology we want (agent space owns its server).
-      # A HERDR_SOCKET override was tried here for the single-tab bridge and
-      # reverted same day: the UI's Add-PC flow starts the remote bridge over
-      # SSH with no socket of its own, so a forced HERDR_SOCKET makes the
-      # remoteentry attach p's live server, find "herdr already running",
-      # and die — while the install prompt it leaves behind suggests the
-      # opposite. The bridge must start with agent's own (empty-but-alive)
-      # server, which is exactly what the default does.
       readablePaths = ["/home/p/repos"];
     };
 
@@ -1085,10 +1069,8 @@ in {
   # coordination is unavailable or busy". Symlink /bin/ps onto procps so the
   # deterministic lock path works without relying on PATH.
   # PATH for `agent` SSH sessions: sshd's default PATH has no
-  # /run/current-system/sw. The herdr socket needs no SetEnv any more:
-  # `agent` has its own server now (second HM block), and the my.setEnv
-  # default (HERDR_SOCKET → p's socket, for the web bridge) arrives via the
-  # agent-ssh-access module's Match block instead of this one.
+  # /run/current-system/sw. The herdr socket needs no SetEnv: `agent`
+  # resolves its own server's socket by default.
   services.openssh.extraConfig = lib.mkAfter ''
     Match User ${agentUser}
         SetEnv PATH=/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin
