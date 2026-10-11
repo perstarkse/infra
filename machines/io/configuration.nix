@@ -227,7 +227,12 @@ in {
     };
 
     endpoints.imports = {
-      machines = ["makemake"];
+      # charon publishes herdr.lan.stark.pub here; without it in this list the
+      # endpoint is declared on charon and dropped on the floor at the router.
+      machines = [
+        "makemake"
+        "charon"
+      ];
       routerName = "io";
       vhostOverrides."makemake.nous" = {
         acmeDns01 = {

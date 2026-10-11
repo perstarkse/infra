@@ -10,12 +10,6 @@
   # The `agent` account herdr's socket is shared with (see my.herdr.shareWith).
   agentUser = config.my.agent-ssh-access.user;
 
-  # Socket the herdr server binds and every client resolves. Duplicated from the
-  # Home Manager module's my.herdr.socketDir default ($HOME/.config/herdr)
-  # because sshd config is system-level and cannot read the HM options. Keep the
-  # two in step: changing my.herdr.socketDir means changing this too.
-  herdrSocket = "/home/${config.my.mainUser.name}/.config/herdr/herdr.sock";
-
   # GDM's switch-user entry point, used to hand the box over without ending the
   # running session. gdm-50.1 common/gdm-common.c: gdm_goto_login_session →
   # create_transient_display → this method (daemon/gdm-local-display-factory.xml).
@@ -73,6 +67,7 @@ in {
       journal-upload
       steam
       agent-ssh-access
+      herdr-web-ui
       bambu-studio
       backups
       sunshine
@@ -91,11 +86,82 @@ in {
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
 
+  # Agent's own space on charon: the same toolchain block makemake carries,
+  # so agent-owned sessions exist on both machines and p's userspace is only
+  # entered by choice. No secrets here (same rule as makemake): agy/pi
+  # authenticate on first interactive run per machine. No herdr-web-ui HM
+  # half: makemake's bridge attaches to this server as a remote PC over SSH
+  # (zero-install path — the descriptor lives in this account's own
+  # registry), so no second vhost is needed. sleepInhibit mirrors p's: agent
+  # workloads hold the same wake lease under the same ceiling.
+  home-manager.users.${config.my.agent-ssh-access.user} = {
+    imports = with ctx.flake.homeModules;
+      [
+        options
+        sops
+        ssh
+        herdr
+        node
+      ]
+      ++ (with ctx.inputs.agentTooling.homeModules; [
+        pi-agent
+        antigravity
+        shared-skills
+        pi-web
+      ]);
+
+    my.agentTooling = {
+      pi-agent = {
+        enable = true;
+        permissionSystem.enable = false;
+      };
+      antigravity.enable = true;
+      shared-skills.enable = true;
+    };
+
+    my.node.enable = true;
+
+    home.packages = with pkgs; [
+      git
+      ripgrep
+    ];
+
+    # Outbound mesh as `agent`: the fleet key lands at ~/.ssh/id_ed25519 via
+    # my.secrets below, so IdentityFile needs no per-machine override.
+    # known_hosts is pinned declaratively (same fleet set the hermes module
+    # installs on makemake): BatchMode never prompts, so a missing entry is
+    # a hard failure rather than an interactive question nobody answers.
+    home.file.".ssh/conf.d/herdr-mesh" = {
+      text = ''
+        Host makemake 10.0.0.10
+          HostName 10.0.0.10
+          User agent
+          IdentityFile ~/.ssh/id_ed25519
+          IdentitiesOnly yes
+          BatchMode yes
+      '';
+    };
+
+    home.file.".ssh/known_hosts" = {
+      text = ''
+        10.0.0.10 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMLhhyxdh0dr+tfcyBgv9K0s5nK9mfwOENBnFVteZOB9
+        10.0.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPugZkqgjBKletbzaNipPLSrq5+ToQFBLyCojQLD8pt
+      '';
+    };
+
+    my.herdr = {
+      enable = true;
+      package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      sleepInhibit.enable = true;
+    };
+  };
+
   home-manager.users.${config.my.mainUser.name} = {
     imports = with ctx.flake.homeModules;
       [
         options
         sops
+        herdr-web-ui
         noctalia
         helix
         rofi
@@ -144,12 +210,27 @@ in {
     my.herdr = {
       enable = true;
       package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
-      # Share the server with the fleet's non-sudo `agent` account: Hermes on
-      # makemake drives charon's agents over plain ssh as `agent`, and herdr
-      # hardcodes its sockets to 0600. The server stays owned by `p` — panes
-      # spawn as the server user, and ~/.pi/agent is 0700 p, so an agent-owned
-      # server would come up with an empty agent config.
-      shareWith = [agentUser];
+      # No shareWith: `agent` has its own server now (second HM block below),
+      # so the cross-user socket sharing is retired. p's server stays owned
+      # by `p` — panes spawn as the server user, and ~/.pi/agent is 0700 p.
+      sleepInhibit.enable = true;
+    };
+
+    my.herdr-web-ui.enable = true;
+
+    # herdr mesh: charon's herdr reaches makemake's as `agent` over SSH. The
+    # IdentityFile is the fleet key, exposed to `p` by my.secrets below — `p`'s
+    # own ~/.ssh/id_ed25519 is Home Manager-generated, so its public half is not
+    # a secret and cannot be authorized on makemake.
+    home.file.".ssh/conf.d/herdr-mesh" = {
+      text = ''
+        Host makemake 10.0.0.10
+          HostName 10.0.0.10
+          User agent
+          IdentityFile ~/.ssh/herdr-mesh_id_ed25519
+          IdentitiesOnly yes
+          BatchMode yes
+      '';
     };
 
     home.packages = [
@@ -269,6 +350,14 @@ in {
               headers = {
                 CONTEXT7_API_KEY = "!cat ${config.my.secrets.getPath "context7" "env"} | grep '^CONTEXT7_API_KEY=' | cut -d= -f2";
               };
+            };
+            # Onshape FeatureScript MCP (hosted, streamable HTTP). Auth is OAuth,
+            # not an Onshape API key: the account authorises in a browser via
+            # `pi mcp login onshape`, and pi stores the token in
+            # ~/.pi/agent/mcp-auth.json, so no secret belongs in this flake.
+            onshape = {
+              url = "https://fs-mcp.labs.onshape.app/mcp";
+              description = "Onshape FeatureScript: write, run and refine custom Onshape features in a document.";
             };
             digikey = {
               # MyLists tools need the app subscribed to MyLists in the portal and its
@@ -419,7 +508,35 @@ in {
   };
 
   my = {
+    # herdr-web-ui's bridge binds loopback, so the LAN IP is what reverse proxies
+    # reach it on. io sets 10.0.0.1, makemake 10.0.0.10; charon is .15.
+    listenNetworkAddress = "10.0.0.15";
+
     stylix.enable = true;
+
+    # Browser client for herdr, LAN only: it is remote shell as `p`, and the
+    # plugin carries its own token/device-pairing access check, so there is no
+    # nginx auth in front of it.
+    #
+    # Retired 2026-10-11: the primary herdr.lan.stark.pub moved to makemake
+    # (always on; charon sleeps). Republished same day under its own name so
+    # charon's panes stay reachable directly: the bridge was never uninstalled
+    # (still healthy on 10.0.0.15:7317), only unpublished. No remote-bundle
+    # install needed — the UI's "add PC over SSH" path would deploy a second
+    # bridge just to tunnel it back, which is redundant next to this vhost.
+    herdr-web-ui = {
+      enable = true;
+      allowedFirewallSources = ["10.0.0.1"];
+      endpoints = {
+        enable = true;
+        domain = "herdr-charon.lan.stark.pub";
+        useWildcard = "lanstark";
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
+    };
 
     # Non-sudo fleet SSH for the personal agent. Unprivileged `agent` account,
     # `restrict`ed key, no wheel/docker/libvirtd, logs only.
@@ -430,7 +547,35 @@ in {
     # gaining any visibility into the rest of the home directory.
     agent-ssh-access = {
       enable = true;
-      traversePaths = ["/home/p"];
+      # Real home, not /var/empty: makemake's agent SSHes in as `agent`
+      # (herdr mesh, Phase E), and with no home every remote command starts
+      # with "Could not chdir to home directory" noise. Same closure as
+      # makemake's: the module's per-user AuthorizedKeysFile Match block
+      # ignores a self-written ~/.ssh/authorized_keys regardless.
+      home = "/home/agent";
+      createHome = true;
+      # /home/p is not enough on its own: herdrSocket lives in
+      # /home/p/.config/herdr, and .config is 0700, so `agent` needs traverse
+      # on every parent between $HOME and the socket or connect(2) is EACCES.
+      # Plus read on the socket file itself: the web UI's remote bridge runs
+      # as `agent` and must connect(2) p's herdr socket for the single-tab
+      # frontend (the file ACL already grants user:agent:rw-, this keeps the
+      # directory side consistent if .config/herdr ever tightens).
+      traversePaths = [
+        "/home/p"
+        "/home/p/.config"
+        "/home/p/.config/herdr"
+      ];
+      socketPaths = ["/home/p/.config/herdr/herdr.sock"];
+      # No setEnv: agent's bridge and CLI both resolve agent's own socket by
+      # default, which is the topology we want (agent space owns its server).
+      # A HERDR_SOCKET override was tried here for the single-tab bridge and
+      # reverted same day: the UI's Add-PC flow starts the remote bridge over
+      # SSH with no socket of its own, so a forced HERDR_SOCKET makes the
+      # remoteentry attach p's live server, find "herdr already running",
+      # and die — while the install prompt it leaves behind suggests the
+      # opposite. The bridge must start with agent's own (empty-but-alive)
+      # server, which is exactly what the default does.
       readablePaths = ["/home/p/repos"];
     };
 
@@ -460,6 +605,33 @@ in {
           file = "charon-ro.env";
           user = config.my.mainUser.name;
           dest = "/home/${config.my.mainUser.name}/.config/air-exhaust/mqtt.env";
+        }
+        {
+          # herdr mesh: `p`'s herdr reaches makemake's as `agent`, and the
+          # fleet key is the only identity declaratively available here.
+          enable = true;
+          # The fleet key's private half, so the owner can `ssh agent@makemake`
+          # from this account. 0400 p-owned: any coding agent running as `p`
+          # can already become `agent` fleet-wide (roadmap accepted exposure),
+          # so this grants the owner nothing the agents do not already have.
+          secretName = "agent-ssh-key";
+          file = "private_key";
+          user = config.my.mainUser.name;
+          dest = "/home/${config.my.mainUser.name}/.ssh/herdr-mesh_id_ed25519";
+          mode = "0400";
+        }
+        {
+          # Outbound half of agent@charon's own mesh: agent's herdr reaches
+          # makemake as `agent`, and the mesh config above points at
+          # ~/.ssh/id_ed25519 — which is where the hermes module would put it
+          # on makemake, but hermes does not run on charon, so it lands here
+          # directly instead. Same key, same 0400, other account.
+          enable = true;
+          secretName = "agent-ssh-key";
+          file = "private_key";
+          user = config.my.agent-ssh-access.user;
+          dest = "/home/${config.my.agent-ssh-access.user}/.ssh/id_ed25519";
+          mode = "0400";
         }
       ];
       discover = {
@@ -822,7 +994,9 @@ in {
   # few-seconds resume freeze. Disable the internal standby timer (-S 0) and
   # APM spindown (-B 255); the resume hook re-applies it since the drive
   # resets to defaults on power cycle.
-  # ponytail: drive standby off, not ALPM tuning; revisit if power draw matters.
+  # LIMIT: drive standby is disabled outright rather than retuned via ALPM, so
+  # idle power draw is higher than it strictly needs to be. Revisit if draw
+  # starts to matter and the resume stall can be fixed another way.
   systemd.services.sda-disable-standby = {
     description = "Disable sda internal standby (swap lives on /mnt/sdb)";
     wantedBy = ["multi-user.target"];
@@ -876,6 +1050,10 @@ in {
     # the Nix profile or Home Manager's.
     ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default
     switchUserToGreeter
+    # herdr's antigravity-cli integration guards on `command -v python3` and
+    # silently reports no session without it, while `herdr integration status`
+    # only diffs the installed file and still says "current".
+    python3
     unstable.code-cursor-fhs
     devenv
     localsend
@@ -906,16 +1084,14 @@ in {
   # directory, so pi's agent_browser tool fails with "Managed-session policy
   # coordination is unavailable or busy". Symlink /bin/ps onto procps so the
   # deterministic lock path works without relying on PATH.
-  # The herdr server runs as `p` (its panes spawn pi/agy and need `p`'s
-  # 0700 ~/.pi/agent), and its socket is shared with `agent` via ACL — see
-  # modules/home/herdr.nix. `agent` still has no way to FIND that socket on its
-  # own: its HOME is /var/empty/agent, so herdr would resolve a different path.
-  # SetEnv hands it the real one for every session, which is what makes
-  # `ssh agent@charon 'herdr agent list'` work with no wrapper on the makemake
-  # side. PATH likewise: sshd's default PATH has no /run/current-system/sw.
+  # PATH for `agent` SSH sessions: sshd's default PATH has no
+  # /run/current-system/sw. The herdr socket needs no SetEnv any more:
+  # `agent` has its own server now (second HM block), and the my.setEnv
+  # default (HERDR_SOCKET → p's socket, for the web bridge) arrives via the
+  # agent-ssh-access module's Match block instead of this one.
   services.openssh.extraConfig = lib.mkAfter ''
     Match User ${agentUser}
-        SetEnv HERDR_SOCKET_PATH=${herdrSocket} PATH=/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin
+        SetEnv PATH=/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin
   '';
 
   system.activationScripts.agent-browser-ps = ''

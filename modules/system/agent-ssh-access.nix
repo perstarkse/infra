@@ -16,12 +16,16 @@
 #     forwarding on the next login, which would let it tunnel into every
 #     loopback-only daemon on the box.
 #
-#  2. The agent's HOME is root-owned and NOT writable. sshd reads
+#  2. The agent can never authorize itself. sshd reads
 #     ~/.ssh/authorized_keys in addition to /etc/ssh/authorized_keys.d/%u, and
 #     services.openssh.authorizedKeysInHomedir is a global option with no
-#     per-user override — so the only way to stop the agent authorizing itself
-#     is to make sure it cannot create that file. Writable scratch space lives
-#     in `workDir` instead.
+#     per-user override. Two ways to close that, and the module applies both
+#     available mechanisms rather than relying on one: a non-writable HOME
+#     cannot hold the file in the first place (the default, via `createHome =
+#     false`), and a per-user `Match` block overrides AuthorizedKeysFile so a
+#     home-writable machine ignores the homedir copy anyway. Either alone would
+#     do; together there is no configuration of this module in which a writable
+#     home opens the hole.
 #
 # Why the key is installed at activation rather than through nixpkgs'
 # `authorizedKeys`: the public half comes from a Clan var, which only exists at
@@ -66,15 +70,30 @@ _: {
         type = lib.types.path;
         default = "/var/empty/agent";
         description = ''
-          Account home. Deliberately a path that is never created: sshd reads
-          ~/.ssh/authorized_keys in addition to
-          /etc/ssh/authorized_keys.d/%u, and services.openssh.authorizedKeysInHomedir
-          is a global option with no per-user override — so the only way to stop
-          the agent authorizing itself is to ensure no such file can exist.
+          Account home. With the default `createHome = false` this is
+          deliberately a path that is never created, so the agent cannot write a
+          ~/.ssh/authorized_keys that sshd would honour in addition to
+          /etc/ssh/authorized_keys.d/%u. /var/empty is root-owned 0555 on
+          NixOS, so even if something creates the path, the agent cannot write
+          into it.
 
-          /var/empty is root-owned 0555 on NixOS, so even if something creates
-          the path, the agent cannot write into it. Writable scratch lives in
-          `workDir` instead.
+          Set it to a real path (e.g. /home/agent) together with
+          `createHome = true` on machines where the agent needs a usable HOME —
+          Home Manager, project checkouts. The per-user AuthorizedKeysFile
+          closure in this module is what keeps that safe; writable scratch
+          elsewhere still lives in `workDir`.
+        '';
+      };
+
+      createHome = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Whether to create and chown `home`. Off by default: a machine with no
+          reason to give the agent a HOME should not have one. Turning it on
+          needs no accompanying sshd work — this module closes the
+          homedir authorized_keys path per-user regardless — but it is a real
+          trust change, so opt in per machine rather than fleet-wide.
         '';
       };
 
@@ -97,14 +116,26 @@ _: {
 
       authorizedKeysOptions = lib.mkOption {
         type = lib.types.str;
-        default = "restrict";
+        # `restrict,pty,port-forwarding`: the owner SSHes in as `agent` for
+        # interactive work (agy/pi first-run auth needs a TTY), so PTY is
+        # re-enabled on the key line itself. Local forwarding is re-enabled
+        # too: the web UI's Add-PC flow SSH-forwards the remote bridge's
+        # loopback port (`ssh -L 127.0.0.1:<local>:127.0.0.1:<remote>`),
+        # and without it verify() dies with "administratively prohibited"
+        # surfacing as "socket connection was closed". The forward binds
+        # loopback on both ends (127.0.0.1: only, never 0.0.0.0), so a
+        # stolen key can reach the bridge port but cannot pivot anywhere
+        # else. Never add PermitTTY/AllowTcpForwarding to the Match block:
+        # that would grant them to EVERY key for this user including a
+        # future unrestricted one, instead of scoping them to this key line.
+        default = "restrict,pty,port-forwarding";
         description = ''
           sshd authorized_keys option list prefixed to the agent key line.
           `restrict` denies port/agent/X11 forwarding, PTY allocation and
-          ~/.ssh/rc execution, and denies everything else by default. Relax it
-          by listing options after `restrict` to re-enable them (e.g.
-          `"restrict,pty"` when the agent needs a tty — neither `git clone` nor
-          Hermes' `ssh -o BatchMode=yes` backend allocates one).
+          ~/.ssh/rc execution, and denies everything else by default; `pty`
+          re-enables allocation for this key. Neither `git clone` nor Hermes'
+          `ssh -o BatchMode=yes` backend allocates one, but the owner's
+          interactive logins do.
         '';
       };
 
@@ -123,6 +154,30 @@ _: {
         default = [];
         description = "Paths the agent may read and list (setfacl u:agent:r-x).";
       };
+
+      socketPaths = lib.mkOption {
+        type = lib.types.listOf lib.types.path;
+        default = [];
+        description = ''
+          Socket files the agent may read/write (setfacl u:agent:rw-). Use
+          for daemon sockets the agent must connect(2) — e.g. another user's
+          herdr socket for a remote web bridge. Files only; the parent
+          directories still need traversePaths.
+        '';
+      };
+
+      setEnv = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = {};
+        description = ''
+          Environment variables sshd sets for every login as this user
+          (Match-block SetEnv). Use for per-machine socket defaults — e.g.
+          HERDR_SOCKET/HERDR_SOCKET_PATH pointing at another user's live
+          herdr socket so both the CLI and the web UI's remote bridge land
+          on the same server. Empty by default: most machines want the
+          user's own socket.
+        '';
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -134,10 +189,11 @@ _: {
         isNormalUser = true;
         group = cfg.user;
         inherit (cfg) home;
-        # No home directory is created or chowned: see the note on `home`. The
-        # NixOS users-groups activation chowns homes it manages, so a "make the
-        # home root-owned" oneshot loses to activation on every switch.
-        createHome = false;
+        # No home directory is created or chowned unless a machine opts in: see
+        # the note on `home`. The NixOS users-groups activation chowns homes it
+        # manages, so a "make the home root-owned" oneshot loses to activation
+        # on every switch — the flag is the only lever that works.
+        inherit (cfg) createHome;
         # Non-interactive, and a shell that sources nothing: an agent that logs
         # in gets a bare prompt, not a login environment it can shape.
         shell = pkgs.bash;
@@ -162,8 +218,42 @@ _: {
         script = ''
           set -euo pipefail
           install -d -m 0700 -o ${cfg.user} -g ${cfg.user} ${cfg.workDir}
+          # Project space lives in the home when there is one; machines on the
+          # default non-writable home keep using workDir alone. Interpolated
+          # by Nix rather than tested in bash: `toString true` is "1", not
+          # "true", so a shell-side `[ "${toString cfg.createHome}" = true ]`
+          # is silently always false and the directory is never created.
+          ${lib.optionalString cfg.createHome ''
+            install -d -m 0700 -o ${cfg.user} -g ${cfg.user} ${cfg.home}/projects
+          ''}
         '';
       };
+
+      # Property 2 above, enforced rather than assumed. Closes the homedir
+      # authorized_keys path for this user only, which is what makes
+      # `createHome = true` safe: sshd cannot be told "no homedir keys" for one
+      # user via services.openssh.authorizedKeysInHomedir, but a Match block
+      # overrides AuthorizedKeysFile for exactly the connections it matches.
+      #
+      # Placement is counter-intuitive and mkAfter is load-bearing. sshd takes
+      # the first obtained value for a keyword, so a Match block placed BEFORE
+      # the global AuthorizedKeysFile line loses to it and the override is
+      # silently ignored. Verified against openssh 10.3 with `sshd -T -C
+      # user=agent`: Match after -> `/etc/ssh/authorized_keys.d/agent`, Match
+      # before -> the global homedir list. Non-matching users keep the global
+      # line either way.
+      # Per-machine socket defaults for this user live in the machine config
+      # (`my.agent-ssh-access.setEnv`), not here: this module is fleet-wide
+      # and the right socket differs per host. Empty by default — and it
+      # must STAY empty unless a machine opts in deliberately: a stale
+      # HERDR_SOCKET here redirects every remote bridge started over SSH
+      # (the web UI's Add-PC flow sets no socket of its own) away from the
+      # account's own server.
+      services.openssh.extraConfig = lib.mkAfter ''
+        Match User ${cfg.user}
+            AuthorizedKeysFile ${cfg.authorizedKeysFile}
+            ${lib.concatStringsSep "\n            " (lib.mapAttrsToList (k: v: "SetEnv ${k}=${v}") cfg.setEnv)}
+      '';
 
       # Install-then-watch: the secret arrives DURING activation (clan untars
       # the secrets tarball into /run/secrets before units start), and
@@ -180,6 +270,23 @@ _: {
         pathConfig = {
           PathModified = publicKeyPath;
         };
+      };
+
+      # The path unit above only fires on changes AFTER the watch is
+      # established — a deploy that installs the unit and the secret in the
+      # same activation never triggers it (verified on charon 2026-10-11:
+      # key deployed, authorized_keys stale, no journal entries). Run the
+      # installer at activation too; it is idempotent (no-op rewrite on
+      # identical content), so the only cost is one extra start per deploy.
+      systemd.services.install-agent-authorized-key-act = {
+        description = "Install the restricted agent SSH public key at activation";
+        after = ["local-fs.target"];
+        wantedBy = ["multi-user.target"];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = config.systemd.services.install-agent-authorized-key.script;
       };
 
       systemd.services.install-agent-authorized-key = {
@@ -218,14 +325,17 @@ _: {
         wantedBy = ["multi-user.target"];
         after = ["local-fs.target"];
         serviceConfig = {
+          # Deliberately no RemainAfterExit. Every call below is an idempotent
+          # setfacl, so re-running is free, while a unit left `active` is never
+          # re-queued by a later activation — an edited traversePaths then
+          # silently fails to apply until the next reboot.
           Type = "oneshot";
-          RemainAfterExit = true;
         };
         script = let
           setfacl = lib.getExe' pkgs.acl "setfacl";
-          mkLoop = perm: paths: ''
+          mkLoop = perm: test: paths: ''
             for path in ${lib.escapeShellArgs paths}; do
-              if [ -d "$path" ]; then
+              if [ ${test} "$path" ]; then
                 ${setfacl} -m u:${cfg.user}:${perm} "$path"
               else
                 echo "agent-path-acl: $path does not exist, skipping" >&2
@@ -240,8 +350,12 @@ _: {
             echo "agent-path-acl: user ${cfg.user} does not exist, skipping ACLs" >&2
             exit 0
           fi
-          ${mkLoop "--x" cfg.traversePaths}
-          ${mkLoop "r-x" cfg.readablePaths}
+          ${mkLoop "--x" "-d" cfg.traversePaths}
+          ${mkLoop "r-x" "-d" cfg.readablePaths}
+          # Sockets are files, not directories: a -d test would skip them
+          # silently, and a missing socket at activation (daemon down) is
+          # normal — the next activation re-applies.
+          ${mkLoop "rw-" "-S" cfg.socketPaths}
         '';
       };
     };

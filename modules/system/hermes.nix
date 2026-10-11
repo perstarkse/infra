@@ -1,27 +1,38 @@
-# Personal agent: Hermes Agent in container mode on makemake.
+# Personal agent: Hermes Agent on makemake, running NATIVELY as `agent`.
 #
 # Upstream ships `nixosModules.default`; this module is the fleet wrapper that
 # pins the pieces the generic module deliberately leaves open:
 #
-#   - container mode on, docker backend (makemake already has
-#     virtualisation.docker.enable from my.docker.enable, and upstream's
-#     mkDefault for that option collides with a podman backend here)
-#   - stateDir on RAID1 xfs under /var/lib. NOT /storage: that is mergerfs over
-#     HDDs with dropcacheonclose, and the agent's session DB is SQLite.
-#   - every durable agent path (state, workspace, key) inside stateDir, so one
-#     restic job covers the lot and nothing important lives on a bind mount
-#     outside the backup
-#   - the fleet SSH private key copied in by my.secrets.exposeUserSecrets, plus
-#     a GitHub known_hosts so `restrict`-ed key auth never prompts
-#   - the gateway API port gated to the io router, because container mode runs
-#     with --network=host (upstream nixosModules.nix)
-#   - himalaya on PATH in the container (nixpkgs closure mounted at
-#     /opt/himalaya) with its config.toml installed from the hermes-mail
-#     secret — addresses and passwords never enter the flake
+#   - Native, not container (roadmap Phase D). The container only walled off the
+#     gateway, not the work, and once panes run as `agent` on the host the LLM
+#     already executes arbitrary code there. Container mode is not offered as an
+#     option: its plumbing (the /data mount, the /opt symlink farm) is gone, so
+#     a flag to turn it back on would only select a broken deployment.
+#   - stateDir IS the agent's home. Native mode sets HOME = stateDir, so
+#     setting it to /home/agent is what makes the gateway an ordinary user of
+#     the machine instead of a service with a private root: ssh, himalaya and
+#     herdr all resolve the same paths a login shell would.
+#   - the gateway runs as the fleet `agent` account, NOT a `hermes` one. The
+#     user is created by agent-ssh-access, so upstream's createUser is off —
+#     which also means upstream's `linger` default (it lives inside the
+#     createUser block) never applies, and cron would silently degrade to
+#     unscoped workers. It is set explicitly below.
+#   - the fleet SSH private key and a GitHub known_hosts land in that same
+#     home, so `restrict`-ed key auth never prompts.
+#   - the gateway API port stays gated to the io router. Native mode binds the
+#     host directly, so this is no longer about --network=host; the port is
+#     still LAN-reachable and must stay restricted.
+#   - himalaya and wake-charon ride `services.hermes-agent.extraPackages`
+#     ("more packages on the PATH of the agent"), which upstream also mirrors
+#     into users.users.<user>.packages. In container mode these needed
+#     container-bin symlinks and :ro bind mounts instead; native mode does not.
 #
-# Channels only: backend.mode (browser dashboard / Hermes Desktop) is not
-# supported in container mode. That is the accepted trade for letting the agent
-# apt/pip/npm install into a persistent environment.
+# Why putting the gateway's writable state inside the agent's home is safe:
+# Home Manager does not write its files INTO the home, it links them there
+# from /nix/store, root-owned. Verified on makemake: ~/.config/systemd/user/
+# herdr.service and ~/.ssh/conf.d/herdr-mesh are both symlinks into the store.
+# The agent can create and delete anything it likes under its own home and
+# still cannot modify a single Home Manager-managed byte.
 {inputs, ...}: {
   config.flake.nixosModules.hermes = {
     config,
@@ -32,7 +43,15 @@
     cfg = config.my.hermes;
     inherit (cfg) stateDir;
     agentUser = config.services.hermes-agent.user;
-    sshDir = "${stateDir}/home/.ssh";
+    # The account that actually drives the fleet. The fleet SSH key and
+    # known_hosts belong to `agent`, not to the hermes service user: once herdr
+    # runs as `agent` (roadmap Phase C), `agent` is the identity that reaches
+    # the other machines, and the gateway only ever borrowed the key. Taken from
+    # the agent-ssh-access options rather than hardcoded so the two accounts'
+    # home paths cannot drift (that module's `home` IS
+    # users.users.<user>.home).
+    fleetUser = config.my.agent-ssh-access.user or "agent";
+    fleetHome = config.my.agent-ssh-access.home or "/home/agent";
     envFile = config.my.secrets.getPath cfg.envSecretName "env";
     sshKeyFile = config.my.secrets.getPath cfg.sshKeySecretName "private_key";
     # Re-render $HERMES_HOME/.env from the secret, then restart BOTH consumers
@@ -136,18 +155,11 @@
           default = pkgs.himalaya;
           defaultText = lib.literalExpression "pkgs.himalaya";
           description = ''
-            Himalaya package. extraPackages would put it on the host wrapper
-            only — the gateway runs inside the container, whose only host
-            inputs are /nix/store mounts, so this is bind-mounted via
-            container.extraVolumes and PATH-prepended in the gateway argv
-            (at mail.mountDir in-container) instead.
+            Himalaya package. Handed to the gateway through
+            services.hermes-agent.extraPackages, which also mirrors it into
+            users.users.<user>.packages, so the agent has it on its interactive
+            PATH too.
           '';
-        };
-
-        mountDir = lib.mkOption {
-          type = lib.types.str;
-          default = "/opt/himalaya";
-          description = "In-container path the package closure is bind-mounted at.";
         };
       };
 
@@ -287,17 +299,59 @@
 
     config = lib.mkIf cfg.enable (lib.mkMerge [
       {
+        # The gateway installs its own files (fleet SSH key, known_hosts,
+        # himalaya config) under fleetHome and runs as fleetUser. Both only work
+        # if that account has a real, writable home — which agent-ssh-access
+        # gates behind `createHome`. Fail here, at eval, with a sentence, rather
+        # than at deploy with an EACCES from an installer.
+        assertions = [
+          {
+            assertion = config.users.users.${fleetUser}.createHome or false;
+            message = "my.hermes: the gateway runs as ${fleetUser} and installs its fleet SSH key and known_hosts under ${fleetHome}, but that account's home is not created. Set my.agent-ssh-access.createHome = true, or point my.hermes.stateDir somewhere writable.";
+          }
+          {
+            # stateDir is what native mode sets HOME to. If it is not the user's
+            # home, ssh/himalaya/herdr resolve one tree while the installers
+            # write another, and nothing fails loudly.
+            assertion = cfg.stateDir == fleetHome;
+            message = "my.hermes.stateDir (${cfg.stateDir}) must equal my.agent-ssh-access.home (${fleetHome}): native mode sets HOME = stateDir, so any other value splits the agent's files across two trees.";
+          }
+        ];
+
         services.hermes-agent = {
           inherit (cfg) enable;
-          container = {
-            inherit (cfg) enable;
-            backend = "docker";
-            # No extraVolumes: upstream already bind-mounts /nix/store read-only
-            # and ${stateDir} → /data (nixosModules.nix:679), and the SSH key and
-            # known_hosts are installed under ${stateDir}/home, which upstream
-            # mounts as the container's HOME.
-          };
+          # One stateDir, not two. `my.hermes.stateDir` and
+          # `services.hermes-agent.stateDir` are separate options that only
+          # coincided because both default to /var/lib/hermes; this makes the
+          # machine's value authoritative for both.
+          inherit (cfg) stateDir;
+          # The gateway IS the agent. Upstream defaults to a `hermes` service
+          # user; createUser is off because agent-ssh-access already owns that
+          # account (and would fight upstream over `home` and `createHome`).
+          #
+          # Consequence, spelled out because it is silent: upstream's
+          # `linger = mkDefault (!container.enable)` lives INSIDE the createUser
+          # block, so switching it off also switches off the user bus that
+          # restart-safe cron dispatch needs. Set explicitly further down.
+          # Native, always. Roadmap Phase D retired container mode rather than
+          # leaving it selectable: the container's whole reason for existing was
+          # a stable /data bind mount and an /opt symlink farm, and with the
+          # gateway running as `agent` in its own home all of that is just the
+          # home. Offering the flag back would offer a mode whose plumbing no
+          # longer exists — himalaya, wake-charon and the herdr client all
+          # arrived through paths that are gone.
+          container.enable = false;
+          user = fleetUser;
+          group = fleetUser;
+          createUser = false;
           addToSystemPackages = true;
+
+          # The agent's own tools. Upstream puts these on the service PATH and
+          # mirrors them into users.users.<user>.packages. This is what replaces
+          # the container-bin symlinks and :ro mounts native mode does not need.
+          extraPackages =
+            lib.optional cfg.mail.enable cfg.mail.package
+            ++ lib.optional config.my.wake-charon.enable config.my.wake-charon.package;
 
           # Merged into $HERMES_HOME/.env on every activation, so a rotated key
           # needs a gateway restart, not a container rebuild.
@@ -372,6 +426,27 @@
           restartSec = 5;
         };
 
+        # The gateway's account is the fleet `agent`, which agent-ssh-access
+        # already owns (hence createUser = false above).
+        users.users.${fleetUser} = {
+          # Restart-safe cron dispatch runs each job as `systemd-run --user
+          # --scope`, which needs /run/user/<uid>/bus. A system service gets none
+          # unless the uid lingers, and the dispatch then fails closed --
+          # silently, with no failed job to grep for. Upstream would have
+          # defaulted this, but its default sits INSIDE its createUser block,
+          # which is off here. mkDefault so a machine can still override.
+          linger = true;
+          # stateDir IS this user's home (native mode sets HOME = stateDir), so
+          # upstream's tmpfiles rule `d <stateDir> 2770 <user> <group>` and the
+          # NixOS users-groups activation both own this directory's mode --
+          # 2770 versus homeMode's 700. tmpfiles only runs at boot, so without
+          # this the home would silently flip between 0700 after a switch and
+          # 2770 after a reboot. Make the two agree rather than pick a winner.
+          # The group is the user's own and holds nobody else, so 2770 grants
+          # nothing extra.
+          homeMode = lib.mkIf (cfg.stateDir == fleetHome) "2770";
+        };
+
         my.secrets.allowReadAccess =
           [
             {
@@ -381,12 +456,16 @@
               # is exactly how the signal-cli daemon ended up with a readers
               # list of only ["hermes"] and could not read the file it reads its
               # account number from. Every consumer of hermes-env goes here.
-              readers = ["hermes" "signal-cli"];
+              # The gateway is `agent` now (roadmap Phase D), so `hermes` is no
+              # longer a reader of anything here. signal-cli keeps its own
+              # grant: it reads SIGNAL_ACCOUNT out of the same file and stays
+              # its own system user.
+              readers = [fleetUser "signal-cli"];
               path = envFile;
             }
           ]
           ++ lib.optional cfg.exposeFleetSshKey {
-            readers = ["hermes"];
+            readers = [fleetUser];
             path = sshKeyFile;
           };
 
@@ -418,20 +497,31 @@
         my.secrets.exposeUserSecrets = [
           {
             enable = true;
-            user = "hermes";
+            # The fleet key now belongs to `agent`, not `hermes` (roadmap D7 +
+            # Phase E). Once the herdr server and the toolchain run as `agent`,
+            # `agent` is the identity that actually reaches the other machines —
+            # the gateway was only ever a borrower. Phase D moves the gateway to
+            # the same account, so this stops being a second reader rather than
+            # becoming a stale grant.
+            user = fleetUser;
             secretName = cfg.sshKeySecretName;
             file = "private_key";
-            dest = "${sshDir}/id_ed25519";
+            # The account's own HOME. `stateDir` was only ever the container's
+            # HOME, and the mesh config on both machines points at
+            # ~/.ssh/id_ed25519.
+            dest = "${fleetHome}/.ssh/id_ed25519";
             mode = "0400";
           }
         ];
 
         # Host keys for non-interactive `restrict`ed key auth. This has to land
-        # in the agent's own $HOME/.ssh — the container's HOME is
-        # ${stateDir}/home, and host /etc is not mounted in, so a file in
-        # environment.etc would never be read. Fleet keys collected with
-        # ssh-keyscan over the LAN on 2026-09-29; github's is the same key the
-        # workstation pins in programs.ssh.knownHosts (modules/system/shared.nix).
+        # in the driving account's own $HOME/.ssh — its home is
+        # ${fleetHome}, and its own mesh config asks ssh to use
+        # ~/.ssh/id_ed25519 from exactly here. It used to target the
+        # container's HOME (${sshDir}); Phase E moved it with the key.
+        # Fleet keys collected with ssh-keyscan over the LAN on 2026-09-29;
+        # github's is the same key the workstation pins in programs.ssh.knownHosts
+        # (modules/system/shared.nix).
         systemd.services.hermes-install-known-hosts = {
           description = "Install the agent's known_hosts into its \$HOME/.ssh";
           wantedBy = ["multi-user.target"];
@@ -442,8 +532,8 @@
           };
           script = ''
             set -euo pipefail
-            install -d -m 0700 -o ${agentUser} -g ${agentUser} ${sshDir}
-            install -m 0644 -o ${agentUser} -g ${agentUser} /dev/stdin ${sshDir}/known_hosts <<'KNOWN_HOSTS'
+            install -d -m 0700 -o ${fleetUser} -g ${fleetUser} ${fleetHome}/.ssh
+            install -m 0644 -o ${fleetUser} -g ${fleetUser} /dev/stdin ${fleetHome}/.ssh/known_hosts <<'KNOWN_HOSTS'
             github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
             charon.lan,10.0.0.15 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINysM9VHtOcjYDAZCTuJl+hjNNHlFExmDx5J7o40Vljh
             10.0.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPugZkqgjBKletbzaNipPLSrq5+ToQFBLyCojQLD8pt
@@ -455,19 +545,11 @@
 
       (lib.mkIf cfg.mail.enable (let
         mailSrc = config.my.secrets.getPath cfg.mail.secretName cfg.mail.configFile;
-        mailDir = "${stateDir}/home/.config/himalaya";
-        # Stable in-container absolute path for the agent at
-        # ${mountDir}/himalaya. container-bin holds ONE symlink per mail
-        # binary (not the store path itself), so the volume spec — and with
-        # it the container identity hash — stays stable across himalaya
-        # updates; tmpfiles owns the link, the installer owns the GC root.
-        # SOUL.md points the agent at the absolute path, so no in-container
-        # PATH surgery is needed.
-        binDir = "${stateDir}/container-bin";
-        himalayaBin = "${binDir}/himalaya";
+        # HOME, so this is ~/.config/himalaya — where himalaya looks without
+        # being told. The old path was ${stateDir}/home/.config because HOME
+        # used to be the CONTAINER's home, one level below stateDir.
+        mailDir = "${stateDir}/.config/himalaya";
       in {
-        services.hermes-agent.container.extraVolumes = ["${binDir}:${cfg.mail.mountDir}:ro"];
-
         # Himalaya has no daemon: it reads config.toml on every invocation,
         # so rotation only re-installs the file — no hermes-agent restart.
         # Same install-then-watch shape as install-agent-authorized-key: the
@@ -486,7 +568,7 @@
           };
         };
         systemd.services.hermes-install-mail = {
-          description = "Install the agent's himalaya config and mail binary link";
+          description = "Install the agent's himalaya config";
           wantedBy = ["multi-user.target"];
           before = ["hermes-agent.service"];
           after = ["local-fs.target"];
@@ -501,51 +583,46 @@
               echo "hermes-install-mail: source secret ${mailSrc} missing or empty" >&2
               exit 1
             fi
-            ${pkgs.nix}/bin/nix-store --add-root ${stateDir}/.gc-root-himalaya --indirect -r ${cfg.mail.package} 2>/dev/null || true
-            # The binary link is made HERE, not by a tmpfiles rule: tmpfiles
-            # only runs at boot, so a rule left the bind mount empty for
-            # every deploy that was not a reboot — himalaya was simply
-            # absent at ${cfg.mail.mountDir}/himalaya. ln -sfn is idempotent,
-            # so a store-path change on the next deploy is picked up here.
-            install -d -m 0755 -o root -g root ${binDir}
-            ln -sfn ${cfg.mail.package}/bin/himalaya ${himalayaBin}
+            # No binary plumbing: himalaya itself arrives through
+            # services.hermes-agent.extraPackages, which puts it on the
+            # gateway's PATH and in the user's profile. This job installs the
+            # config file and nothing else.
+            # Own the whole chain, not just the leaf: install -d only fixes
+            # ownership on directories it creates, so a ~/.config first made by
+            # a root-run installer stays root-owned and the agent can then write
+            # nothing under it (this is exactly how a headless HM activation
+            # died in dconfSettings on first deploy). The user's config dir
+            # must belong to the user.
+            install -d -m 0755 -o ${agentUser} -g ${agentUser} ${stateDir}/.config
             install -d -m 0700 -o ${agentUser} -g ${agentUser} ${mailDir}
             install -m 0400 -o ${agentUser} -g ${agentUser} ${mailSrc} ${mailDir}/config.toml
-            echo "hermes-install-mail: ${himalayaBin} -> $(readlink ${himalayaBin})"
+            echo "hermes-install-mail: ${mailDir}/config.toml"
           '';
         };
       }))
 
-      # wake-charon in the container, same shape as himalaya above: the
-      # gateway's only host inputs are /nix/store mounts and ${stateDir}, so a
-      # systemPackages entry is invisible in there. One symlink under the same
-      # container-bin dir keeps the volume spec (and with it the container
-      # identity hash) stable across wake-charon store-path changes.
-      (lib.mkIf config.my.wake-charon.enable (let
-        binDir = "${stateDir}/container-bin";
-        wakeBin = "${binDir}/wake-charon";
-      in {
-        services.hermes-agent.container.extraVolumes = ["${binDir}:/opt/wake-charon:ro"];
+      # wake-charon needs no plumbing at all in native mode. It used to be a
+      # container-bin symlink plus a :ro mount, because the container's only
+      # host inputs were /nix/store and ${stateDir} and a systemPackages entry
+      # was invisible in there. The gateway is now an ordinary process on the
+      # host, so the script arrives through services.hermes-agent.extraPackages
+      # -- which upstream also mirrors into users.users.<user>.packages, so it
+      # is on the agent's interactive PATH too, not just the gateway's.
 
-        systemd.services.hermes-install-wake-charon = {
-          description = "Expose the wake-charon script to the agent container";
-          wantedBy = ["multi-user.target"];
-          before = ["hermes-agent.service"];
-          after = ["local-fs.target"];
-          serviceConfig = {
-            Type = "oneshot";
-            Restart = "on-failure";
-            RestartSec = 1;
-          };
-          script = ''
-            set -euo pipefail
-            ${pkgs.nix}/bin/nix-store --add-root ${stateDir}/.gc-root-wake-charon --indirect -r ${config.my.wake-charon.package} 2>/dev/null || true
-            install -d -m 0755 -o root -g root ${binDir}
-            ln -sfn ${config.my.wake-charon.package}/bin/wake-charon ${wakeBin}
-            echo "hermes-install-wake-charon: ${wakeBin} -> $(readlink ${wakeBin})"
-          '';
-        };
-      }))
+      # No herdr client for the agent container any more. It used to need only a
+      # stable binary path, because the socket came for free: herdr ran as
+      # `hermes`, whose stateDir is bind-mounted at /data, so the socket was
+      # /data/.config/herdr/herdr.sock with no wiring at all. That stopped being
+      # true in roadmap Phase C — herdr is now a Home Manager user unit owned by
+      # `agent`, so its socket lives in a 0700 home the `hermes` container user
+      # cannot traverse. Bridging it would mean an ACL plus a new bind mount for
+      # a container that roadmap Phase D removes outright (the gateway runs
+      # natively as `agent`, and reaches the socket directly). So the block is
+      # gone rather than re-plumbed.
+      #
+      # CONSEQUENCE, deliberately accepted and not hidden: until Phase D lands,
+      # the containerised gateway has no herdr client. Do not deploy Phase C on
+      # its own — C and D belong in one deploy.
 
       # Container mode shares the host network namespace, so every port the
       # gateway opens is a port on makemake. Restrict the known one to io.

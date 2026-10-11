@@ -48,30 +48,77 @@
     # no knob for it, so sharing means applying an ACL AFTER the bind. With
     # Type=simple systemd considers the unit started before the socket exists,
     # hence the wait. Never fails the unit: a missing socket is a warning to
-    # read in the journal, not a reason to kill a healthy server.
-    # ponytail: no path unit; a herdr restart re-runs ExecStartPost, which
-    # re-ACLs. Add a watcher if herdr ever rebinds without a service restart.
-    shareScript = pkgs.writeShellScript "herdr-share-sockets" ''
+    # read in the journal, not a reason to kill a healthy server. The script
+    # The script lives in flake/lib so the system-scope module could share it;
+    # roadmap Phase C retired that module, so this is the only consumer left.
+    inherit ((import ../../flake/lib/herdr-sockets.nix {inherit pkgs;})) shareScript;
+
+    # Hold a logind sleep blocker while some agent reports `working`. Idle
+    # agents do not block, so this does not defeat auto-suspend for an unused
+    # session. auto-suspend already greps `systemd-inhibit --list` for sleep
+    # blockers, so taking one here is the whole integration.
+    #
+    # LIMIT: max hold ${cfg.sleepInhibit.maxHoldSeconds}s. Agent status is
+    # herdr-reported, so an agent that dies while still marked `working` would
+    # hold the blocker forever and charon would never suspend again. After the
+    # ceiling this gives up and waits for an agent to report idle again. Raise
+    # it once herdr reports dead agents, or if a legitimate long run trips it.
+    #
+    # Fails open on purpose: an unreadable agent list counts as "nothing is
+    # working", so a restarting or crashed server releases the blocker instead
+    # of pinning the machine awake.
+    inhibitScript = pkgs.writeShellScript "herdr-sleep-inhibit" ''
       set -uo pipefail
-      api="$1"
-      client="$2"
-      shift 2
-      for _ in $(seq 1 60); do
-        [ -S "$api" ] && break
-        sleep 0.5
+      socket="${apiSocket}"
+      herdr=${herdrBin}
+      inhibit=${lib.getExe' pkgs.systemd "systemd-inhibit"}
+      date=${lib.getExe' pkgs.coreutils "date"}
+      sleep=${lib.getExe' pkgs.coreutils "sleep"}
+      grep=${lib.getExe' pkgs.gnugrep "grep"}
+      interval=${toString cfg.sleepInhibit.intervalSeconds}
+      max_hold=${toString cfg.sleepInhibit.maxHoldSeconds}
+
+      inhibitor_pid=""
+      held_since=0
+      tripped=0
+
+      release() {
+        if [ -n "$inhibitor_pid" ]; then
+          kill "$inhibitor_pid" 2>/dev/null || true
+          wait "$inhibitor_pid" 2>/dev/null || true
+          inhibitor_pid=""
+          held_since=0
+          echo "herdr-sleep-inhibit: released" >&2
+        fi
+      }
+      trap release EXIT INT TERM
+
+      while :; do
+        working=$(
+          HERDR_SOCKET_PATH="$socket" "$herdr" agent list 2>/dev/null |
+            "$grep" -c '"agent_status":"working"' || true
+        )
+        now=$("$date" +%s)
+
+        if [ "$working" -gt 0 ] && [ "$tripped" -eq 0 ]; then
+          if [ -z "$inhibitor_pid" ]; then
+            "$inhibit" --what=sleep --mode=block --who=herdr-agent \
+              --why="herdr agent working" "$sleep" infinity &
+            inhibitor_pid=$!
+            held_since=$now
+            echo "herdr-sleep-inhibit: holding (agent working)" >&2
+          elif [ $((now - held_since)) -ge "$max_hold" ]; then
+            tripped=1
+            release
+            echo "herdr-sleep-inhibit: max hold ''${max_hold}s reached; not blocking until an agent goes idle" >&2
+          fi
+        elif [ "$working" -eq 0 ]; then
+          tripped=0
+          release
+        fi
+
+        "$sleep" "$interval"
       done
-      if [ ! -S "$api" ]; then
-        echo "herdr: $api never appeared; socket not shared with: $*" >&2
-        exit 0
-      fi
-      for path in "$api" "$client"; do
-        [ -S "$path" ] || continue
-        for user in "$@"; do
-          ${pkgs.acl}/bin/setfacl -m "u:$user:rw" "$path" \
-            || echo "herdr: setfacl failed for $user on $path" >&2
-        done
-      done
-      echo "herdr: sockets shared with: $*"
     '';
 
     # Install AFTER pi-agent laid down ~/.pi/agent: herdr creates the
@@ -148,6 +195,23 @@
           the client surface without moving the spawn identity.
         '';
       };
+
+      sleepInhibit = {
+        enable = lib.mkEnableOption "block logind sleep while a herdr agent is working";
+        intervalSeconds = lib.mkOption {
+          type = lib.types.int;
+          default = 5;
+          description = "How often to re-read the agent list.";
+        };
+        maxHoldSeconds = lib.mkOption {
+          type = lib.types.int;
+          default = 1800;
+          description = ''
+            Give up on blocking sleep after this long without an agent ever
+            going idle. See the LIMIT note on the script for why.
+          '';
+        };
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -165,7 +229,24 @@
           # Pin the socket so the server, this user's clients, and anyone the
           # socket is shared with all resolve the same path even if a desktop
           # session exports a different XDG_CONFIG_HOME.
-          Environment = "HERDR_SOCKET_PATH=${apiSocket}";
+          # Plugins that need more of the server's environment (a [[startup]]
+          # hook's interpreter on PATH, HOST) add to
+          # systemd.user.services.herdr.Service.Environment directly: Home
+          # Manager merges those lists across modules.
+          # __NIXOS_SET_ENVIRONMENT_DONE must be present but EMPTY. The
+          # systemd user manager exports it as 1, and every login shell's
+          # init (/etc/fish/nixos-env-preinit.fish and the bash equivalent)
+          # guards on it: `if [ -z "$__NIXOS_SET_ENVIRONMENT_DONE" ]; then
+          # fenv source .../set-environment`. Panes are spawned by this server
+          # and inherit its environment, so a set guard makes them skip NixOS
+          # env setup entirely — they keep this unit's PATH and never gain
+          # ~/.nix-profile/bin, so agy, zoxide and the whole user profile are
+          # missing inside panes while working fine in a normal terminal.
+          # Empty means "not done yet", which is the correct initial state.
+          Environment = [
+            "HERDR_SOCKET_PATH=${apiSocket}"
+            "__NIXOS_SET_ENVIRONMENT_DONE="
+          ];
           ExecStart = "${herdrBin} server";
           ExecStartPost = lib.concatStringsSep " " [
             (lib.escapeShellArg shareScript)
@@ -176,6 +257,12 @@
           Restart = "always";
           RestartSec = 5;
         };
+        # WantedBy default.target, or Home Manager links the file but nothing
+        # ever starts it: `is-active` reports `inactive`, the socket never
+        # binds, and the bridge [[startup]] hook never fires. Verified on
+        # makemake 2026-10-11: herdr.service absent from
+        # default.target.wants after a deploy that re-linked the unit files,
+        # while the server only ran as stray remote-client-bridge children.
         Install.WantedBy = ["default.target"];
       };
 
@@ -199,7 +286,35 @@
         Service = {
           Type = "oneshot";
           RemainAfterExit = true;
-          ExecStart = integrationScript;
+          # herdr.service is Restart=always with a 5s delay: ordering After
+          # it only sequences the first attempt, and if the server is still
+          # in its restart loop the integration install fails against a dead
+          # socket. Rather than failing the unit (which blocks the bridge
+          # [[startup]] hook that needs these files), retry the socket dial
+          # briefly and succeed with a warning if the server never answers.
+          ExecStart = pkgs.writeShellScript "herdr-integrations-wrapped" ''
+            set -uo pipefail
+            for _ in $(seq 1 12); do
+              if ${integrationScript} 2>&1; then exit 0; fi
+              sleep 5
+            done
+            echo "herdr-integrations: server never answered; leaving integrations uninstalled" >&2
+            exit 0
+          '';
+        };
+        Install.WantedBy = ["default.target"];
+      };
+
+      systemd.user.services.herdr-sleep-inhibit = lib.mkIf cfg.sleepInhibit.enable {
+        Unit = {
+          Description = "Block logind sleep while a herdr agent is working";
+          After = ["herdr.service"];
+        };
+        Service = {
+          Type = "simple";
+          ExecStart = inhibitScript;
+          Restart = "on-failure";
+          RestartSec = 5;
         };
         Install.WantedBy = ["default.target"];
       };

@@ -17,7 +17,12 @@
     config = lib.mkIf cfg.enable {
       programs.zellij = {
         enable = true;
-        enableFishIntegration = true;
+        # HM's fish integration emits zellij's own autostart, whose only guard
+        # is `not set -q ZELLIJ`. A herdr pane is not a zellij session, so every
+        # new pane started a nested zellij, and because herdr exports
+        # ZELLIJ_AUTO_EXIT=true, quitting that zellij killed the pane. The
+        # multiplex-aware autostart below replaces it.
+        enableFishIntegration = false;
         exitShellOnExit = true;
         attachExistingSession = false;
         settings = {
@@ -45,6 +50,19 @@
           }
         '';
       };
+
+      # Normally set by HM whenever any zellij shell integration is enabled.
+      # enableFishIntegration is off, so spell out what it would have set.
+      home.sessionVariables = {
+        ZELLIJ_AUTO_ATTACH = lib.boolToString config.programs.zellij.attachExistingSession;
+        ZELLIJ_AUTO_EXIT = lib.boolToString config.programs.zellij.exitShellOnExit;
+      };
+
+      programs.fish.interactiveShellInit = lib.mkIf (config.programs.fish.enable or false) ''
+        if test "$TERM" != "dumb"; and not set -q HERDR_ENV
+            eval (${lib.getExe config.programs.zellij.package} setup --generate-auto-start fish | string collect)
+        end
+      '';
     };
   };
 }

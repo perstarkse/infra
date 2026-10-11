@@ -7,6 +7,7 @@
 }: {
   imports = with ctx.flake.nixosModules;
     [
+      home-module
       ./hardware-configuration.nix
       ./boot.nix
       options
@@ -38,11 +39,123 @@
       journal-upload
       agent-ssh-access
       hermes
+      herdr-web-ui
       wake-charon
       signal-cli
     ]
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [media mailserver]);
+
+  # Home Manager profile for `agent`. This machine is the one that hosts the
+  # agent toolchain (roadmap Phase B/C), and `agent` is the fleet's least
+  # privileged account — no mainUser, no GUI, no sudo. Keep the import list to
+  # what a non-interactive account actually needs: `options` carries the
+  # my.secrets bridge into HM, `ssh` is the fleet access the toolchain needs,
+  # `sops` comes along because Phase F hands pi an age key. Do NOT set
+  # my.mainUser here — that is a different account on a different machine.
+  home-manager.users.${config.my.agent-ssh-access.user} = {
+    imports = with ctx.flake.homeModules;
+      [
+        options
+        sops
+        ssh
+        herdr
+        herdr-web-ui
+        # pi shells out to `npm` by name at first run (extension installs
+        # into ~/.pi/agent/npm). nodejs alone is not enough: the npm
+        # wrapper ships in a separate output that bare `nodejs` does not
+        # put on PATH. Charon gets this via my.node; agent gets it here.
+        node
+      ]
+      ++ (with ctx.inputs.agentTooling.homeModules; [
+        pi-agent
+        antigravity
+        shared-skills
+        # Imported but NOT enabled, purely to declare my.agentTooling.pi-web.
+        # agent-tooling's antigravity.nix guards its pi-web wiring with
+        # `lib.attrByPath [... "pi-web" "enable"] false config` and comments that
+        # the module "still evaluates" without it -- but attrByPath has to force
+        # config.my.agentTooling.pi-web to discover it is absent, and forcing an
+        # option nobody declared is an error, not a default. So the module is
+        # only importable alongside pi-web. Costs nothing: all of pi-web.nix's
+        # config sits behind `mkIf cfg.enable`, and this one stays off.
+        pi-web
+      ]);
+
+    # The agent toolchain (roadmap Phase F). Both agents authenticate on their
+    # first interactive run and headless runs reuse the cached credentials, so
+    # there is deliberately NO secret here: no includeTags for provider keys, no
+    # requireGenerators entries, no allowReadAccess grants. Nothing to rotate,
+    # nothing that can leak into a backup.
+    my.agentTooling = {
+      pi-agent = {
+        enable = true;
+        # Panes are non-interactive. The permission extension asks questions and
+        # nobody is there to answer, so an approval prompt is a hang. Disabled
+        # rather than reconfigured: the boundary it enforces is `agent`'s, and
+        # agent holds no sudo anywhere in the fleet.
+        permissionSystem.enable = false;
+      };
+      antigravity.enable = true;
+      shared-skills.enable = true;
+    };
+
+    # pi's first run shells out to `npm` by name (extension installs into
+    # ~/.pi/agent/npm). nodejs arrives via the `node` homeModule import
+    # above; this enables its global-prefix shim so npm resolves there too.
+    my.node.enable = true;
+
+    # The `pi` binary itself arrives through my.agentTooling.pi-agent.package,
+    # which defaults to agent-tooling's packages.pi -- the same pi-coding-agent
+    # pi-web bundles -- and lands on home.packages from the module. git and
+    # ripgrep are the pane tools pi shells out to by name.
+    home.packages = with pkgs; [
+      git
+      ripgrep
+    ];
+
+    # herdr as a USER unit here rather than the system unit it used to be. The
+    # system module existed only for machines with no Home Manager user; now
+    # that `agent` has one, the server runs as `agent`, which is the identity
+    # panes must be spawned as (D1/D3) and the one whose home the socket lands
+    # in. No `shareWith`: the server already belongs to the only user that
+    # drives it.
+    my.herdr = {
+      enable = true;
+      # No default in the HM module (home modules cannot see flake inputs), so
+      # it comes from the locked input exactly as charon's does.
+      package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
+    };
+
+    # Plugin half of the browser client (roadmap Phase G). bindHost is NOT set:
+    # the HM module already defaults it to my.listenNetworkAddress, and a
+    # loopback bind would be unreachable from io's proxy.
+    my.herdr-web-ui.enable = true;
+
+    # The ssh client itself (roadmap Phase C prerequisite, not optional).
+    # `home.file.".ssh/conf.d/herdr-mesh"` below is inert without it: nothing
+    # Includes conf.d/* until this module writes ~/.ssh/config, and without
+    # that the outbound mesh fails with "Could not resolve hostname charon"
+    # on first deploy. The ssh-agent user service it also starts is harmless
+    # here (no keys are added to it; the fleet key is used via IdentityFile).
+    my.ssh.enable = true;
+
+    # herdr mesh, makemake's half. charon's herdr reaches this one as `agent`
+    # over plain ssh; the key it uses is the fleet key, which Phase E installs
+    # into this user's own ~/.ssh. `home.file` rather than the system module's
+    # removed `my.herdr.sshConfig`. known_hosts for charon comes from the same
+    # installer that ships the key.
+    home.file.".ssh/conf.d/herdr-mesh" = {
+      text = ''
+        Host charon 10.0.0.15
+          HostName 10.0.0.15
+          User agent
+          IdentityFile ~/.ssh/id_ed25519
+          IdentitiesOnly yes
+          BatchMode yes
+      '';
+    };
+  };
 
   # The io router DNAT-hijacks outbound :53 to its own resolver, which splits
   # mail.stark.pub -> 10.0.0.10 and caches NODATA for _acme-challenge.* per
@@ -68,7 +181,27 @@
   my = {
     # Non-sudo fleet SSH for the personal agent. Unprivileged `agent` account,
     # `restrict`ed key, no wheel/docker/libvirtd, logs only.
-    agent-ssh-access.enable = true;
+    agent-ssh-access = {
+      enable = true;
+      # This machine hosts the agent toolchain, so unlike the rest of the fleet
+      # `agent` needs a real HOME: Home Manager (Phase B) writes its whole
+      # profile there and project checkouts go in ~/projects. createHome is safe
+      # because the module closes the homedir authorized_keys path per-user
+      # (see its `AuthorizedKeysFile` Match block). `home` is what drives
+      # users.users.agent.home; do not also set that option directly.
+      home = "/home/agent";
+      createHome = true;
+      # herdr's socket lives under the hermes stateDir, which is drwxrws---
+      # hermes:hermes, so `agent` cannot even traverse into it — the socket's
+      # own ACL is unreachable without these. Traverse only (x, no read), same
+      # reasoning as charon's: the path to a socket is not a licence to list
+      # the directory. Every parent between / and the socket needs it. Phase C
+      # moves herdr into this user's home and retires these.
+      # herdr's socket now lives in this user's own home (Phase C), so the
+      # traverse ACLs into the hermes stateDir that the old system service
+      # needed are gone. Writable scratch still comes from workDir.
+      traversePaths = [];
+    };
 
     # Magic-packet script for waking charon before driving it over SSH.
     # Runs on makemake (same broadcast reachability as io, one less hop).
@@ -83,6 +216,13 @@
 
     hermes = {
       enable = true;
+
+      # IS the agent's home. Native mode sets HOME = stateDir, so this is what
+      # makes the gateway an ordinary user of the machine. It must stay equal
+      # to my.agent-ssh-access.home -- the module asserts the home's mode
+      # against this value, and the fleet SSH key and known_hosts are installed
+      # under it.
+      stateDir = config.my.agent-ssh-access.home;
 
       mail.enable = true;
 
@@ -107,6 +247,34 @@
     mainUser = {
       enable = false;
       name = "p";
+    };
+
+    # Browser client for herdr. PRIMARY since 2026-10-11: herdr.lan.stark.pub
+    # moved here from charon (always on; charon sleeps). The -mk domain is
+    # kept as an alias so existing bookmarks keep working. Only io proxies
+    # here, so the bridge is reachable from the router alone.
+    #
+    # THIS IS AN UNAUTHENTICATED REMOTE SHELL. The plugin's gate is off while
+    # HERDR_WEB_TOKEN is unset and /api/health reports role "drive", so anyone
+    # who can reach the vhost gets keystrokes into `agent`'s panes. LAN-only and
+    # io-only keeps the blast radius at "already on the LAN", which is not the
+    # same as authentication. Auth is out of scope per decision D6.
+    herdr-web-ui = {
+      enable = true;
+      allowedFirewallSources = ["10.0.0.1"];
+      endpoints = {
+        enable = true;
+        domain = "herdr.lan.stark.pub";
+        # No alias vhost for herdr-mk: the endpoint schema is one domain
+        # per service, so the old name dies with the cutover. Bookmarks
+        # get one edit; a second vhost doubles the unauthenticated
+        # surface for a name nobody needs.
+        useWildcard = "lanstark";
+        router = {
+          enable = true;
+          targets = ["io"];
+        };
+      };
     };
 
     docker.enable = true;
@@ -250,8 +418,12 @@
       # Personal agent state: sessions, session DB, memory, skills, cron store,
       # mcp-tokens, config.yaml, workspace. One directory, one job — the agent
       # writes nothing durable outside it (see modules/system/hermes.nix).
+      # Scoped to HERMES_HOME and the workspace, NOT the whole stateDir: since
+      # Phase D the stateDir IS /home/agent, so backing it up wholesale would
+      # sweep ~/.pi, ~/.cache and every other cache into the repo on top of
+      # what the gateway actually owns.
       hermes =
-        (mkB2 config.my.hermes.stateDir)
+        (mkB2 "${config.my.hermes.stateDir}/.hermes")
         // {
           # The session DB is SQLite and live-written: a raw restic copy of a
           # torn database is worse than no copy. Snapshot a consistent .backup
@@ -264,12 +436,12 @@
           # state.db that hermes (running as its own user) cannot then open.
           backupPrepareCommand = ''
             if [ -f ${config.my.hermes.stateDir}/.hermes/state.db ]; then
-              install -d -m 0700 ${config.my.hermes.stateDir}/.restic-prep
+              install -d -m 0700 ${config.my.hermes.stateDir}/.hermes/.restic-prep
               ${pkgs.sqlite}/bin/sqlite3 ${config.my.hermes.stateDir}/.hermes/state.db \
-                ".backup '${config.my.hermes.stateDir}/.restic-prep/state.db'"
+                ".backup '${config.my.hermes.stateDir}/.hermes/.restic-prep/state.db'"
             fi
           '';
-          backupCleanupCommand = "rm -rf ${config.my.hermes.stateDir}/.restic-prep";
+          backupCleanupCommand = "rm -rf ${config.my.hermes.stateDir}/.hermes/.restic-prep";
           # $HERMES_HOME/.env is regenerated from the hermes-env generator on
           # every activation: the generator is the source of truth, so keys
           # never enter a backup repo. Same for the installed himalaya
@@ -282,8 +454,13 @@
           # lose every session taken before the first restic run. If a restore
           # ever reports a corrupt state.db, replace it with the .restic-prep
           # copy from the same snapshot.
-          exclude = ["${config.my.hermes.stateDir}/.hermes/.env" "${config.my.hermes.stateDir}/home/.config/himalaya/config.toml"];
+          # The himalaya config.toml no longer needs excluding: it lives at
+          # ~/.config/himalaya/config.toml, outside HERMES_HOME, so it is not in
+          # this snapshot at all.
+          exclude = ["${config.my.hermes.stateDir}/.hermes/.env"];
         };
+
+      hermes-workspace = (mkB2 "${config.my.hermes.stateDir}/workspace") // {};
 
       paperless = {
         enable = true;
@@ -688,6 +865,12 @@
     };
   };
 
+  # No `SetEnv` for the herdr socket any more. The server is now a user unit
+  # owned by `agent` itself (roadmap Phase C), so a client in `agent`'s own
+  # session resolves $HOME/.config/herdr on its own — which is exactly what the
+  # old block was working around. The PATH half of the problem is solved at
+  # environment.systemPackages above instead of per-session SetEnv.
+
   services.indicator-alert-daemon = {
     enable = true;
     intervalType = "1wk";
@@ -756,6 +939,15 @@
   environment.systemPackages = with pkgs; [
     mergerfs
     unrar
+    # On PATH system-wide so `ssh agent@makemake 'herdr agent list'` resolves it:
+    # a non-login ssh command gets sshd's default PATH, which has neither the
+    # Nix profile nor Home Manager's. This is what keeps the inbound half of
+    # the mesh alive now that the server is a user unit (roadmap Phase C
+    # side-effect 2). python3 for the same reason charon carries it: herdr's
+    # antigravity-cli integration guards on `command -v python3` and reports no
+    # session without it, while `herdr integration status` still says current.
+    ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default
+    python3
   ];
 
   programs.fuse.userAllowOther = true;
@@ -793,6 +985,14 @@
     ignoreIP = [
       "127.0.0.0/8"
       "::1"
+      # Fleet peers must never be banned. 2026-10-11: charon (10.0.0.15)
+      # ate a 30m sshd ban from my own `ssh agent@makemake.lan` attempts
+      # with the wrong local key — every LAN host refused, not just SSH —
+      # and the mesh died with it. fail2ban's stock iptables action drops
+      # all traffic from the banned IP, not just port 22.
+      "10.0.0.1"
+      "10.0.0.10"
+      "10.0.0.15"
     ];
     jails = {
       postfix = {

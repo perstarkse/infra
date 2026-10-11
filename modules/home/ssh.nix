@@ -17,6 +17,11 @@
 
       home.file.".ssh/config" = {
         text = ''
+          # Per-host blocks live in conf.d/ (e.g. a tool that needs its own
+          # IdentityFile). Included first so a specific Host can be overridden
+          # by anything the user drops in later.
+          Include ~/.ssh/conf.d/*
+
           Host *
             ForwardAgent no
             AddKeysToAgent yes

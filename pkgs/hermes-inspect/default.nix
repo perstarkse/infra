@@ -39,6 +39,13 @@
   apiPort ? 8642,
   # Agent state root; the module that owns it defines my.hermes.stateDir.
   stateDir ? "/var/lib/hermes",
+  # How to invoke the gateway on the TARGET. Roadmap Phase D made it native, so
+  # the binary is on the system PATH (services.hermes-agent.addToSystemPackages)
+  # and there is no container to exec into. The old default,
+  # <stateDir>/current-package/bin/hermes, only ever existed in container mode:
+  # upstream creates that symlink inside `mkIf cfg.container.enable`, so in
+  # native mode the path simply is not there and every one-shot ran into ENOENT.
+  hermesBin ? "hermes",
   # Absolute NixOS paths on the target (/bin/bash does not exist there).
   remoteBash ? "/run/current-system/sw/bin/bash",
   remoteCurl ? "/run/current-system/sw/bin/curl",
@@ -72,7 +79,7 @@ writeShellApplication {
     )}
     API="127.0.0.1:${toString apiPort}"
     HERMES_HOME_REMOTE="${stateDir}/.hermes"
-    HERMES_BIN_REMOTE="${stateDir}/current-package/bin/hermes"
+    HERMES_BIN_REMOTE="${hermesBin}"
 
     # Absolute NixOS paths on the TARGET. /bin/bash does not exist there, and
     # clan ssh -c execs exactly one binary, so every remote invocation is

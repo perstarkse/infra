@@ -13,3 +13,6 @@ SECURITY-REVIEW.md
 docs/drill-log.md
 # Local generator outputs hold plaintext secrets (never commit).
 outputs/
+
+# transient review diff dumps
+*.patch

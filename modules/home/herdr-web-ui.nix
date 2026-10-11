@@ -1,0 +1,168 @@
+# herdr-web-ui (Home Manager half): install the devswha/herdr-web-ui plugin and
+# give herdr.service the toolchain its [[startup]] hook needs.
+#
+# Split from modules/system/herdr-web-ui.nix, which publishes the endpoint:
+# herdr.service is a user unit and `my.herdr` is a Home Manager option, so this
+# half belongs under modules/home/ like every other user-scope module.
+#
+# LIMIT: `herdr plugin install` resolves the plugin at HEAD of its GitHub repo
+# unless pluginRepo names a tag, and it builds against the network (bun install).
+# The install oneshot is idempotent in effect but not in content. Pin pluginRepo
+# to a tag once this stops being a prototype.
+{
+  config.flake.homeModules.herdr-web-ui = {
+    config,
+    lib,
+    osConfig,
+    pkgs,
+    ...
+  }: let
+    cfg = config.my.herdr-web-ui;
+    herdrBin = lib.getExe config.my.herdr.package;
+
+    # Bound in the let, not as a derivation sibling: Nix attrset siblings are
+    # not in lexical scope of each other, so `version` would be invisible inside
+    # the nested `src` and `meta` attrsets below.
+    bunVersion = "1.4.2";
+
+    bun = pkgs.stdenv.mkDerivation {
+      pname = "bun";
+      version = bunVersion;
+      src = pkgs.fetchurl {
+        url = "https://github.com/oven-sh/bun/releases/download/bun-v${bunVersion}/bun-linux-x64.zip";
+        hash = "sha256-NjaPrvdSeHXV/6UuU81IAhdB8qg+tiCKjdZAaNQiqRM=";
+      };
+      nativeBuildInputs = [pkgs.unzip];
+      dontStrip = true;
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out/bin
+        # stdenv sets sourceRoot to the archive's single top-level directory,
+        # so the build runs inside bun-linux-x64/ already.
+        cp bun $out/bin/bun
+        runHook postInstall
+      '';
+      meta = {
+        description = "Bun ${bunVersion}, pinned for herdr-web-ui's >=1.4 build floor";
+        # The pinned source is the x64 release only; do not claim aarch64.
+        platforms = ["x86_64-linux"];
+      };
+    };
+
+    # The system directories stay. Setting PATH on a unit REPLACES systemd's
+    # default (/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin),
+    # so a bare lib.makeBinPath here silently removes every basic tool from the
+    # server and from every pane it spawns. Only the two nix dirs need adding.
+    pluginPath = "${lib.makeBinPath [bun pkgs.nodejs_22]}:/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin";
+
+    installScript = pkgs.writeShellScript "herdr-web-ui-install" ''
+      set -euo pipefail
+      # Pinned by ref, not floating on HEAD. A newer HEAD (e6febbe) ignores
+      # HOST and binds loopback only, while 9153e60b (what charon runs, health
+      # 200 on its LAN IP) honours it. The installer reinstalls when the
+      # installed ref drifts from the configured one; `plugin install` does not
+      # overwrite, so a drifting install is uninstalled first.
+      installed_ref=$(${herdrBin} plugin list 2>/dev/null | grep herdr-web-ui | grep -o "@[0-9a-f]*" | head -1 || true)
+      want_ref="@${cfg.pluginRef}"
+      if [ "$installed_ref" = "$want_ref" ]; then
+        echo "herdr-web-ui: already at $want_ref"
+        exit 0
+      fi
+      if [ -n "$installed_ref" ]; then
+        echo "herdr-web-ui: installed $installed_ref drifts from $want_ref; reinstalling"
+        ${herdrBin} plugin uninstall devswha.herdr-web-ui || true
+      fi
+      ${herdrBin} plugin install --yes --ref ${cfg.pluginRef} ${cfg.pluginRepo}
+    '';
+  in {
+    options.my.herdr-web-ui = {
+      enable = lib.mkEnableOption "herdr-web-ui Home Manager side (plugin install)";
+
+      pluginRepo = lib.mkOption {
+        type = lib.types.str;
+        default = "devswha/herdr-web-ui";
+        description = "GitHub repo passed to `herdr plugin install`.";
+      };
+
+      pluginRef = lib.mkOption {
+        type = lib.types.str;
+        default = "9153e60b53abe7e65420c8c8036928d41998e1df";
+        description = ''
+          Git ref passed as `herdr plugin install --ref`. Pinned, not HEAD:
+          HEAD moves and has broken HOST binding before. This is the rev
+          running on charon (health 200 on its LAN IP).
+        '';
+      };
+
+      bindHost = lib.mkOption {
+        type = lib.types.str;
+        # Read from the OS side rather than repeated per machine:
+        # server/index.ts binds process.env.HOST, defaulting to 127.0.0.1, and
+        # a loopback-only bridge is unreachable from the reverse proxy. A
+        # `tailscale serve` deployment wants loopback and overrides this.
+        default = osConfig.my.listenNetworkAddress;
+        description = ''
+          Address the plugin's bridge binds. Must be reachable from whatever
+          reverse proxies to it; 127.0.0.1 only suits a same-host proxy or
+          `tailscale serve`.
+        '';
+      };
+    };
+
+    config = lib.mkIf cfg.enable {
+      # bun goes in home.packages rather than into the herdr unit's PATH.
+      # Setting PATH on the unit REPLACES the path the service inherits from
+      # the user manager, and NixOS's set-environment respects an existing PATH
+      # rather than rebuilding it — so panes spawned by the server kept that
+      # PATH and never gained ~/.nix-profile/bin, making agy, zoxide, cargo and
+      # the rest of the user profile disappear inside panes while working in a
+      # normal terminal. ~/.nix-profile/bin is already on the manager's PATH,
+      # so putting bun here satisfies the plugin's [[startup]] hook without
+      # touching PATH at all.
+      home.packages = [bun];
+
+      # HOST reaches the `bun scripts/plugin.ts start` startup hook THROUGH
+      # herdr, not around it. The hook is spawned by the server and reads
+      # process.env first (scripts/plugin.ts:104 falls back to 127.0.0.1),
+      # so HOST must be on the server's own environment — there is no other
+      # channel. A `tailscale serve` deployment wants loopback and overrides
+      # bindHost.
+      systemd.user.services.herdr.Service.Environment = ["HOST=${cfg.bindHost}"];
+
+      # Belt and suspenders: the [[startup]] hook is one-shot per herdr start,
+      # so a bridge that bound 127.0.0.1 before HOST was set survives every
+      # redeploy (the start script sees a live port and leaves it alone).
+      # Writing HOST into the plugin's own `env` file makes the value stick
+      # regardless of hook timing. `env` is read BEFORE `.env`, which stays
+      # the owner's for the token and PORT; activation only fills in a missing
+      # HOST so a hand-set one is never clobbered.
+      home.activation.herdrWebUiHost = lib.hm.dag.entryAfter ["writeBoundary"] ''
+        cfgDir="$HOME/.config/herdr/plugins/config/devswha.herdr-web-ui"
+        if [ ! -e "$cfgDir/env" ] || ! grep -q '^HOST=' "$cfgDir/env" 2>/dev/null; then
+          run mkdir -p "$cfgDir"
+          run sh -c "printf 'HOST=${cfg.bindHost}\\n' >> \"$cfgDir/env\""
+        fi
+      '';
+
+      systemd.user.services.herdr-web-ui-install = {
+        Unit = {
+          Description = "Install the herdr-web-ui plugin";
+          After = ["herdr.service"];
+        };
+        Service = {
+          Type = "oneshot";
+          # One network build, and deliberately no Restart: a boot loop when
+          # GitHub is unreachable helps nobody.
+          RemainAfterExit = true;
+          TimeoutStartSec = "20min";
+          Environment = [
+            "PATH=${pluginPath}"
+            "HERDR_SOCKET_PATH=${config.my.herdr.socketDir}/herdr.sock"
+          ];
+          ExecStart = "${installScript}";
+        };
+        Install.WantedBy = ["default.target"];
+      };
+    };
+  };
+}

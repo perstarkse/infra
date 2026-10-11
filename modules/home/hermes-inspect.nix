@@ -90,10 +90,12 @@ _: {
         type = lib.types.path;
         default = "/var/lib/hermes";
         description = ''
-          Agent state root on the target. HERMES_HOME is <stateDir>/.hermes and
-          the container binary is <stateDir>/current-package/bin/hermes — both are
-          what the remote one-shot runs point at. Must match my.hermes.stateDir
-          on the agent host.
+          Agent state root on the target. HERMES_HOME is <stateDir>/.hermes,
+          which is what the remote one-shot runs point at. Must match
+          my.hermes.stateDir on the agent host — which since roadmap Phase D is
+          the agent account's own home. The gateway BINARY is not under here:
+          the gateway is native now, so `hermes` comes off the system PATH
+          (see my.hermes-inspect.hermesBin).
         '';
       };
 
