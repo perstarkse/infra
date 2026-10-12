@@ -159,6 +159,9 @@ in {
         herdr
         node
         git
+        direnv
+        fish
+        zoxide
       ]
       ++ (with ctx.inputs.agentTooling.homeModules; [
         pi-agent
@@ -184,6 +187,19 @@ in {
     # (mkIf): importing alone configures nothing.
     my.git.enable = true;
     my.ssh.enable = true;
+    my.direnv.enable = true;
+    my.fish.enable = true;
+    my.zoxide.enable = true;
+
+    # fish is agent's login shell (store-managed config, nothing shapeable).
+    # GIT_AUTHOR_* rides fish's config so ssh-command shells keep agent
+    # authorship: fish sources config.fish non-interactively too, and .bashrc
+    # is bash-only — fish would have silently re-opened the mis-attribution
+    # gap the bashrc closed.
+    programs.fish.interactiveShellInit = ''
+      set -gx GIT_AUTHOR_NAME agent
+      set -gx GIT_AUTHOR_EMAIL agent@stark.pub
+    '';
 
     my.node.enable = true;
 
@@ -643,6 +659,11 @@ in {
   # (NixOS re-applies homeMode on every activation — verified in
   # update-users-groups.pl:238 — so the mode itself needs no oneshot).
   users.users.${agentUser}.homeMode = "750";
+
+  # fish as agent's login shell: the HM fish config is store-managed, so the
+  # login environment stays declarative (the module default bash was chosen
+  # for machines with no agent HM profile).
+  my.agent-ssh-access.shell = pkgs.fish;
 
   # C5: p's downhill read on agent's home. Recursive + default: a
   # top-level-only grant stops at the first 0700 subdir agent creates.
