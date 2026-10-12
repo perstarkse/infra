@@ -98,6 +98,7 @@ in {
         ssh
         herdr
         node
+        git
       ]
       ++ (with ctx.inputs.agentTooling.homeModules; [
         pi-agent
@@ -115,12 +116,65 @@ in {
       shared-skills.enable = true;
     };
 
+    # Both home modules gate their whole config behind the enable flag
+    # (mkIf): importing alone configures nothing.
+    my.git.enable = true;
+    my.ssh.enable = true;
+
     my.node.enable = true;
 
     home.packages = with pkgs; [
-      git
       ripgrep
     ];
+
+    # Decision C1 (docs/p-agent-collab-roadmap.md): the shared git module sets
+    # committer Per Stark <per@stark.pub> (committer is ALWAYS p, both
+    # principals); authorship comes from GIT_AUTHOR_* below. Signing uses the
+    # agent-git-sign private half (signing-only key); the public half is
+    # registered on GitHub as a signing key and installed into the root-owned
+    # allowed_signers by install-agent-allowed-signers. user.signingkey points
+    # at the PRIVATE key file: exposeUserSecrets deploys no .pub here, and git
+    # stats the path before every sign (a missing file aborts the commit).
+    # Verified end-to-end with a throwaway keypair 2026-10-12: Good "git"
+    # signature for agent@stark.pub via the allowed_signers principal lines.
+    programs.git.settings = {
+      commit.gpgsign = true;
+      gpg.format = "ssh";
+      user.signingkey = "/home/agent/.ssh/git_sign_ed25519";
+      gpg.ssh.allowedSignersFile = "/etc/ssh/allowed_signers";
+    };
+
+    # GIT_AUTHOR_* must reach every path agent commits from:
+    #   - home.sessionVariables: interactive shells
+    #   - herdr's Service.Environment: herdr panes inherit the SERVER's env,
+    #     not environment.d (modules/home/herdr.nix notes plugins use the
+    #     same lever)
+    # Known gap: non-interactive `ssh agent@charon <cmd>` shells source
+    # neither — commits from that path fall back to p as author. Accepted:
+    # the execution plane is herdr panes (C7); revisit only if a commit
+    # actually lands mis-attributed (2026-10-12).
+    home.sessionVariables = {
+      GIT_AUTHOR_NAME = "agent";
+      GIT_AUTHOR_EMAIL = "agent@stark.pub";
+    };
+    systemd.user.services.herdr.Service.Environment = [
+      "GIT_AUTHOR_NAME=agent"
+      "GIT_AUTHOR_EMAIL=agent@stark.pub"
+    ];
+
+    # GitHub pushes go through the agent-git-auth key only (decision C2).
+    # IdentitiesOnly yes keeps the fleet mesh key (~/.ssh/id_ed25519) from
+    # ever being offered to github.com. github.com's host key is pinned
+    # fleet-wide in modules/system/shared.nix, so BatchMode-style non-interactive
+    # pushes verify the host without TOFU.
+    home.file.".ssh/conf.d/github" = {
+      text = ''
+        Host github.com
+          User git
+          IdentityFile ~/.ssh/git_auth_ed25519
+          IdentitiesOnly yes
+      '';
+    };
 
     # Outbound mesh as `agent`: the fleet key lands at ~/.ssh/id_ed25519 via
     # my.secrets below, so IdentityFile needs no per-machine override.
@@ -500,6 +554,42 @@ in {
     };
   };
 
+  # Git SSH trust anchor for verifying agent-signed commits (decision C1).
+  # Root-owned 0444 so agent cannot rewrite the principals that vouch for its
+  # own signatures — same reasoning as the root-owned authorized_keys in
+  # modules/system/agent-ssh-access.nix. Carries SIGNING keys only (never the
+  # auth key), one explicit principal line per party.
+  #
+  # No path unit and no RemainAfterExit: a oneshot without RemainAfterExit is
+  # re-queued by every switch-to-configuration (verified on charon 2026-10-12:
+  # agent-path-acl started Oct 11 17:37 and Oct 12 07:09 on a machine booted
+  # Oct 4), and rotation only ever happens through a deploy, whose activation
+  # runs after /run/secrets is populated — so the idempotent installer picks
+  # up rotated keys on the very deploy that carries them.
+  systemd.services.install-agent-allowed-signers = {
+    description = "Install git SSH allowed_signers (signing keys only)";
+    after = ["local-fs.target"];
+    wantedBy = ["multi-user.target"];
+    serviceConfig = {
+      Type = "oneshot";
+    };
+    script = let
+      signPub = config.my.secrets.getPath "agent-git-sign" "public_key";
+      # Single source of truth: p's key as declared for authorized_keys.
+      pKey = builtins.head config.my.mainUser.extraSshKeys;
+    in ''
+      set -euo pipefail
+      if [ ! -s "${signPub}" ]; then
+        # Fresh clone before `clan vars generate`: not an error, the next
+        # deploy after generation installs the file.
+        echo "agent git signing public key not present yet; skipping allowed_signers install" >&2
+        exit 0
+      fi
+      printf 'agent@stark.pub %s\nper@stark.pub ${pKey}\n' "$(cat "${signPub}")" \
+        | install -m 0444 -o root -g root /dev/stdin /etc/ssh/allowed_signers
+    '';
+  };
+
   my = {
     # herdr-web-ui's bridge binds this host's LAN address (needs an inbound
     # firewall rule: see modules/system/herdr-web-ui.nix), not loopback.
@@ -617,16 +707,38 @@ in {
           dest = "/home/${config.my.agent-ssh-access.user}/.ssh/id_ed25519";
           mode = "0400";
         }
+        {
+          # Decision C2: account-level GitHub auth key (write). User git
+          # over ssh to github.com only — ~/.ssh/conf.d/github pins
+          # IdentitiesOnly so no other host ever sees it.
+          enable = true;
+          secretName = "agent-git-auth";
+          file = "private_key";
+          user = config.my.agent-ssh-access.user;
+          dest = "/home/${config.my.agent-ssh-access.user}/.ssh/git_auth_ed25519";
+          mode = "0400";
+        }
+        {
+          # Decision C1: signing-only key. user.signingkey in the agent HM
+          # block points at this file; the public half is registered on
+          # GitHub (owner, browser step) and installed into /etc/ssh/allowed_signers.
+          enable = true;
+          secretName = "agent-git-sign";
+          file = "private_key";
+          user = config.my.agent-ssh-access.user;
+          dest = "/home/${config.my.agent-ssh-access.user}/.ssh/git_sign_ed25519";
+          mode = "0400";
+        }
       ];
       discover = {
         enable = true;
-        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt" "agent-ssh-key"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt" "agent-ssh-key" "agent-git"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted-mcp-key" "agent-ssh-key" "attic-cache" "context7" "db-passwords" "digikey" "garage-s3" "journal-upload" "ntfy" "politikerstod-lekeberg" "politikerstod-orebro" "wake-proxy-keep-awake-ssh" "z-ai-env"];
+      requireGenerators = ["accounted-mcp-key" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "attic-cache" "context7" "db-passwords" "digikey" "garage-s3" "journal-upload" "ntfy" "politikerstod-lekeberg" "politikerstod-orebro" "wake-proxy-keep-awake-ssh" "z-ai-env"];
 
       allowReadAccess = [
         {
