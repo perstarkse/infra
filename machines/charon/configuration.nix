@@ -206,6 +206,13 @@ in {
       gpg.format = "ssh";
       user.signingkey = "/home/agent/.ssh/git_sign_ed25519";
       gpg.ssh.allowedSignersFile = "/etc/ssh/allowed_signers";
+      # Shared-tree worker (C4/C5): the agent's workspace is by design
+      # repos owned by p (verified 2026-10-12: every git command in
+      # /mnt/sdb/repos checkouts dies with "dubious ownership" otherwise).
+      # The ownership check protects a user from OTHERS' repos; here the
+      # account's whole purpose is operating in p's repos. safe.directory
+      # supports no prefix globs — only exact paths or a lone "*".
+      safe.directory = "*";
     };
 
     # GIT_AUTHOR_* must reach every path agent commits from:
@@ -213,10 +220,11 @@ in {
     #   - herdr's Service.Environment: herdr panes inherit the SERVER's env,
     #     not environment.d (modules/home/herdr.nix notes plugins use the
     #     same lever)
-    # Known gap: non-interactive `ssh agent@charon <cmd>` shells source
-    # neither — commits from that path fall back to p as author. Accepted:
-    # the execution plane is herdr panes (C7); revisit only if a commit
-    # actually lands mis-attributed (2026-10-12).
+    #   - ~/.bashrc: bash invoked by sshd sources it even non-interactively
+    #     (SSH_CLIENT set) — the one path the two mechanisms above don't
+    #     reach; verified on charon 2026-10-12 that an ssh-command commit
+    #     authored as p without it. HM files are store symlinks, so the
+    #     agent cannot edit its own authorship.
     home.sessionVariables = {
       GIT_AUTHOR_NAME = "agent";
       GIT_AUTHOR_EMAIL = "agent@stark.pub";
@@ -225,6 +233,10 @@ in {
       "GIT_AUTHOR_NAME=agent"
       "GIT_AUTHOR_EMAIL=agent@stark.pub"
     ];
+    home.file.".bashrc".text = ''
+      export GIT_AUTHOR_NAME=agent
+      export GIT_AUTHOR_EMAIL=agent@stark.pub
+    '';
 
     # GitHub pushes go through the agent-git-auth key only (decision C2).
     # IdentitiesOnly yes keeps the fleet mesh key (~/.ssh/id_ed25519) from
@@ -651,6 +663,14 @@ in {
       if [ -d "/home/${agentUser}" ]; then
         ${setfacl} -R -m u:p:r-X /home/${agentUser}
         ${setfacl} -R -d -m u:p:r-X /home/${agentUser}
+        # Scrub the grant inside ~/.ssh: ssh-keygen REFUSES a private key
+        # whose mode shows group readability — the u:p entry sets the mask
+        # to r-x and the mode to 0440 ("UNPROTECTED PRIVATE KEY FILE",
+        # verified live on charon 2026-10-12: agent commit signing died on
+        # it). p has no need to read agent's keys: p already holds the
+        # fleet key. The scrub runs after every grant so the re-applied
+        # recursion can never leave the keys broken across deploys.
+        ${setfacl} -R -b /home/${agentUser}/.ssh 2>/dev/null || true
       fi
     '';
   };
