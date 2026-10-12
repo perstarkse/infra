@@ -156,6 +156,22 @@ _: {
         description = "Paths the agent may read and list (setfacl u:agent:r-x).";
       };
 
+      writablePaths = lib.mkOption {
+        type = lib.types.listOf lib.types.path;
+        default = [];
+        description = ''
+          Trees the agent and the main user may both read AND write
+          (setfacl rwX). Applied two ways: agent-path-acl sets single-level
+          access + default ACLs on the top directory at activation (default
+          ACLs propagate by inheritance, so all content created afterwards —
+          including fresh clones — is covered without a walk), and the
+          agent-path-acl-repair timer recursively fixes pre-existing content.
+          The recursive pass must never run in the activation path: on charon
+          the shared tree holds ~8.7M inodes and would stall or time out
+          every switch (2026-10-12).
+        '';
+      };
+
       socketPaths = lib.mkOption {
         type = lib.types.listOf lib.types.path;
         default = [];
@@ -212,7 +228,16 @@ _: {
           # "true", so a shell-side `[ "${toString cfg.createHome}" = true ]`
           # is silently always false and the directory is never created.
           ${lib.optionalString cfg.createHome ''
-            install -d -m 0700 -o ${cfg.user} -g ${cfg.user} ${cfg.home}/projects
+            # 0750 (not 0700): the owner's downhill read grant must reach
+            # inside. The -L guard is load-bearing, not tidiness: `install -d`
+            # FOLLOWS symlinks and re-applies owner+mode to the TARGET, so on
+            # a machine where projects is an HM symlink to a shared tree this
+            # line would chown that tree to the agent (verified on charon
+            # 2026-10-12). Existing real directories get the mode re-applied,
+            # which repairs stale modes from earlier deploys.
+            if [ ! -L "${cfg.home}/projects" ]; then
+              install -d -m 0750 -o ${cfg.user} -g ${cfg.user} ${cfg.home}/projects
+            fi
           ''}
         '';
       };
@@ -322,6 +347,25 @@ _: {
               fi
             done
           '';
+          # Both principals, so files either creates inside the tree stay
+          # writable by the other. rwX: execute only where it already exists
+          # or on directories.
+          writableAcl =
+            "u:${cfg.user}:rwX"
+            + lib.optionalString config.my.mainUser.enable ",u:${config.my.mainUser.name}:rwX";
+          writableTopLoop = paths: ''
+            for path in ${lib.escapeShellArgs paths}; do
+              if [ -d "$path" ]; then
+                ${setfacl} -m "${writableAcl}" "$path"
+                # The default ACL is the load-bearing half: it propagates to
+                # everything created inside from now on, so a fresh clone is
+                # fully covered with no tree walk.
+                ${setfacl} -d -m "${writableAcl}" "$path"
+              else
+                echo "agent-path-acl: $path is not a directory, skipping" >&2
+              fi
+            done
+          '';
         in ''
           set -euo pipefail
           if ! id -u ${cfg.user} >/dev/null 2>&1; then
@@ -336,7 +380,57 @@ _: {
           # silently, and a missing socket at activation (daemon down) is
           # normal — the next activation re-applies.
           ${mkLoop "rw-" "-S" cfg.socketPaths}
+          ${writableTopLoop cfg.writablePaths}
         '';
+      };
+
+      # Recursive rwX repair for content that predates the default ACLs —
+      # clone restores, pre-cutover checkouts. Timer-driven, never wanted by
+      # multi-user.target: a -R walk over a large tree must not block or be
+      # killed by the activation timeout (charon: ~8.7M inodes). OnBootSec
+      # elapses immediately when the timer arms on an already-booted system,
+      # so the first deploy after changing writablePaths repairs within
+      # minutes without holding the switch. 12h cadence is pure
+      # belt-and-braces afterwards: default-ACL inheritance covers everything
+      # created through normal use.
+      systemd.services.agent-path-acl-repair = lib.mkIf (cfg.writablePaths != []) {
+        description = "Recursive rwX ACL repair for agent-writable trees";
+        after = ["local-fs.target"];
+        serviceConfig = {
+          Type = "oneshot";
+          TimeoutStartSec = "30min";
+        };
+        script = let
+          setfacl = lib.getExe' pkgs.acl "setfacl";
+          writableAcl =
+            "u:${cfg.user}:rwX"
+            + lib.optionalString config.my.mainUser.enable ",u:${config.my.mainUser.name}:rwX";
+        in ''
+          set -euo pipefail
+          if ! id -u ${cfg.user} >/dev/null 2>&1; then
+            echo "agent-path-acl-repair: user ${cfg.user} does not exist, skipping" >&2
+            exit 0
+          fi
+          ${lib.concatMapStrings (p: ''
+              if [ -d "${p}" ]; then
+                ${setfacl} -R -m "${writableAcl}" "${p}"
+                ${setfacl} -R -d -m "${writableAcl}" "${p}"
+              else
+                echo "agent-path-acl-repair: ${p} is not a directory, skipping" >&2
+              fi
+            '')
+            cfg.writablePaths}
+        '';
+      };
+
+      systemd.timers.agent-path-acl-repair = lib.mkIf (cfg.writablePaths != []) {
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnBootSec = "3min";
+          OnUnitActiveSec = "12h";
+          # A suspended workstation misses elapsing points; catch up on wake.
+          Persistent = true;
+        };
       };
     };
   };

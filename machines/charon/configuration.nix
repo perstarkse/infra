@@ -204,6 +204,14 @@ in {
       package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
       sleepInhibit.enable = true;
     };
+
+    # C4: same shared tree, viewed from agent's home. See the p-profile
+    # comment: config.lib is unreachable here, so the out-of-store symlink is
+    # inlined. HM moves the pre-existing workdir-created empty projects/ dir
+    # to projects.backup on first activation.
+    home.file."projects".source =
+      pkgs.runCommandLocal "projects-out-of-store" {}
+      "ln -s /mnt/sdb/repos $out";
   };
 
   home-manager.users.${config.my.mainUser.name} = {
@@ -264,6 +272,17 @@ in {
     };
 
     my.herdr-web-ui.enable = true;
+
+    # C4: ~/projects is the post-rename front door to the shared tree.
+    # mkOutOfStoreSymlink would be the idiom, but `config` here is the NixOS
+    # module's config — the HM profile's config.lib is unreachable from a
+    # home-manager.users attrset — so inline the same construction (a store
+    # symlink pointing at the absolute path; HM links the home name to it).
+    # ~/repos (a manual symlink made 2025-06) stays as the compat link
+    # through the cooling period.
+    home.file."projects".source =
+      pkgs.runCommandLocal "projects-out-of-store" {}
+      "ln -s /mnt/sdb/repos $out";
 
     # herdr mesh: charon's herdr reaches makemake's as `agent` over SSH. The
     # IdentityFile is the fleet key, exposed to `p` by my.secrets below — `p`'s
@@ -356,13 +375,15 @@ in {
           # Machine-specific CWD-boundary allow: all agent work lives under
           # /mnt/sdb/repos (25 project session dirs, ~56k governance entries);
           # cross-project reads are constant and every sibling repo is the
-          # same trust level. ~/repos is a symlink to this mount and is
-          # matched via canonical path resolution. Full map (replaces the
-          # module default for this option).
+          # same trust level. ~/repos and ~/projects are symlinks to this
+          # mount and are matched via canonical path resolution; ~/repos is
+          # the pre-C4 compat link, drop once cooling period ends (~1 month
+          # after 2026-10-12). Full map (replaces the module default).
           permissions.external_directory = {
             "*" = "ask";
             "/mnt/sdb/repos/*" = "allow";
             "~/repos/*" = "allow";
+            "~/projects/*" = "allow";
             "~/.cargo/registry/*" = "allow";
             "~/.cargo/git/*" = "allow";
             "~/.cache/nix/*" = "allow";
@@ -439,6 +460,7 @@ in {
           host = "0.0.0.0";
           pathAccess.allowedPaths = [
             "~/repos"
+            "~/projects"
             "/mnt/sdb/repos"
             "/home/p/repos"
           ];
@@ -590,6 +612,58 @@ in {
     '';
   };
 
+  # C5: agent's home becomes 750 + u:p:r-X so p reads everything downhill
+  # (NixOS re-applies homeMode on every activation — verified in
+  # update-users-groups.pl:238 — so the mode itself needs no oneshot).
+  users.users.${agentUser}.homeMode = "750";
+
+  # C5: p's downhill read on agent's home. Recursive + default: a
+  # top-level-only grant stops at the first 0700 subdir agent creates.
+  # 46k inodes — safe in the activation path (seconds). p-readable-by-design:
+  # agent holds nothing p must not see; the boundary is /home/p, not this.
+  systemd.services.grant-p-agent-home-read = {
+    description = "Grant p downhill r-X on ${agentUser}'s home (C5)";
+    after = ["local-fs.target"];
+    wantedBy = ["multi-user.target"];
+    serviceConfig = {
+      Type = "oneshot";
+      TimeoutStartSec = "10min";
+    };
+    script = let
+      setfacl = lib.getExe' pkgs.acl "setfacl";
+    in ''
+      set -euo pipefail
+      if [ -d "/home/${agentUser}" ]; then
+        ${setfacl} -R -m u:p:r-X /home/${agentUser}
+        ${setfacl} -R -d -m u:p:r-X /home/${agentUser}
+      fi
+    '';
+  };
+
+  # C5/C7: strip the legacy agent grants on /home/p — traverse on the home
+  # and .config chain, rw on p's herdr socket. Idempotent every switch: the
+  # config change alone would leave the on-disk ACLs in place forever.
+  # No chmod: /home/p's 710 was the ACL mask artifact; removing the entry
+  # recomputes the mask, and update-users-groups.pl re-applies homeMode 700
+  # every activation anyway. The socket grant never returns: herdr recreates
+  # the socket without ACLs and agent-path-acl no longer grants it.
+  systemd.services.revoke-agent-legacy-access = {
+    description = "Revoke agent ACLs on /home/p (C5: p-private)";
+    after = ["local-fs.target"];
+    wantedBy = ["multi-user.target"];
+    serviceConfig = {
+      Type = "oneshot";
+    };
+    script = let
+      setfacl = lib.getExe' pkgs.acl "setfacl";
+    in ''
+      set -euo pipefail
+      for path in /home/p /home/p/.config /home/p/.config/herdr /home/p/.config/herdr/herdr.sock; do
+        ${setfacl} -x u:agent "$path" 2>/dev/null || true
+      done
+    '';
+  };
+
   my = {
     # herdr-web-ui's bridge binds this host's LAN address (needs an inbound
     # firewall rule: see modules/system/herdr-web-ui.nix), not loopback.
@@ -624,10 +698,14 @@ in {
     # Non-sudo fleet SSH for the personal agent. Unprivileged `agent` account,
     # `restrict`ed key, no wheel/docker/libvirtd, logs only.
     #
-    # /home/p is 0700, so without these ACLs the agent cannot reach the repos
-    # at all. --x on the home (traverse only, cannot list it) plus r-x on the
-    # repos themselves: the agent can read and clone infra/homelab without
-    # gaining any visibility into the rest of the home directory.
+    # Shared-space topology (roadmap C4/C5): /home/p is p-private (700, ZERO
+    # agent ACLs — the old traverse-only grant leaked world-readable dotfiles
+    # to any known path; revoked by revoke-agent-legacy-access below). The
+    # agent reaches the shared tree via /mnt/sdb/repos directly or its own
+    # ~/projects symlink, never by traversing /home/p. writablePaths grants
+    # rwX for agent AND p (files either creates must stay writable by the
+    # other); the old herdr socket grant is gone — cross-driving p's server
+    # goes over explicit `herdr --machine`, never ambient socket rw.
     agent-ssh-access = {
       enable = true;
       # Real home, not /var/empty: makemake's agent SSHes in as `agent`
@@ -637,21 +715,16 @@ in {
       # ignores a self-written ~/.ssh/authorized_keys regardless.
       home = "/home/agent";
       createHome = true;
-      # /home/p is not enough on its own: herdrSocket lives in
-      # /home/p/.config/herdr, and .config is 0700, so `agent` needs traverse
-      # on every parent between $HOME and the socket or connect(2) is EACCES.
-      # Plus read on the socket file itself: the web UI's remote bridge runs
-      # as `agent` and must connect(2) p's herdr socket for the single-tab
-      # frontend (the file ACL already grants user:agent:rw-, this keeps the
-      # directory side consistent if .config/herdr ever tightens).
-      traversePaths = [
-        "/home/p"
-        "/home/p/.config"
-        "/home/p/.config/herdr"
-      ];
-      socketPaths = ["/home/p/.config/herdr/herdr.sock"];
-      readablePaths = ["/home/p/repos"];
+      # C5: the shared project tree. Single-level ACLs land at activation;
+      # the agent-path-acl-repair timer walks pre-existing content
+      # (8.7M inodes — deliberately never in the activation path).
+      writablePaths = ["/mnt/sdb/repos"];
     };
+
+    # C5: agent's home becomes 750 + u:p:r-X so p reads everything downhill
+    # (NixOS re-applies homeMode on every activation — verified in
+    # update-users-groups.pl:238 — so the mode itself needs no oneshot).
+    # homeMode is set at top level next to the C5 services.
 
     docker.enable = true;
     fonts.enable = true;
