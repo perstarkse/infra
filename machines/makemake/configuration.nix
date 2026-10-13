@@ -244,7 +244,18 @@ in {
     # Runs on makemake (same broadcast reachability as io, one less hop).
     # Constants interpolate from services.wakeproxy option defaults, which
     # mirror io's values; makemake sets no services.wakeproxy itself.
-    wake-charon.enable = true;
+    # keepAwake closes the Phase H gap: a direct WOL does not take
+    # wakeproxy's keep-awake lease (only wake.stark.pub traffic does), so a
+    # long agent run could hit charon's 1800s sleepInhibit ceiling. The
+    # lease goes straight to charon's wakeproxy-keep-awake SSH target with
+    # the wake-proxy-keep-awake-ssh key (read grant on `agent` below).
+    wake-charon = {
+      enable = true;
+      keepAwake = {
+        enable = true;
+        identityFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
+      };
+    };
 
     attic-cache.server = {
       enable = true;
@@ -352,15 +363,23 @@ in {
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls" "hermes" "hermes-mail" "agent-ssh-key" "agent-git" "accounted-mcp" "context7" "digikey"];
+        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls" "hermes" "hermes-mail" "agent-ssh-key" "agent-git" "accounted-mcp" "context7" "digikey" "keep-awake"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "accounted-mcp-key" "attic-cache" "context7" "db-passwords" "digikey" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "hermes-env" "hermes-mail" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
+      requireGenerators = ["accounted" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "accounted-mcp-key" "attic-cache" "context7" "db-passwords" "digikey" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "hermes-env" "hermes-mail" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "wake-proxy-keep-awake-ssh" "webdav-htpasswd"];
 
       allowReadAccess = [
+        {
+          # wake-charon lease: the agent SSHes charon's wakeproxy-keep-awake
+          # forced-command target. Read-only ACL on the services-scope key
+          # (0400 root:root + u:agent:r) — one line in this list is the whole
+          # inventory entry (roadmap C6 rule).
+          readers = ["agent"];
+          path = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
+        }
         {
           readers = ["nous"];
           path = config.my.secrets.getPath "nous" "env";

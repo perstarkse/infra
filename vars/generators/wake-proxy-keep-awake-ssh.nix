@@ -12,7 +12,10 @@
           mode = "0400";
           neededFor = "services";
         }
-        // pkgs.lib.optionalAttrs config.services.wakeproxy.enable {
+        # `or false`, not .enable: machines that deploy this generator without
+        # importing the wake-proxy module (makemake's wake-charon lease does,
+        # and does not run wakeproxy) must not fail eval on the missing option.
+        // pkgs.lib.optionalAttrs (config.services.wakeproxy.enable or false) {
           owner = "wake-proxy";
         };
       public_key = {

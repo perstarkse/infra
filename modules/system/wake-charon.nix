@@ -10,6 +10,15 @@
 # Readiness is TCP connect to charon:22, NOT the wakeproxy HTTP frontend —
 # POST /_wake/start is CSRF-guarded, rate-limited, and behind an argon2 login
 # meant for humans; the agent must not forge browser-shaped headers past that.
+#
+# Keep-awake lease (Phase H gap, closed 2026-10-13): a direct WOL does not
+# take wakeproxy's keep-awake lease — only wake.stark.pub traffic does — so a
+# long agent run could hit charon's 1800s sleepInhibit ceiling and suspend
+# mid-work. `wake-charon lease <seconds>` SSHes to charon's
+# wakeproxy-keep-awake target (forced command, restrict'ed key) and takes a
+# logind inhibit lease; `wake --lease <seconds>` combines both. The lease
+# key is the fleet-wide wake-proxy-keep-awake-ssh generator; machines using
+# this grant `agent` read via my.secrets.allowReadAccess.
 _: {
   config.flake.nixosModules.wake-charon = {
     config,
@@ -26,6 +35,7 @@ _: {
         flakeIgnore = ["E501" "W291" "W293"];
       } ''
         import socket
+        import subprocess
         import sys
         import time
 
@@ -36,6 +46,16 @@ _: {
         SSH_PORT = ${toString cfg.sshPort}
         TIMEOUT = ${toString cfg.timeoutSeconds}
         POLL_INTERVAL = ${toString cfg.pollIntervalSeconds}
+        KEEP_AWAKE_ENABLED = ${
+          if cfg.keepAwake.enable
+          then "True"
+          else "False"
+        }
+        KEEP_AWAKE_USER = "${cfg.keepAwake.sshUser}"
+        KEEP_AWAKE_HOST = "${cfg.sshHost}"
+        KEEP_AWAKE_PORT = ${toString cfg.sshPort}
+        IDENTITY_FILE = "${toString cfg.keepAwake.identityFile}"
+        MAX_LEASE_SECONDS = ${toString cfg.keepAwake.maxDurationSeconds}
 
 
         def parse_mac(mac):
@@ -85,17 +105,69 @@ _: {
             return 1
 
 
+        def lease(seconds_str):
+            if not KEEP_AWAKE_ENABLED:
+                print("keep-awake is not configured on this machine (my.wake-charon.keepAwake.enable)", file=sys.stderr)
+                return 2
+            if not seconds_str.isdigit() or int(seconds_str) <= 0:
+                print("lease duration must be a positive integer (seconds)", file=sys.stderr)
+                return 2
+            seconds = int(seconds_str)
+            if seconds > MAX_LEASE_SECONDS:
+                # Client-side cap mirrors the target's own rejection
+                # (WAKEPROXY_KEEP_AWAKE_TARGET_MAX_SECS on charon).
+                print(f"lease {seconds}s exceeds max {MAX_LEASE_SECONDS}s", file=sys.stderr)
+                return 1
+            # StrictHostKeyChecking=yes fails closed: makemake's agent has
+            # charon pinned in ~/.ssh/known_hosts (hermes-install-known-hosts);
+            # an account without the pin gets a hard error, not a TOFU prompt.
+            cmd = [
+                "ssh", "-i", IDENTITY_FILE,
+                "-o", "BatchMode=yes",
+                "-o", "IdentitiesOnly=yes",
+                "-o", "StrictHostKeyChecking=yes",
+                "-o", "ConnectTimeout=10",
+                "-p", str(KEEP_AWAKE_PORT),
+                f"{KEEP_AWAKE_USER}@{KEEP_AWAKE_HOST}",
+                seconds_str,
+            ]
+            result = subprocess.run(cmd)
+            if result.returncode == 0:
+                print(f"keep-awake lease {seconds}s accepted by {KEEP_AWAKE_USER}@{KEEP_AWAKE_HOST}")
+            return result.returncode
+
+
         if __name__ == "__main__":
             args = sys.argv[1:]
             dry = "--dry-run" in args
             args = [a for a in args if a != "--dry-run"]
+            lease_seconds = None
+            if "--lease" in args:
+                i = args.index("--lease")
+                if i + 1 >= len(args):
+                    print("--lease requires a duration in seconds", file=sys.stderr)
+                    sys.exit(2)
+                lease_seconds = args[i + 1]
+                args = args[:i] + args[i + 2:]
             cmd = args[0] if args else "wake"
             if cmd == "probe":
                 sys.exit(probe())
+            elif cmd == "lease":
+                if lease_seconds is not None:
+                    sys.exit(lease(lease_seconds))
+                if len(args) > 1:
+                    sys.exit(lease(args[1]))
+                print("lease requires a duration in seconds", file=sys.stderr)
+                sys.exit(2)
             elif cmd == "wake":
-                sys.exit(wake(dry))
+                rc = wake(dry)
+                # Refresh the lease only after a real wake: dry-run prints the
+                # packet and must not touch charon's logind.
+                if rc == 0 and lease_seconds is not None and not dry:
+                    rc = lease(lease_seconds)
+                sys.exit(rc)
             else:
-                print(f"usage: {sys.argv[0]} [probe|wake] [--dry-run]", file=sys.stderr)
+                print(f"usage: {sys.argv[0]} [probe|wake|lease] [--dry-run] [--lease <seconds>]", file=sys.stderr)
                 sys.exit(2)
       '';
   in {
@@ -106,7 +178,7 @@ _: {
         type = lib.types.package;
         default = script;
         defaultText = lib.literalExpression "the wake-charon script below";
-        description = "The script. Exposed so other modules can hand it to a container (see modules/system/hermes.nix); override only to swap the implementation.";
+        description = "The script. Exposed so other modules can put it on an agent's PATH (services.hermes-agent.extraPackages); override only to swap the implementation.";
       };
 
       mac = lib.mkOption {
@@ -151,10 +223,44 @@ _: {
         defaultText = "flake.lib.wakeTarget.pollInterval";
         description = "Poll interval while waiting for sshd.";
       };
+
+      keepAwake = {
+        enable = lib.mkEnableOption "wakeproxy keep-awake lease support (wake-charon lease <seconds>)";
+
+        sshUser = lib.mkOption {
+          type = lib.types.str;
+          default = "wakeproxy-keep-awake";
+          description = "charon's wakeproxy keep-awake SSH user (services.wakeproxy.keepAwake.sshTarget.user there).";
+        };
+
+        identityFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.path;
+          default = null;
+          description = ''
+            Private key for the wake-proxy-keep-awake-ssh generator, read via
+            my.secrets.allowReadAccess (readers = the account that runs
+            wake-charon — agent). Required when keepAwake.enable; the same
+            public half is in charon's sshTarget authorized_keys.
+          '';
+        };
+
+        maxDurationSeconds = lib.mkOption {
+          type = lib.types.ints.positive;
+          default = 14400;
+          description = "Client-side lease cap; must not exceed charon's services.wakeproxy.keepAwake.maxDurationSeconds.";
+        };
+      };
     };
 
     config = lib.mkIf cfg.enable {
-      environment.systemPackages = [script];
+      assertions = [
+        {
+          assertion = cfg.keepAwake.enable -> cfg.keepAwake.identityFile != null;
+          message = "my.wake-charon.keepAwake.enable needs keepAwake.identityFile (the wake-proxy-keep-awake-ssh private key).";
+        }
+      ];
+
+      environment.systemPackages = [script] ++ lib.optionals cfg.keepAwake.enable [pkgs.openssh];
     };
   };
 }
