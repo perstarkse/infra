@@ -51,7 +51,15 @@
         "GIT_AUTHOR_NAME=agent"
         "GIT_AUTHOR_EMAIL=agent@stark.pub"
       ];
-      home.file.".bashrc".text = ''
+      # Enable HM's bash management so integrations land in ~/.bashrc: with
+      # programs.bash disabled, direnv's bash hook (and zoxide's) never reach
+      # the agent's interactive shells — the checkout dev shells only load
+      # via the hook (verified live 2026-10-13: `clan` missing in an agent
+      # pane despite the direnv allow being present). The exports ride
+      # initExtra; bash sources .bashrc when invoked by sshd too, so the
+      # ssh-command authorship path stays covered.
+      programs.bash.enable = true;
+      programs.bash.initExtra = ''
         export GIT_AUTHOR_NAME=agent
         export GIT_AUTHOR_EMAIL=agent@stark.pub
       '';
