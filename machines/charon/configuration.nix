@@ -148,7 +148,7 @@ in {
       ripgrep
     ];
 
-    # Decision C1 (docs/p-agent-collab-roadmap.md): the shared git module sets
+    # Agent git identity (decision C1, retired collab roadmap): the shared git module sets
     # committer Per Stark <per@stark.pub> (committer is ALWAYS p, both
     # principals); agent authorship + signing + the github push stanza ride
     # the shared agentGit home module (same block drives makemake's agent).
@@ -257,7 +257,9 @@ in {
     # home-manager.users attrset — so inline the same construction (a store
     # symlink pointing at the absolute path; HM links the home name to it).
     # ~/repos (a manual symlink made 2025-06) stays as the compat link
-    # through the cooling period.
+    # through the cooling period. REMOVE-BY 2026-11-12: delete this comment
+    # block and any surviving ~/repos symlink once nothing references it
+    # (pi session cwds, direnv allow-files, shell muscle memory).
     home.file."projects".source =
       pkgs.runCommandLocal "projects-out-of-store" {}
       "ln -s /mnt/sdb/repos $out";
@@ -622,6 +624,8 @@ in {
     # (still healthy on 10.0.0.15:7317), only unpublished. No remote-bundle
     # install needed — the UI's "add PC over SSH" path would deploy a second
     # bridge just to tunnel it back, which is redundant next to this vhost.
+    # REVIEW-BY 2026-11-12: if makemake's UI reaches charon's panes through
+    # the mesh (Add-PC or herdr machine list), retire this vhost entirely.
     herdr-web-ui = {
       enable = true;
       allowedFirewallSources = ["10.0.0.1"];

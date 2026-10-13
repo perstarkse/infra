@@ -57,6 +57,14 @@ _: {
     cfg = config.my.agent-ssh-access;
     inherit (cfg) home;
     publicKeyPath = config.my.secrets.getPath "agent-ssh-key" "public_key";
+    # Single definition for both consumers below (activation ACLs and the
+    # recursive repair): two copies drifted the moment someone edits one.
+    # Both principals, so files either creates inside the tree stay writable
+    # by the other. rwX: execute only where it already exists or on
+    # directories. The mainUser half is absent on agent-only machines.
+    writableAcl =
+      "u:${cfg.user}:rwX"
+      + lib.optionalString config.my.mainUser.enable ",u:${config.my.mainUser.name}:rwX";
   in {
     options.my.agent-ssh-access = {
       enable = lib.mkEnableOption "non-sudo SSH access for the personal agent";
@@ -349,12 +357,6 @@ _: {
               fi
             done
           '';
-          # Both principals, so files either creates inside the tree stay
-          # writable by the other. rwX: execute only where it already exists
-          # or on directories.
-          writableAcl =
-            "u:${cfg.user}:rwX"
-            + lib.optionalString config.my.mainUser.enable ",u:${config.my.mainUser.name}:rwX";
           writableTopLoop = paths: ''
             for path in ${lib.escapeShellArgs paths}; do
               if [ -d "$path" ]; then
@@ -404,9 +406,6 @@ _: {
         };
         script = let
           setfacl = lib.getExe' pkgs.acl "setfacl";
-          writableAcl =
-            "u:${cfg.user}:rwX"
-            + lib.optionalString config.my.mainUser.enable ",u:${config.my.mainUser.name}:rwX";
         in ''
           set -euo pipefail
           if ! id -u ${cfg.user} >/dev/null 2>&1; then

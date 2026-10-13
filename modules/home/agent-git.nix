@@ -28,12 +28,20 @@
         # repos owned by p (verified 2026-10-12: every git command in
         # /mnt/sdb/repos checkouts dies with "dubious ownership" otherwise).
         # The ownership check protects a user from OTHERS' repos; here the
-        # account's whole purpose is operating in p's repos. safe.directory
-        # supports no prefix globs — only exact paths or a lone "*".
-        safe.directory = "*";
+        # account's purpose is operating the shared tree, so exactly that tree
+        # is trusted — not "*", which would silence the check for any
+        # foreign-owned repo the agent ever touches (e.g. a copy of someone
+        # else's checkout). safe.directory supports no prefix globs — exact
+        # paths or a lone "*" — but git compares every leading directory of
+        # the repo path, so the top-level entry covers all checkouts under it;
+        # ~/projects (a symlink to /mnt/sdb/repos) canonicalizes to the same
+        # path. Machines without the shared tree (makemake) carry an inert
+        # entry: its agent owns its own checkouts in ~/projects.
+        safe.directory = ["/mnt/sdb/repos"];
       };
 
-      # GIT_AUTHOR_* must reach every path agent commits from:
+      # GIT_AUTHOR_* must reach every path agent commits from. ONE logical
+      # setting delivered through THREE channels — keep them in sync:
       #   - home.sessionVariables: interactive shells
       #   - herdr's Service.Environment: herdr panes inherit the SERVER's env,
       #     not environment.d (modules/home/herdr.nix notes plugins use the
@@ -43,6 +51,8 @@
       #     reach; verified on charon 2026-10-12 that an ssh-command commit
       #     authored as p without it. HM files are store symlinks, so the
       #     agent cannot edit its own authorship.
+      # Removing "the redundant" one of the three silently re-attributes
+      # commits from whichever channel you dropped.
       home.sessionVariables = {
         GIT_AUTHOR_NAME = "agent";
         GIT_AUTHOR_EMAIL = "agent@stark.pub";
