@@ -122,7 +122,7 @@ in {
       pi-agent = {
         enable = true;
         permissionSystem.enable = false;
-        # C6: same MCP surface as p's pi (decision: use access to all MCP
+        # Agent MCP parity: same surface as p's pi (decision: use access to all MCP
         # servers). The digikey token store is agent's own — p's sits under
         # /home/p (700, zero agent ACLs), the files must never be shared.
         mcpServers = ctx.flake.lib.mkPiMcpServers {
@@ -148,7 +148,7 @@ in {
       ripgrep
     ];
 
-    # Agent git identity (decision C1, retired collab roadmap): the shared git module sets
+    # Agent git identity: the shared git module sets
     # committer Per Stark <per@stark.pub> (committer is ALWAYS p, both
     # principals); agent authorship + signing + the github push stanza ride
     # the shared agentGit home module (same block drives makemake's agent).
@@ -357,7 +357,7 @@ in {
           # cross-project reads are constant and every sibling repo is the
           # same trust level. ~/repos and ~/projects are symlinks to this
           # mount and are matched via canonical path resolution; ~/repos is
-          # the pre-C4 compat link, drop once cooling period ends (~1 month
+          # the pre-rename compat link, drop once cooling period ends (REMOVE-BY 2026-11-12,
           # after 2026-10-12). Full map (replaces the module default).
           permissions.external_directory = {
             "*" = "ask";
@@ -390,16 +390,11 @@ in {
             tokenStore = "/home/p/.local/state/digikey-mcp/tokens.json";
           };
         };
-        pi-web = {
-          enable = true;
-          host = "0.0.0.0";
-          pathAccess.allowedPaths = [
-            "~/repos"
-            "~/projects"
-            "/mnt/sdb/repos"
-            "/home/p/repos"
-          ];
-        };
+        # RETIRED 2026-10-13: pi-web was wakeproxy's upstream; the public door
+        # now proxies makemake's herdr-web-ui instead (io: upstreamHost
+        # 10.0.0.10:7317). The pi-web module import stays above because
+        # antigravity can only eval alongside it; the service is off and
+        # /home/p/.pi-web state is inert.
         shared-skills = {
           enable = true;
         };
@@ -511,7 +506,7 @@ in {
     };
   };
 
-  # Git SSH trust anchor for verifying agent-signed commits (decision C1).
+  # Git SSH trust anchor for verifying agent-signed commits.
   # Root-owned 0444 so agent cannot rewrite the principals that vouch for its
   # own signatures — same reasoning as the root-owned authorized_keys in
   # modules/system/agent-ssh-access.nix. Carries SIGNING keys only (never the
@@ -547,17 +542,17 @@ in {
     '';
   };
 
-  # C5: agent's home becomes 750 + u:p:r-X so p reads everything downhill
+  # p-private home: agent's home becomes 750 + u:p:r-X so p reads everything downhill
   # (NixOS re-applies homeMode on every activation — verified in
   # update-users-groups.pl:238 — so the mode itself needs no oneshot).
   users.users.${agentUser}.homeMode = "750";
 
-  # C5: p's downhill read on agent's home. Recursive + default: a
+  # p's downhill read on agent's home. Recursive + default: a
   # top-level-only grant stops at the first 0700 subdir agent creates.
   # 46k inodes — safe in the activation path (seconds). p-readable-by-design:
   # agent holds nothing p must not see; the boundary is /home/p, not this.
   systemd.services.grant-p-agent-home-read = {
-    description = "Grant p downhill r-X on ${agentUser}'s home (C5)";
+    description = "Grant p downhill r-X on ${agentUser}'s home";
     after = ["local-fs.target"];
     wantedBy = ["multi-user.target"];
     serviceConfig = {
@@ -583,7 +578,7 @@ in {
     '';
   };
 
-  # C5/C7: strip the legacy agent grants on /home/p — traverse on the home
+  # Strip the legacy agent grants on /home/p — traverse on the home
   # and .config chain, rw on p's herdr socket. Idempotent every switch: the
   # config change alone would leave the on-disk ACLs in place forever.
   # No chmod: /home/p's 710 was the ACL mask artifact; removing the entry
@@ -591,7 +586,7 @@ in {
   # every activation anyway. The socket grant never returns: herdr recreates
   # the socket without ACLs and agent-path-acl no longer grants it.
   systemd.services.revoke-agent-legacy-access = {
-    description = "Revoke agent ACLs on /home/p (C5: p-private)";
+    description = "Revoke agent ACLs on /home/p (p-private home)";
     after = ["local-fs.target"];
     wantedBy = ["multi-user.target"];
     serviceConfig = {
@@ -614,9 +609,10 @@ in {
 
     stylix.enable = true;
 
-    # Browser client for herdr, LAN only: it is remote shell as `p`, and the
-    # plugin carries its own token/device-pairing access check, so there is no
-    # nginx auth in front of it.
+    # Browser client for herdr: it is remote shell as `p`. The plugin's own
+    # token gate (HERDR_WEB_TOKEN, exposed into the plugin's .env via
+    # my.secrets below) is armed since 2026-10-13; there is still no nginx
+    # auth in front of the LAN vhost.
     #
     # Retired 2026-10-11: the primary herdr.lan.stark.pub moved to makemake
     # (always on; charon sleeps). Republished same day under its own name so
@@ -643,7 +639,7 @@ in {
     # Non-sudo fleet SSH for the personal agent. Unprivileged `agent` account,
     # `restrict`ed key, no wheel/docker/libvirtd, logs only.
     #
-    # Shared-space topology (roadmap C4/C5): /home/p is p-private (700, ZERO
+    # Shared-space topology: /home/p is p-private (700, ZERO
     # agent ACLs — the old traverse-only grant leaked world-readable dotfiles
     # to any known path; revoked by revoke-agent-legacy-access below). The
     # agent reaches the shared tree via /mnt/sdb/repos directly or its own
@@ -666,10 +662,10 @@ in {
       writablePaths = ["/mnt/sdb/repos"];
     };
 
-    # C5: agent's home becomes 750 + u:p:r-X so p reads everything downhill
+    # p-private home: agent's home is 750 + u:p:r-X so p reads everything downhill
     # (NixOS re-applies homeMode on every activation — verified in
     # update-users-groups.pl:238 — so the mode itself needs no oneshot).
-    # homeMode is set at top level next to the C5 services.
+    # homeMode is set at top level next to the shared-space services.
 
     docker.enable = true;
     fonts.enable = true;
@@ -726,9 +722,10 @@ in {
           mode = "0400";
         }
         {
-          # Decision C2: account-level GitHub auth key (write). User git
-          # over ssh to github.com only — ~/.ssh/conf.d/github pins
-          # IdentitiesOnly so no other host ever sees it.
+          # Agent git auth key: account-level GitHub auth key
+          # (write). User git over ssh to github.com only —
+          # ~/.ssh/conf.d/github pins IdentitiesOnly so no other host ever
+          # sees it.
           enable = true;
           secretName = "agent-git-auth";
           file = "private_key";
@@ -737,7 +734,20 @@ in {
           mode = "0400";
         }
         {
-          # Decision C1: signing-only key. user.signingkey in the agent HM
+          # herdr-web-ui token gate: HERDR_WEB_TOKEN into the plugin's .env
+          # in p's config dir (charon's herdr runs as p). .env wins over
+          # `env` (plugin 0.3.25+, included in the pinned checkout); with
+          # the token set, every visitor needs it. Rotation: regenerate,
+          # redeploy, restart herdr.
+          enable = true;
+          secretName = "herdr-web-ui";
+          file = "plugin_env";
+          user = config.my.mainUser.name;
+          dest = "/home/${config.my.mainUser.name}/.config/herdr/plugins/config/devswha.herdr-web-ui/.env";
+          mode = "0400";
+        }
+        {
+          # Agent git signing key: signing-only. user.signingkey in the agent HM
           # block points at this file; the public half is registered on
           # GitHub (owner, browser step) and installed into /etc/ssh/allowed_signers.
           enable = true;
@@ -750,13 +760,13 @@ in {
       ];
       discover = {
         enable = true;
-        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt" "agent-ssh-key" "agent-git"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt" "agent-ssh-key" "agent-git" "herdr-web-ui"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted-mcp-key" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "attic-cache" "context7" "db-passwords" "digikey" "garage-s3" "journal-upload" "ntfy" "politikerstod-lekeberg" "politikerstod-orebro" "wake-proxy-keep-awake-ssh" "z-ai-env"];
+      requireGenerators = ["accounted-mcp-key" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "attic-cache" "context7" "db-passwords" "digikey" "garage-s3" "herdr-web-ui" "journal-upload" "ntfy" "politikerstod-lekeberg" "politikerstod-orebro" "wake-proxy-keep-awake-ssh" "z-ai-env"];
 
       allowReadAccess = [
         {
@@ -764,7 +774,7 @@ in {
           path = config.my.secrets.getPath "z-ai-env" "env";
         }
         {
-          # C6: agent's pi reads the same env via its own reader grant (the
+          # Agent MCP parity: agent's pi reads the same env via its own reader grant (the
           # !command pattern is unchanged — only the ACL differs).
           readers = [config.my.mainUser.name agentUser];
           path = config.my.secrets.getPath "accounted-mcp-key" "env";
@@ -776,7 +786,8 @@ in {
         {
           # Granted because agent's digikey-mcp cannot start without the
           # client creds (digikey-mcp crashes at startup without them) —
-          # required for the per-principal consent flow C6 prescribes.
+          # required for the per-principal OAuth store separation (separate consent
+          # flows per principal, never shared stores).
           # z-ai-env above stays p-only: provider LLM keys are not MCP creds.
           readers = [config.my.mainUser.name agentUser];
           path = config.my.secrets.getPath "digikey" "env";
@@ -1253,18 +1264,9 @@ in {
     # Allow localsend receive port
     # Allow 3000/1 and 5000/1 for dev server and tooling
     firewall.allowedTCPPorts = [53317 3001 5000 5001];
-    # PI WEB for wakeproxy upstream (io only)
-    firewall.extraInputRules =
-      lib.mkAfter
-      (config._module.args.mkRestrictedPortRules {
-        port = 8504;
-        allowedSources = ["10.0.0.1"];
-      }).nft;
-    firewall.extraCommands = lib.mkIf (!config.networking.nftables.enable) (lib.mkAfter
-      (config._module.args.mkRestrictedPortRules {
-        port = 8504;
-        allowedSources = ["10.0.0.1"];
-      }).iptables);
+    # PI WEB firewall hole for wakeproxy upstream (io only) — RETIRED
+    # 2026-10-13 with the pi-web service: io's wakeproxy now proxies
+    # makemake's herdr-web-ui, so nothing may listen on 8504 here.
   };
 
   hardware.bluetooth = {

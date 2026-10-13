@@ -1,5 +1,5 @@
-# GitHub commit *signing* key for the personal agent (decision C1,
-# docs/p-agent-collab-roadmap.md). Signing-only: cannot authenticate to
+# GitHub commit *signing* key for the personal agent. Signing-only: cannot
+# authenticate to
 # anything — a leak forges attestation, not access.
 #
 # Mirrors vars/generators/agent-ssh-key.nix (prompt-rotate pattern, public half

@@ -8,6 +8,9 @@
   endpointsLib = ctx.flake.lib.endpoints or (import ../../flake/lib/endpoints.nix {inherit (pkgs) lib;});
   # Single source for charon's WOL target, shared with makemake's wake-charon
   # script (flake/lib/wake-target.nix) so the MAC exists in exactly one file.
+  # Drives the WOL half below (manual wake button + keep-awake lease), NOT the
+  # proxy upstream: since 2026-10-13 the upstream is makemake's herdr-web-ui,
+  # which is always on — see the comment in services.wakeproxy.
   wakeTarget = ctx.flake.lib.wakeTarget or (import ../../flake/lib/wake-target.nix);
   keepAwakeIdentityFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
   routerImportCfg = config.my.endpoints.imports;
@@ -61,9 +64,18 @@ in {
     listenAddress = "10.0.0.1";
     port = 8091;
 
-    upstreamHost = wakeTarget.host;
-    upstreamPort = 8504;
-    healthPath = "/api/pi-web/version";
+    # Cutover 2026-10-13: upstream is makemake's herdr-web-ui (always on),
+    # replacing charon's retired pi-web. Its /api/health is open by design
+    # (the plugin's own gate — HERDR_WEB_TOKEN, set via a sops generator —
+    # stays discoverable), so it is a valid healthPath. Because the upstream
+    # is always healthy, wakeproxy never auto-wakes: wake.stark.pub is an
+    # authenticated door to the agent UI, not a wake trigger. The WOL half
+    # below still targets charon: the manual wake button (POST /_wake/start,
+    # argon2 login) wakes charon for direct work and its keep-awake lease
+    # holds it awake for the lease duration.
+    upstreamHost = "10.0.0.10";
+    upstreamPort = 7317;
+    healthPath = "/api/health";
 
     wolMac = wakeTarget.mac;
     wolBroadcastIp = wakeTarget.broadcastIp;

@@ -1,4 +1,4 @@
-# The shared MCP server surface (roadmap C6), one function for every pi
+# The shared MCP server surface (agent MCP parity), one function for every pi
 # profile in the fleet. Called per profile with that profile's digikey OAuth
 # token store — token files must never be shared between principals (the
 # refresh flow rotates them; a shared store races).

@@ -300,11 +300,12 @@ in {
     # Browser client for herdr. Only io proxies here, so the bridge is
     # reachable from the router alone.
     #
-    # THIS IS AN UNAUTHENTICATED REMOTE SHELL. The plugin's gate is off while
-    # HERDR_WEB_TOKEN is unset and /api/health reports role "drive", so anyone
-    # who can reach the vhost gets keystrokes into `agent`'s panes. LAN-only and
-    # io-only bounds the exposure to "already on the LAN", which is not the
-    # same as authentication.
+    # TWO auth layers since the wakeproxy cutover (2026-10-13): io's
+    # wakeproxy password-gates the public vhost (wake.stark.pub → this
+    # bridge), and HERDR_WEB_TOKEN — exposed into the plugin's .env via
+    # my.secrets above — gates every visitor of the bridge itself, LAN
+    # included. Until both deploy, the LAN vhost is still an
+    # unauthenticated remote shell into `agent`'s panes.
     herdr-web-ui = {
       enable = true;
       allowedFirewallSources = ["10.0.0.1"];
@@ -363,20 +364,20 @@ in {
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls" "hermes" "hermes-mail" "agent-ssh-key" "agent-git" "accounted-mcp" "context7" "digikey" "keep-awake"];
+        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls" "hermes" "hermes-mail" "agent-ssh-key" "agent-git" "accounted-mcp" "context7" "digikey" "keep-awake" "herdr-web-ui"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "accounted-mcp-key" "attic-cache" "context7" "db-passwords" "digikey" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "hermes-env" "hermes-mail" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "wake-proxy-keep-awake-ssh" "webdav-htpasswd"];
+      requireGenerators = ["accounted" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "accounted-mcp-key" "attic-cache" "context7" "db-passwords" "digikey" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "hermes-env" "hermes-mail" "herdr-web-ui" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "wake-proxy-keep-awake-ssh" "webdav-htpasswd"];
 
       allowReadAccess = [
         {
           # wake-charon lease: the agent SSHes charon's wakeproxy-keep-awake
           # forced-command target. Read-only ACL on the services-scope key
           # (0400 root:root + u:agent:r) — one line in this list is the whole
-          # inventory entry (roadmap C6 rule).
+          # inventory entry: every credential the agent can read is declared in Nix.
           readers = ["agent"];
           path = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "private_key";
         }
@@ -420,7 +421,7 @@ in {
           readers = ["root"];
           path = config.my.secrets.getPath "ntfy" "indicator-token";
         }
-        # C6 MCP parity: agent's pi reads the same env files as charon's
+        # Agent MCP parity: agent's pi reads the same env files as charon's
         # agent. p is NOT a reader here — makemake has no p account
         # (mainUser.enable = false), and a setfacl for a missing user fails
         # the activation. The vars themselves are shared (share = true), so
@@ -441,7 +442,7 @@ in {
 
       exposeUserSecrets = [
         {
-          # Decision C2: account-level GitHub auth key (write). Same keypair
+          # Agent git auth key: account-level GitHub auth key (write). Same keypair
           # fleet-wide (share = true generators): no per-machine GitHub
           # registration.
           enable = true;
@@ -452,14 +453,30 @@ in {
           mode = "0400";
         }
         {
-          # Decision C1: signing-only key; user.signingkey (agentGit module)
-          # points at this file, and install-agent-allowed-signers below
-          # installs the public half into /etc/ssh/allowed_signers.
+          # Agent git signing key: signing-only; user.signingkey
+          # (agentGit module) points at this file, and
+          # install-agent-allowed-signers below installs the public half into
+          # /etc/ssh/allowed_signers.
           enable = true;
           secretName = "agent-git-sign";
           file = "private_key";
           user = agentUser;
           dest = "/home/${agentUser}/.ssh/git_sign_ed25519";
+          mode = "0400";
+        }
+        {
+          # herdr-web-ui token gate: HERDR_WEB_TOKEN lands straight into the
+          # plugin's config dir as .env (KEY=value; .env wins over `env`,
+          # supported since plugin 0.3.25, which the pin includes). With the
+          # token set, every visitor — wakeproxy's proxied vhost included —
+          # needs it; pairing a device bypasses it only for that device.
+          # Rotation: regenerate the generator, redeploy, restart herdr (the
+          # bridge reads the token once at start).
+          enable = true;
+          secretName = "herdr-web-ui";
+          file = "plugin_env";
+          user = agentUser;
+          dest = "/home/${agentUser}/.config/herdr/plugins/config/devswha.herdr-web-ui/.env";
           mode = "0400";
         }
       ];

@@ -1,5 +1,5 @@
-# GitHub *authentication* key for the personal agent (decision C1,
-# docs/p-agent-collab-roadmap.md). Account-level write key: pushes to any repo
+# GitHub *authentication* key for the personal agent. Account-level write
+# key: pushes to any repo
 # p can access — accepted deliberately, one key for ~40 repos; deploy still
 # needs p's pane and the key grants nothing beyond git-over-ssh.
 #

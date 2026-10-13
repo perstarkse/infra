@@ -24,7 +24,7 @@
         gpg.format = "ssh";
         user.signingkey = "/home/agent/.ssh/git_sign_ed25519";
         gpg.ssh.allowedSignersFile = "/etc/ssh/allowed_signers";
-        # Shared-tree worker (C4/C5): the agent's workspace is by design
+        # Shared-tree worker: the agent's workspace is by design
         # repos owned by p (verified 2026-10-12: every git command in
         # /mnt/sdb/repos checkouts dies with "dubious ownership" otherwise).
         # The ownership check protects a user from OTHERS' repos; here the
@@ -74,7 +74,8 @@
         export GIT_AUTHOR_EMAIL=agent@stark.pub
       '';
 
-      # GitHub pushes go through the agent-git-auth key only (decision C2).
+      # GitHub pushes go through the agent-git-auth key only — one
+      # write-capable account-level key, never the fleet mesh key.
       # IdentitiesOnly yes keeps the fleet mesh key (~/.ssh/id_ed25519) from
       # ever being offered to github.com. github.com's host key is pinned
       # fleet-wide in modules/system/shared.nix, so BatchMode-style
