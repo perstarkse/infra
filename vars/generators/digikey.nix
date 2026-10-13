@@ -29,6 +29,8 @@ _: {
       printf 'DIGIKEY_CLIENT_ID=%s\n' "$(cat "$_prompts_dir/client_id")" > "$out/env"
       printf 'DIGIKEY_CLIENT_SECRET=%s\n' "$(cat "$_prompts_dir/client_secret")" >> "$out/env"
     '';
-    meta.tags = ["digikey" "charon"];
+    # No "charon" tag: makemake's agent consumes the same shared env since
+    # the C6 MCP parity decision (2026-10-13).
+    meta.tags = ["digikey"];
   };
 }

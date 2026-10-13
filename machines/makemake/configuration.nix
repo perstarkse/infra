@@ -4,7 +4,9 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  agentUser = config.my.agent-ssh-access.user;
+in {
   imports = with ctx.flake.nixosModules;
     [
       home-module
@@ -66,6 +68,8 @@
         # wrapper ships in a separate output that bare `nodejs` does not
         # put on PATH. Charon gets this via my.node; agent gets it here.
         node
+        git
+        agentGit
         direnv
         zoxide
       ]
@@ -97,16 +101,27 @@
         # rather than reconfigured: the boundary it enforces is `agent`'s, and
         # agent holds no sudo anywhere in the fleet.
         permissionSystem.enable = false;
+        # Same MCP surface as charon's agent (owner decision 2026-10-13: git
+        # identity + MCP parity). The digikey token store is agent's own —
+        # per-principal stores, never shared (refresh rotation races).
+        mcpServers = ctx.flake.lib.mkPiMcpServers {
+          inherit config pkgs;
+          inherit (ctx) inputs;
+          tokenStore = "/home/agent/.local/state/digikey-mcp/tokens.json";
+        };
       };
       antigravity.enable = true;
       shared-skills.enable = true;
     };
 
-    # Same agent environment as charon as much as possible (owner decision
-    # 2026-10-13): direnv + zoxide ride the shared home modules. Deliberately
-    # NOT here: my.git.enable — the git signing keys are charon-only clan
-    # vars, and the git module would point commit signing at files that don't
-    # exist on this machine, breaking every commit.
+    # Same agent environment as charon (owner decision 2026-10-13). agentGit
+    # gives signing + authorship + the github push stanza; the agent-git
+    # vars (share = true, one keypair fleet-wide) deploy the private halves
+    # via my.secrets.exposeUserSecrets below. my.git.enable sets the
+    # committer identity — without it commits fall back to the system git
+    # defaults and authorship/committer drift.
+    my.git.enable = true;
+    my.agentGit.enable = true;
     my.direnv.enable = true;
     my.zoxide.enable = true;
 
@@ -181,6 +196,30 @@
     enable = lib.mkForce true;
     timeout = 30;
     extraArgs = ["--interface=enp1s0" "--operational-state=degraded"];
+  };
+
+  # Git SSH allowed_signers for the agentGit module. Agent-line only: there
+  # is no p account on this machine (mainUser.enable = false) and no p
+  # public key declared, so there is no per@stark.pub principal to verify.
+  # Skips silently on a fresh clone before `clan vars generate makemake`.
+  systemd.services.install-agent-allowed-signers = {
+    description = "Install git SSH allowed_signers (agent signing key)";
+    after = ["local-fs.target"];
+    wantedBy = ["multi-user.target"];
+    serviceConfig = {
+      Type = "oneshot";
+    };
+    script = let
+      signPub = config.my.secrets.getPath "agent-git-sign" "public_key";
+    in ''
+      set -euo pipefail
+      if [ ! -s "${signPub}" ]; then
+        echo "agent git signing public key not present yet; skipping allowed_signers install" >&2
+        exit 0
+      fi
+      printf 'agent@stark.pub %s\n' "$(cat "${signPub}")" \
+        | install -m 0444 -o root -g root /dev/stdin /etc/ssh/allowed_signers
+    '';
   };
 
   my = {
@@ -313,13 +352,13 @@
     secrets = {
       discover = {
         enable = true;
-        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls" "hermes" "hermes-mail" "agent-ssh-key"];
+        includeTags = ["makemake" "surrealdb" "b2" "minne-saas" "nous" "politikerstod" "politikerstod-lekeberg" "politikerstod-orebro" "garage" "garage-s3" "paperless" "ntfy" "attic-cache" "wireguard-tunnels" "supabase" "accounted" "journal-upload" "db-passwords" "heartbeat" "heartbeat-tls" "hermes" "hermes-mail" "agent-ssh-key" "agent-git" "accounted-mcp" "context7" "digikey"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted" "agent-ssh-key" "attic-cache" "db-passwords" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "hermes-env" "hermes-mail" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
+      requireGenerators = ["accounted" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "accounted-mcp-key" "attic-cache" "context7" "db-passwords" "digikey" "garage" "garage-s3" "heartbeat" "heartbeat-tls" "hermes-env" "hermes-mail" "journal-upload" "minne-saas" "nous" "ntfy" "politikerstod-lekeberg" "supabase" "surrealdb-credentials" "vaultwarden" "webdav-htpasswd"];
 
       allowReadAccess = [
         {
@@ -361,6 +400,48 @@
         {
           readers = ["root"];
           path = config.my.secrets.getPath "ntfy" "indicator-token";
+        }
+        # C6 MCP parity: agent's pi reads the same env files as charon's
+        # agent. p is NOT a reader here — makemake has no p account
+        # (mainUser.enable = false), and a setfacl for a missing user fails
+        # the activation. The vars themselves are shared (share = true), so
+        # the same env content deploys on both machines.
+        {
+          readers = [agentUser];
+          path = config.my.secrets.getPath "accounted-mcp-key" "env";
+        }
+        {
+          readers = [agentUser];
+          path = config.my.secrets.getPath "context7" "env";
+        }
+        {
+          readers = [agentUser];
+          path = config.my.secrets.getPath "digikey" "env";
+        }
+      ];
+
+      exposeUserSecrets = [
+        {
+          # Decision C2: account-level GitHub auth key (write). Same keypair
+          # fleet-wide (share = true generators): no per-machine GitHub
+          # registration.
+          enable = true;
+          secretName = "agent-git-auth";
+          file = "private_key";
+          user = agentUser;
+          dest = "/home/${agentUser}/.ssh/git_auth_ed25519";
+          mode = "0400";
+        }
+        {
+          # Decision C1: signing-only key; user.signingkey (agentGit module)
+          # points at this file, and install-agent-allowed-signers below
+          # installs the public half into /etc/ssh/allowed_signers.
+          enable = true;
+          secretName = "agent-git-sign";
+          file = "private_key";
+          user = agentUser;
+          dest = "/home/${agentUser}/.ssh/git_sign_ed25519";
+          mode = "0400";
         }
       ];
     };

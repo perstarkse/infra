@@ -16,6 +16,8 @@
   # Wake-on-LAN target for charon, shared by io's wakeproxy and makemake's
   # wake-charon script (single source: no duplicated MAC).
   flake.lib.wakeTarget = import ../lib/wake-target.nix;
+  # Shared MCP server surface (roadmap C6); per-profile digikey token store.
+  flake.lib.mkPiMcpServers = import ../lib/pi-mcp-servers.nix;
   # Canonical public-domain registry (pure constant, no cross-machine eval
   # — arch #6). MUST equal io's derived my.publicDomains; enforced by the
   # sedna subset assertions + io's registry-equality lint.

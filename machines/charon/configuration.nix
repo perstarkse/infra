@@ -32,7 +32,6 @@
       allowUnfree = true;
     };
   };
-
   # MCP server config shared by p's and agent's pi profiles (decision C6:
   # the agent gets use access to every MCP server). sops-backed values read
   # the same /run/secrets-for-users paths via each principal's own
@@ -41,57 +40,6 @@
   # stores race on refresh-token rotation, so only the store path differs.
   # Verified against digikey-mcp source: the store is created 0600 by the
   # principal that runs the consent flow.
-  mkPiMcpServers = tokenStore: {
-    accounted = {
-      url = "https://accounting.lan.stark.pub/api/extensions/ext/mcp-server/mcp?client=pi-code";
-      # pi's built-in MCP support has no `bearerToken` field: the
-      # Authorization header is a `!command` value, and that command must
-      # be the WHOLE value (pi runs it through a shell and takes trimmed
-      # stdout), so the Bearer prefix comes from the command itself.
-      headers.Authorization = "!cat ${config.my.secrets.getPath "accounted-mcp-key" "env"} | grep '^ACCOUNTED_MCP_API_KEY=' | cut -d= -f2 | sed 's/^/Bearer /'";
-    };
-    context7 = {
-      url = "https://mcp.context7.com/mcp";
-      headers = {
-        CONTEXT7_API_KEY = "!cat ${config.my.secrets.getPath "context7" "env"} | grep '^CONTEXT7_API_KEY=' | cut -d= -f2";
-      };
-    };
-    # Onshape FeatureScript MCP (hosted, streamable HTTP). Auth is OAuth,
-    # not an Onshape API key: the account authorises in a browser via
-    # `pi mcp login onshape`, and pi stores the token in
-    # ~/.pi/agent/mcp-auth.json, so no secret belongs in this flake.
-    onshape = {
-      url = "https://fs-mcp.labs.onshape.app/mcp";
-      description = "Onshape FeatureScript: write, run and refine custom Onshape features in a document.";
-    };
-    digikey = {
-      # MyLists tools need the app subscribed to MyLists in the portal and its
-      # OAuth Callback URL set to DIGIKEY_CALLBACK_URL below; the account owner
-      # then runs the one-time mylists_authorize consent flow (per principal —
-      # separate consent, separate token store).
-      command = "${ctx.inputs.digikeyMcp.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/digikey-mcp";
-      env = {
-        DIGIKEY_CLIENT_ID = "!cat ${config.my.secrets.getPath "digikey" "env"} | grep '^DIGIKEY_CLIENT_ID=' | cut -d= -f2";
-        DIGIKEY_CLIENT_SECRET = "!cat ${config.my.secrets.getPath "digikey" "env"} | grep '^DIGIKEY_CLIENT_SECRET=' | cut -d= -f2";
-        DIGIKEY_CALLBACK_URL = "https://localhost:8139/digikey_callback";
-        DIGIKEY_TOKEN_STORE = tokenStore;
-      };
-    };
-    # agentcad: stdio MCP server exposing the CAD CLI as typed tools
-    # (venv interpreter from the shared agent-tooling package).
-    agentcad = {
-      command = "${ctx.inputs.agentTooling.packages.${pkgs.stdenv.hostPlatform.system}.agentcad}/bin/python";
-      args = ["-m" "agentcad.mcp"];
-      # Host workaround: OCP's GL renderer aborts the process with an
-      # X error on a live display it cannot use (BadWindow kills the
-      # auto-diff PNG phase — agentcad 0.4.0 has no --no-diff). An
-      # unreachable DISPLAY fails the GL phase gracefully instead.
-      # See printing/desktop-side-box/spec.md → CAD tooling.
-      env = {
-        DISPLAY = "invalid-display";
-      };
-    };
-  };
 in {
   # Workstation-only: agent forwarding lets the deploy/build host reuse the
   # interactive agent over SSH; servers must never enable it.
@@ -159,6 +107,7 @@ in {
         herdr
         node
         git
+        agentGit
         direnv
         zoxide
       ]
@@ -176,7 +125,11 @@ in {
         # C6: same MCP surface as p's pi (decision: use access to all MCP
         # servers). The digikey token store is agent's own — p's sits under
         # /home/p (700, zero agent ACLs), the files must never be shared.
-        mcpServers = mkPiMcpServers "/home/agent/.local/state/digikey-mcp/tokens.json";
+        mcpServers = ctx.flake.lib.mkPiMcpServers {
+          inherit config pkgs;
+          inherit (ctx) inputs;
+          tokenStore = "/home/agent/.local/state/digikey-mcp/tokens.json";
+        };
       };
       antigravity.enable = true;
       shared-skills.enable = true;
@@ -197,64 +150,9 @@ in {
 
     # Decision C1 (docs/p-agent-collab-roadmap.md): the shared git module sets
     # committer Per Stark <per@stark.pub> (committer is ALWAYS p, both
-    # principals); authorship comes from GIT_AUTHOR_* below. Signing uses the
-    # agent-git-sign private half (signing-only key); the public half is
-    # registered on GitHub as a signing key and installed into the root-owned
-    # allowed_signers by install-agent-allowed-signers. user.signingkey points
-    # at the PRIVATE key file: exposeUserSecrets deploys no .pub here, and git
-    # stats the path before every sign (a missing file aborts the commit).
-    # Verified end-to-end with a throwaway keypair 2026-10-12: Good "git"
-    # signature for agent@stark.pub via the allowed_signers principal lines.
-    programs.git.settings = {
-      commit.gpgsign = true;
-      gpg.format = "ssh";
-      user.signingkey = "/home/agent/.ssh/git_sign_ed25519";
-      gpg.ssh.allowedSignersFile = "/etc/ssh/allowed_signers";
-      # Shared-tree worker (C4/C5): the agent's workspace is by design
-      # repos owned by p (verified 2026-10-12: every git command in
-      # /mnt/sdb/repos checkouts dies with "dubious ownership" otherwise).
-      # The ownership check protects a user from OTHERS' repos; here the
-      # account's whole purpose is operating in p's repos. safe.directory
-      # supports no prefix globs — only exact paths or a lone "*".
-      safe.directory = "*";
-    };
-
-    # GIT_AUTHOR_* must reach every path agent commits from:
-    #   - home.sessionVariables: interactive shells
-    #   - herdr's Service.Environment: herdr panes inherit the SERVER's env,
-    #     not environment.d (modules/home/herdr.nix notes plugins use the
-    #     same lever)
-    #   - ~/.bashrc: bash invoked by sshd sources it even non-interactively
-    #     (SSH_CLIENT set) — the one path the two mechanisms above don't
-    #     reach; verified on charon 2026-10-12 that an ssh-command commit
-    #     authored as p without it. HM files are store symlinks, so the
-    #     agent cannot edit its own authorship.
-    home.sessionVariables = {
-      GIT_AUTHOR_NAME = "agent";
-      GIT_AUTHOR_EMAIL = "agent@stark.pub";
-    };
-    systemd.user.services.herdr.Service.Environment = [
-      "GIT_AUTHOR_NAME=agent"
-      "GIT_AUTHOR_EMAIL=agent@stark.pub"
-    ];
-    home.file.".bashrc".text = ''
-      export GIT_AUTHOR_NAME=agent
-      export GIT_AUTHOR_EMAIL=agent@stark.pub
-    '';
-
-    # GitHub pushes go through the agent-git-auth key only (decision C2).
-    # IdentitiesOnly yes keeps the fleet mesh key (~/.ssh/id_ed25519) from
-    # ever being offered to github.com. github.com's host key is pinned
-    # fleet-wide in modules/system/shared.nix, so BatchMode-style non-interactive
-    # pushes verify the host without TOFU.
-    home.file.".ssh/conf.d/github" = {
-      text = ''
-        Host github.com
-          User git
-          IdentityFile ~/.ssh/git_auth_ed25519
-          IdentitiesOnly yes
-      '';
-    };
+    # principals); agent authorship + signing + the github push stanza ride
+    # the shared agentGit home module (same block drives makemake's agent).
+    my.agentGit.enable = true;
 
     # Outbound mesh as `agent`: the fleet key lands at ~/.ssh/id_ed25519 via
     # my.secrets below, so IdentityFile needs no per-machine override.
@@ -484,7 +382,11 @@ in {
             systemPromptMode = "append";
             systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
           });
-          mcpServers = mkPiMcpServers "/home/p/.local/state/digikey-mcp/tokens.json";
+          mcpServers = ctx.flake.lib.mkPiMcpServers {
+            inherit config pkgs;
+            inherit (ctx) inputs;
+            tokenStore = "/home/p/.local/state/digikey-mcp/tokens.json";
+          };
         };
         pi-web = {
           enable = true;

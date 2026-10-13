@@ -8,9 +8,9 @@
 #
 #   private_key — 0400 neededFor = "users", copied to
 #                 /home/agent/.ssh/git_auth_ed25519 by my.secrets.exposeUserSecrets
-#                 (machines/charon/configuration.nix). Charon is the only machine
-#                 carrying the "agent-git" tag, so the private half deploys there
-#                 alone.
+#                 on every machine that opts in (charon and makemake, owner
+#                 decision 2026-10-13). The generators are share = true: ONE
+#                 keypair fleet-wide, no per-machine GitHub registration.
 #   public_key  — registered on github.com by the owner (browser step, once).
 #                 Never used for SSH auth anywhere; only GitHub accepts it.
 #

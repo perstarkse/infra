@@ -22,6 +22,8 @@ _: {
       fi
       printf 'ACCOUNTED_MCP_API_KEY=%s\n' "$(cat "$_prompts_dir/api_key")" > "$out/env"
     '';
-    meta.tags = ["accounted-mcp" "charon"];
+    # No "charon" tag: makemake's agent consumes the same shared env since
+    # the C6 MCP parity decision (2026-10-13).
+    meta.tags = ["accounted-mcp"];
   };
 }
