@@ -66,6 +66,8 @@
         # wrapper ships in a separate output that bare `nodejs` does not
         # put on PATH. Charon gets this via my.node; agent gets it here.
         node
+        direnv
+        zoxide
       ]
       ++ (with ctx.inputs.agentTooling.homeModules; [
         pi-agent
@@ -99,6 +101,14 @@
       antigravity.enable = true;
       shared-skills.enable = true;
     };
+
+    # Same agent environment as charon as much as possible (owner decision
+    # 2026-10-13): direnv + zoxide ride the shared home modules. Deliberately
+    # NOT here: my.git.enable — the git signing keys are charon-only clan
+    # vars, and the git module would point commit signing at files that don't
+    # exist on this machine, breaking every commit.
+    my.direnv.enable = true;
+    my.zoxide.enable = true;
 
     # pi's first run shells out to `npm` by name (extension installs into
     # ~/.pi/agent/npm). nodejs arrives via the `node` homeModule import

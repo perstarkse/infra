@@ -104,19 +104,6 @@ _: {
         description = "Writable scratch directory for the agent (clones, scratch files).";
       };
 
-      shell = lib.mkOption {
-        type = lib.types.package;
-        default = pkgs.bash;
-        description = ''
-          Login shell for the agent account. The fleet default is bash: a
-          shell that sources nothing on machines where the agent has no HM
-          profile, so a login gets a bare prompt rather than an environment
-          it could shape. Machines that DO give the agent a Home Manager
-          profile may set fish: the fish config is store-managed (immutable
-          symlinks), so the login environment stays declarative.
-        '';
-      };
-
       authorizedKeysFile = lib.mkOption {
         type = lib.types.path;
         default = "/etc/ssh/authorized_keys.d/agent";
@@ -211,9 +198,11 @@ _: {
         # manages, so a "make the home root-owned" oneshot loses to activation
         # on every switch — the flag is the only lever that works.
         inherit (cfg) createHome;
-        # Default: sources nothing — see the `shell` option. Machines with an
-        # agent HM profile opt into fish there (also store-managed).
-        inherit (cfg) shell;
+        # Non-interactive, and a shell that sources nothing but the
+        # store-managed .bashrc: an agent that logs in gets a bare prompt,
+        # not a login environment it can shape. Bash everywhere: the same
+        # agent environment on every machine (owner decision 2026-10-13).
+        shell = pkgs.bash;
         # Read-only log access. wheel, docker and libvirtd are all
         # root-equivalent and stay out on purpose.
         extraGroups = ["systemd-journal"];
