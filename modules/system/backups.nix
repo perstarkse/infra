@@ -449,6 +449,17 @@
                           garageS3Script =
                             if config.services.garage.enable
                             then ''
+                              # The admin API (127.0.0.1:3903) is not guaranteed by
+                              # garage-ready.service: verified live on makemake 2026-10-13,
+                              # the bootstrap raced garage's startup and died with
+                              # "Connection refused" on every boot since Oct 11 (23 fails,
+                              # switch exits 4). Wait for the admin endpoint — it answers
+                              # long before backups are needed and the unit then behaves
+                              # like its successful siblings (122 in the journal).
+                              for _ in $(seq 1 60); do
+                                if ${pkgs.garage}/bin/garage bucket list >/dev/null 2>&1; then break; fi
+                                sleep 2
+                              done
                               create_out="$(${pkgs.garage}/bin/garage bucket create "${bucketName}" 2>&1 || true)"
                               if echo "$create_out" | ${pkgs.gnugrep}/bin/grep -qiE 'was created|already exists|Bucket already'; then
                                 :
