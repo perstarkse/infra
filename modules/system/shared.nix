@@ -184,5 +184,33 @@
         ];
       })
     ];
+
+    # Re-run the expose-user installers after sops-nix's for-users render
+    # swap. Verified live on makemake 2026-10-13: sops-nix renders
+    # users-scope secrets into /run/secrets-for-users.d/N generation dirs
+    # and atomically swaps the symlink mid-switch (the render happens in the
+    # activation script — sops-install-secrets-for-users.service does NOT
+    # exist on this fleet, sysusers.enable = false); a .path unit's inotify
+    # watch anchored through the swapped symlink never saw the new file and
+    # the secret silently never reached its destination, while a sibling
+    # unit fired. Each expose service is self-guarding (exits 0 when the
+    # source is absent), idempotent (cmp-protected install), and runs the
+    # same root 0400 install the path unit would trigger — starting the
+    # services directly relies on no watch semantics. The services are
+    # inactive-loaded, so the glob matches them; machines without expose
+    # entries fail the glob harmlessly. The oneshot re-runs on every switch
+    # (no RemainAfterExit — verified via the install-agent-allowed-signers
+    # journal: started at boot AND again at the switch).
+    systemd.services.expose-user-secrets-refresh = {
+      description = "Re-run expose-user-secret installers after the sops for-users render swap";
+      after = ["local-fs.target"];
+      wantedBy = ["multi-user.target"];
+      serviceConfig = {
+        Type = "oneshot";
+      };
+      script = ''
+        systemctl start 'my-expose-user-secret-*.service' --all 2>/dev/null || true
+      '';
+    };
   };
 }

@@ -1175,6 +1175,7 @@ in {
     localsend
     bluetuith
     discord
+    ledger-live-desktop
     # PrismLauncher is Qt6: the global qt5ct platformtheme + kvantum style
     # override segfault it on startup (each var alone crashes, even --version).
     # Strip both; PrismLauncher falls back to Fusion + its builtin themes.
