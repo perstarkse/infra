@@ -5,10 +5,9 @@
 # herdr.service is a user unit and `my.herdr` is a Home Manager option, so this
 # half belongs under modules/home/ like every other user-scope module.
 #
-# LIMIT: `herdr plugin install` resolves the plugin at HEAD of its GitHub repo
-# unless pluginRepo names a tag, and it builds against the network (bun install).
-# The install oneshot is idempotent in effect but not in content. Pin pluginRepo
-# to a tag once this stops being a prototype.
+# LIMIT: `herdr plugin install` builds against the network (bun install).
+# pluginRef is pinned to the release tag v0.4.8, and the install oneshot is
+# idempotent in effect but not in content.
 {
   config.flake.homeModules.herdr-web-ui = {
     config,
@@ -57,13 +56,17 @@
 
     installScript = pkgs.writeShellScript "herdr-web-ui-install" ''
       set -euo pipefail
-      # Pinned by ref, not floating on HEAD. A newer HEAD (e6febbe) ignores
-      # HOST and binds loopback only, while 9153e60b (what charon runs, health
-      # 200 on its LAN IP) honours it. The installer reinstalls when the
-      # installed ref drifts from the configured one; `plugin install` does not
-      # overwrite, so a drifting install is uninstalled first.
-      installed_ref=$(${herdrBin} plugin list 2>/dev/null | grep herdr-web-ui | grep -o "@[0-9a-f]*" | head -1 || true)
-      want_ref="@${cfg.pluginRef}"
+      # Pinned by tag, not floating on HEAD. HEAD (e6febbe) once ignored HOST
+      # and bound loopback only; v0.4.8 reads process.env["HOST"] again and
+      # honours it (server/index.ts:523). The installer reinstalls when the
+      # installed ref drifts from the configured one; `plugin install` does
+      # not overwrite, so a drifting install is uninstalled first. The ref
+      # extract matches anything up to the list line's closing bracket, not
+      # only hex: a tag ref (v0.4.8) is displayed verbatim, while the old
+      # hex-only pattern would read an installed tag install as missing and
+      # retry a refused install on every activation.
+      installed_ref=$(${herdrBin} plugin list 2>/dev/null | grep "github:${cfg.pluginRepo}@" | grep -o "github:${cfg.pluginRepo}@[^] ]*" | head -1 || true)
+      want_ref="github:${cfg.pluginRepo}@${cfg.pluginRef}"
       if [ "$installed_ref" = "$want_ref" ]; then
         echo "herdr-web-ui: already at $want_ref"
         exit 0
@@ -73,6 +76,14 @@
         ${herdrBin} plugin uninstall devswha.herdr-web-ui || true
       fi
       ${herdrBin} plugin install --yes --ref ${cfg.pluginRef} ${cfg.pluginRepo}
+      # A reinstall does not restart herdr.service, so the [[startup]] hook
+      # never runs for the new checkout and the bridge would stay down until
+      # the next herdr restart (verified live on makemake 2026-10-15: v0.4.8
+      # installed 15:08, no listener until a manual start). The start action
+      # self-guards on a live bridge; non-fatal so an install with the server
+      # down still counts as installed.
+      ${herdrBin} plugin action invoke devswha.herdr-web-ui.start 2>/dev/null \
+        || echo "herdr-web-ui: bridge start skipped (server down or already running)" >&2
     '';
   in {
     options.my.herdr-web-ui = {
@@ -86,11 +97,12 @@
 
       pluginRef = lib.mkOption {
         type = lib.types.str;
-        default = "9153e60b53abe7e65420c8c8036928d41998e1df";
+        default = "v0.4.8";
         description = ''
-          Git ref passed as `herdr plugin install --ref`. Pinned, not HEAD:
-          HEAD moves and has broken HOST binding before. This is the rev
-          running on charon (health 200 on its LAN IP).
+          Git ref passed as `herdr plugin install --ref`. Pinned to the
+          latest release tag, not HEAD: HEAD moves between deploys. v0.4.8
+          (2026-10-12) reads process.env["HOST"] again, which the once-newer
+          HEAD e6febbe ignored, so the configured bindHost is honoured.
         '';
       };
 
@@ -171,6 +183,16 @@
       # The start command self-guards ("already running for this checkout and
       # port"), so a redundant trigger is harmless. HOME-relative: works in
       # any herdr-owner profile (agent on makemake, p on charon).
+      #
+      # The start goes through HERDR's plugin action API, not a backgrounded
+      # bun: a Type=oneshot unit kills its whole cgroup when ExecStart exits
+      # and setsid(1) changes the session but not the cgroup, so the old
+      # `setsid nohup bun … start &` left a supervisor that bound the port,
+      # printed "listening", and died one second later at unit deactivation
+      # — verified live on makemake 2026-10-15: four env-restart runs, zero
+      # surviving listeners. The action runs inside the long-lived
+      # herdr.service cgroup instead. herdrBin absolute: the unit's PATH
+      # replacement carries bun/node, not the herdr profile.
       systemd.user.paths.herdr-web-ui-env = {
         Install.WantedBy = ["default.target"];
         Path = {
@@ -183,7 +205,10 @@
         Service = {
           Type = "oneshot";
           TimeoutStartSec = "5min";
-          Environment = ["PATH=${pluginPath}"];
+          Environment = [
+            "PATH=${pluginPath}"
+            "HERDR_SOCKET_PATH=${config.my.herdr.socketDir}/herdr.sock"
+          ];
           ExecStart = pkgs.writeShellScript "herdr-web-ui-env-restart" ''
             set -eu
             # Patterns chosen so they cannot match this script's own cmdline.
@@ -191,15 +216,14 @@
             pkill -f 'herdr-web-ui/updates/.*server/supervisor\.ts' 2>/dev/null || true
             pkill -f 'bun server/index\.ts' 2>/dev/null || true
             sleep 1
-            checkout=$(ls -d "$HOME"/.config/herdr/plugins/github/devswha.herdr-web-ui-* 2>/dev/null | head -1)
-            if [ -z "$checkout" ]; then
+            if [ ! -d "$HOME/.config/herdr/plugins/github"/devswha.herdr-web-ui-* ]; then
               echo "herdr-web-ui: no plugin checkout yet; nothing to restart" >&2
               exit 0
             fi
-            cd "$checkout"
-            log="''${XDG_STATE_HOME:-$HOME/.local/state}/herdr/plugins/devswha.herdr-web-ui/server.log"
-            mkdir -p "$(dirname "$log")"
-            setsid nohup ${bun}/bin/bun scripts/plugin.ts start >> "$log" 2>&1 < /dev/null &
+            # The start action self-guards on a live bridge; a herdr that is
+            # down (mid-deploy) fails the unit visibly instead of silently
+            # leaving no bridge.
+            ${herdrBin} plugin action invoke devswha.herdr-web-ui.start
           '';
         };
       };

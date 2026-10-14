@@ -46,7 +46,6 @@
       journal-upload
       steam
       agent-ssh-access
-      herdr-web-ui
       bambu-studio
       backups
       sunshine
@@ -73,33 +72,6 @@
     gui.enable = true;
 
     stylix.enable = true;
-
-    # Browser client for herdr: it is remote shell as `p`. The plugin's own
-    # token gate (HERDR_WEB_TOKEN, exposed into the plugin's .env via
-    # my.secrets below) is armed since 2026-10-13; there is still no nginx
-    # auth in front of the LAN vhost.
-    #
-    # Retired 2026-10-11: the primary herdr.lan.stark.pub moved to makemake
-    # (always on; charon sleeps). Republished same day under its own name so
-    # charon's panes stay reachable directly: the bridge was never uninstalled
-    # (still healthy on 10.0.0.15:7317), only unpublished. No remote-bundle
-    # install needed — the UI's "add PC over SSH" path would deploy a second
-    # bridge just to tunnel it back, which is redundant next to this vhost.
-    # REVIEW-BY 2026-11-12: if makemake's UI reaches charon's panes through
-    # the mesh (Add-PC or herdr machine list), retire this vhost entirely.
-    herdr-web-ui = {
-      enable = true;
-      allowedFirewallSources = ["10.0.0.1"];
-      endpoints = {
-        enable = true;
-        domain = "herdr-charon.lan.stark.pub";
-        useWildcard = "lanstark";
-        router = {
-          enable = true;
-          targets = ["io"];
-        };
-      };
-    };
 
     docker.enable = true;
     fonts.enable = true;
@@ -168,19 +140,6 @@
           mode = "0400";
         }
         {
-          # herdr-web-ui token gate: HERDR_WEB_TOKEN into the plugin's .env
-          # in p's config dir (charon's herdr runs as p). .env wins over
-          # `env` (plugin 0.3.25+, included in the pinned checkout); with
-          # the token set, every visitor needs it. Rotation: regenerate,
-          # redeploy, restart herdr.
-          enable = true;
-          secretName = "herdr-web-ui";
-          file = "plugin_env";
-          user = config.my.mainUser.name;
-          dest = "/home/${config.my.mainUser.name}/.config/herdr/plugins/config/devswha.herdr-web-ui/.env";
-          mode = "0400";
-        }
-        {
           # Agent git signing key: signing-only. user.signingkey in the agent HM
           # block points at this file; the public half is registered on
           # GitHub (owner, browser step) and installed into /etc/ssh/allowed_signers.
@@ -194,13 +153,13 @@
       ];
       discover = {
         enable = true;
-        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt" "agent-ssh-key" "agent-git" "herdr-web-ui"];
+        includeTags = ["aws" "charon" "openai" "openrouter" "context7" "user" "b2" "debug" "garage-s3" "wireguard-tunnels" "keep-awake" "attic-cache" "accounted-mcp" "digikey" "db-passwords" "journal-upload" "ntfy" "air-exhaust-mqtt" "agent-ssh-key" "agent-git"];
       };
       # Fail closed when an expected generator is absent after merge
       # (tag typo, missing includeTags). Static names only: dynamic
       # consumers (wireguard-tunnels-$name, restic-$job-$backend) are
       # covered by lib/secrets-discovery-check.py instead.
-      requireGenerators = ["accounted-mcp-key" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "attic-cache" "context7" "db-passwords" "digikey" "garage-s3" "herdr-web-ui" "journal-upload" "ntfy" "politikerstod-lekeberg" "politikerstod-orebro" "wake-proxy-keep-awake-ssh" "z-ai-env"];
+      requireGenerators = ["accounted-mcp-key" "agent-ssh-key" "agent-git-auth" "agent-git-sign" "attic-cache" "context7" "db-passwords" "digikey" "garage-s3" "journal-upload" "ntfy" "politikerstod-lekeberg" "politikerstod-orebro" "wake-proxy-keep-awake-ssh" "z-ai-env"];
 
       allowReadAccess = [
         {

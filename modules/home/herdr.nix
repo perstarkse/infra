@@ -22,6 +22,14 @@
 # - Session restore is native (server persists panes); a restart resumes them.
 # - Bundled integrations ship ahead of the floors for native restore:
 #   pi v9 (floor 2), antigravity-cli v3 (floor 1).
+#
+# Plugins (herdr-navigator, herdr-auto-title) are installed per instance by
+# the herdr-plugins-install oneshot below. They must be installed on EVERY
+# server the owner's client can focus: a plugin_action keybind is looked up
+# on the focused endpoint's server (src/client/shell/actions.rs answers
+# "custom command is not available on this endpoint" otherwise), so a
+# plugin installed only on one instance does nothing when a remote
+# machine's workspace is focused.
 {
   config.flake.homeModules.herdr = {
     lib,
@@ -116,7 +124,8 @@
     # integration resolves its target via PI_CODING_AGENT_DIR → ~/.pi/agent.
     integrationTargets =
       ["pi"]
-      ++ lib.optionals cfg.integrations.antigravity ["antigravity-cli"];
+      ++ lib.optionals cfg.integrations.antigravity ["antigravity-cli"]
+      ++ lib.optionals cfg.integrations.hermes ["hermes"];
     integrationScript = pkgs.writeShellScript "herdr-install-integrations" ''
       set -euo pipefail
       export PATH="${lib.makeBinPath [herdrPkg]}:$PATH"
@@ -127,6 +136,55 @@
         ${herdrBin} integration install "$target"
       done
     '';
+
+    # Drift-checked plugin install: `herdr plugin install` does not
+    # overwrite, so a plugin already installed at a different ref (a manual
+    # HEAD install, or a previous pin) is uninstalled first. Uninstall keeps
+    # the plugin's config dir, and a new build keeps running until the
+    # restart action replaces it.
+    pluginsInstallScript = pkgs.writeShellScript "herdr-install-plugins" ''
+      set -euo pipefail
+      export PATH="${lib.makeBinPath [herdrPkg]}:$PATH"
+      export HERDR_SOCKET_PATH=${lib.escapeShellArg apiSocket}
+
+      install_plugin() {
+        repo=$1
+        ref=$2
+        restart=$3
+        want="github:$repo@$ref"
+        installed=$(${herdrBin} plugin list 2>/dev/null | grep -o "github:$repo@[^] ]*" | head -1 || true)
+        if [ "$installed" = "$want" ]; then
+          echo "herdr plugins: $repo already at $ref"
+          return 0
+        fi
+        if [ -n "$installed" ]; then
+          echo "herdr plugins: $repo at '$installed' drifts from '$want'; reinstalling"
+          ${herdrBin} plugin uninstall "$repo" || true
+        fi
+        ${herdrBin} plugin install --yes --ref "$ref" "$repo"
+        if [ -n "$restart" ]; then
+          # Plugins only start when the server starts, so a long-lived
+          # plugin needs its restart action after the first install. A
+          # failed restart is non-fatal: the next server start starts the
+          # new build anyway.
+          ${herdrBin} plugin action invoke "$restart" \
+            || echo "herdr plugins: $repo installed but '$restart' failed; starts at the next server start" >&2
+        fi
+      }
+
+      ${lib.concatMapStrings (p: ''
+          install_plugin ${lib.escapeShellArg p.repo} ${lib.escapeShellArg p.ref} ${lib.escapeShellArg (p.restartAction or null)}
+        '')
+        cfg.plugins}
+    '';
+
+    # Toolchain the plugin manifests' [[build]] commands need, on the
+    # oneshot's PATH: herdr-navigator builds with cargo (rustc + a C linker),
+    # herdr-auto-title with go. Setting PATH on a unit REPLACES systemd's
+    # default, so the basic dirs are appended as in herdr-web-ui's install.
+    pluginBuildPath =
+      "${lib.makeBinPath [herdrPkg pkgs.rustc pkgs.cargo pkgs.go pkgs.stdenv.cc]}"
+      + ":/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin";
   in {
     options.my.herdr = {
       enable = lib.mkEnableOption "herdr coding-agent execution surface (server + integrations)";
@@ -155,6 +213,74 @@
           default = true;
           description = "Install the antigravity-cli integration (hooks into ~/.gemini/config, bundled v3, restore floor v1).";
         };
+        hermes = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Install the Hermes Agent integration (plugin in
+            ~/.hermes/plugins, enablement in ~/.hermes/config.yaml,
+            restore floor v5). Requires ~/.hermes to exist first — the
+            install fails with "hermes config directory not found" when
+            hermes is not installed, so this stays off wherever the
+            gateway does not run (p on charon, hermes-inspect only).
+          '';
+        };
+      };
+
+      # GitHub plugins installed per herdr instance. Server-side: a client
+      # plugin_action keybind resolves on the focused endpoint's server, so
+      # every machine the owner's client can focus needs the same list.
+      # Install-time builds run against the network with this module's
+      # buildDeps on PATH (herdr runs the plugin manifest's [[build]]).
+      plugins = lib.mkOption {
+        type = lib.types.listOf (lib.types.submodule {
+          options = {
+            repo = lib.mkOption {
+              type = lib.types.str;
+              description = "GitHub owner/repo passed to `herdr plugin install`.";
+            };
+            ref = lib.mkOption {
+              type = lib.types.str;
+              description = ''
+                Git ref passed as `herdr plugin install --ref`. Always pin a
+                released tag, never HEAD: HEAD moves between deploys and the
+                install is drift-checked against exactly this ref.
+              '';
+            };
+            restartAction = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = ''
+                Plugin action invoked after install, to start or replace the
+                running instance. Plugins only start when the server starts,
+                so a plugin with a long-lived process (herdr-auto-title) needs
+                its restart action after the first install; on-demand plugins
+                (herdr-navigator) spawn a pane per invocation and need none.
+              '';
+            };
+          };
+        });
+        default = [
+          # The fuzzy searcher (prefix+t): one navigator for workspaces,
+          # agents, projects, sessions, remotes, directories and actions.
+          {
+            repo = "thanhdat77/herdr-navigator";
+            ref = "v0.3.6";
+          }
+          # Names tabs/panes after the work in them; feeds the sidebar's
+          # $topic token.
+          {
+            repo = "kryptamine/herdr-auto-title";
+            ref = "v0.13.2";
+            restartAction = "herdr.auto-title.restart";
+          }
+        ];
+        description = ''
+          Plugins installed on every herdr instance this profile owns.
+          `herdr plugin install` does not overwrite, so the oneshot compares
+          the installed source ref against the configured one and
+          uninstalls first on drift.
+        '';
       };
 
       socketDir = lib.mkOption {
@@ -253,6 +379,24 @@
             echo "herdr-integrations: server never answered; leaving integrations uninstalled" >&2
             exit 0
           '';
+        };
+        Install.WantedBy = ["default.target"];
+      };
+
+      systemd.user.services.herdr-plugins-install = {
+        Unit = {
+          Description = "Install herdr plugins (herdr-navigator, herdr-auto-title)";
+          After = ["herdr.service"];
+        };
+        Service = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          # One network build per plugin (cargo/go against crates.io and the
+          # Go module proxy), and deliberately no Restart: a boot loop when
+          # GitHub is unreachable helps nobody.
+          TimeoutStartSec = "30min";
+          Environment = ["PATH=${pluginBuildPath}"];
+          ExecStart = "${pluginsInstallScript}";
         };
         Install.WantedBy = ["default.target"];
       };

@@ -578,6 +578,21 @@
       # which upstream also mirrors into users.users.<user>.packages, so it
       # is on the agent's interactive PATH too, not just the gateway's.
 
+      # herdr's Hermes integration installs into ~/.hermes — the gateway
+      # user's own home (see modules/home/herdr.nix) — so the home-manager
+      # option is flipped from here, where "hermes runs natively in this
+      # user's home" is known. The gateway user's HM profile (agentProfile)
+      # imports the herdr module, so the option exists wherever this
+      # evaluates. Guarded on native mode: a stateDir that is not the fleet
+      # home means the gateway does not own this user's ~/.hermes. p on
+      # charon (hermes-inspect only, no gateway) keeps the module default —
+      # and `herdr integration install hermes` would fail there anyway with
+      # "hermes config directory not found".
+      {
+        home-manager.users.${fleetUser}.my.herdr.integrations.hermes =
+          lib.mkIf (cfg.stateDir == fleetHome) true;
+      }
+
       # No herdr client wiring here: the gateway runs as `agent`
       # and reaches the socket (same user's home) directly.
 

@@ -13,7 +13,6 @@
       [
         options
         sops
-        herdr-web-ui
         noctalia
         helix
         rofi
@@ -64,8 +63,6 @@
       package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
       sleepInhibit.enable = true;
     };
-
-    my.herdr-web-ui.enable = true;
 
     # C4: ~/projects is the post-rename front door to the shared tree.
     # mkOutOfStoreSymlink would be the idiom, but `config` here is the NixOS
