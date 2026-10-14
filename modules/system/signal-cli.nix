@@ -158,6 +158,7 @@ _: {
       systemd.services.signal-cli = {
         description = "signal-cli daemon (HTTP) for the agent's Signal channel";
         wantedBy = ["multi-user.target"];
+        wants = ["network-online.target"];
         after = ["network-online.target"];
         serviceConfig =
           {

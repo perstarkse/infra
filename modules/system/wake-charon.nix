@@ -56,6 +56,11 @@ _: {
         KEEP_AWAKE_PORT = ${toString cfg.sshPort}
         IDENTITY_FILE = "${toString cfg.keepAwake.identityFile}"
         MAX_LEASE_SECONDS = ${toString cfg.keepAwake.maxDurationSeconds}
+        DEFAULT_LEASE_SECONDS = ${
+          if cfg.keepAwake.enable && cfg.keepAwake.defaultDurationSeconds != null
+          then toString cfg.keepAwake.defaultDurationSeconds
+          else "None"
+        }
 
 
         def parse_mac(mac):
@@ -105,18 +110,38 @@ _: {
             return 1
 
 
-        def lease(seconds_str):
+        def parse_duration(val_str):
+            s = str(val_str).strip()
+            if s.endswith("s") or s.endswith("S"):
+                s = s[:-1].strip()
+                try:
+                    val = float(s)
+                    return int(round(val)) if val > 0 else None
+                except ValueError:
+                    return None
+            if s.endswith("m") or s.endswith("M"):
+                s = s[:-1].strip()
+            try:
+                val = float(s)
+                return int(round(val * 60)) if val > 0 else None
+            except ValueError:
+                return None
+
+
+        def lease(val):
             if not KEEP_AWAKE_ENABLED:
                 print("keep-awake is not configured on this machine (my.wake-charon.keepAwake.enable)", file=sys.stderr)
                 return 2
-            if not seconds_str.isdigit() or int(seconds_str) <= 0:
-                print("lease duration must be a positive integer (seconds)", file=sys.stderr)
+            seconds = val if isinstance(val, int) else parse_duration(str(val))
+            if seconds is None or seconds <= 0:
+                print("lease duration must be a positive number of minutes", file=sys.stderr)
                 return 2
-            seconds = int(seconds_str)
             if seconds > MAX_LEASE_SECONDS:
                 # Client-side cap mirrors the target's own rejection
                 # (WAKEPROXY_KEEP_AWAKE_TARGET_MAX_SECS on charon).
-                print(f"lease {seconds}s exceeds max {MAX_LEASE_SECONDS}s", file=sys.stderr)
+                max_mins = MAX_LEASE_SECONDS // 60
+                mins = seconds // 60
+                print(f"lease {mins}m ({seconds}s) exceeds max {max_mins}m ({MAX_LEASE_SECONDS}s)", file=sys.stderr)
                 return 1
             # StrictHostKeyChecking=yes fails closed: makemake's agent has
             # charon pinned in ~/.ssh/known_hosts (hermes-install-known-hosts);
@@ -129,11 +154,13 @@ _: {
                 "-o", "ConnectTimeout=10",
                 "-p", str(KEEP_AWAKE_PORT),
                 f"{KEEP_AWAKE_USER}@{KEEP_AWAKE_HOST}",
-                seconds_str,
+                str(seconds),
             ]
             result = subprocess.run(cmd)
             if result.returncode == 0:
-                print(f"keep-awake lease {seconds}s accepted by {KEEP_AWAKE_USER}@{KEEP_AWAKE_HOST}")
+                mins = seconds / 60
+                mins_display = int(mins) if mins.is_integer() else f"{mins:.1f}"
+                print(f"keep-awake lease {mins_display}m ({seconds}s) accepted by {KEEP_AWAKE_USER}@{KEEP_AWAKE_HOST}")
             return result.returncode
 
 
@@ -141,24 +168,72 @@ _: {
             args = sys.argv[1:]
             dry = "--dry-run" in args
             args = [a for a in args if a != "--dry-run"]
-            lease_seconds = None
-            if "--lease" in args:
-                i = args.index("--lease")
-                if i + 1 >= len(args):
-                    print("--lease requires a duration in seconds", file=sys.stderr)
+            no_lease = "--no-lease" in args
+            args = [a for a in args if a != "--no-lease"]
+
+            explicit_seconds = None
+            for flag in ("--lease", "-l", "--minutes", "-m"):
+                if flag in args:
+                    i = args.index(flag)
+                    if i + 1 >= len(args):
+                        print(f"{flag} requires a duration in minutes", file=sys.stderr)
+                        sys.exit(2)
+                    explicit_seconds = parse_duration(args[i + 1])
+                    if explicit_seconds is None:
+                        print(f"invalid duration: {args[i + 1]!r} (must be a positive number of minutes)", file=sys.stderr)
+                        sys.exit(2)
+                    args = args[:i] + args[i + 2:]
+                    break
+
+            cmd = "wake"
+            pos_seconds = None
+
+            if len(args) == 0:
+                cmd = "wake"
+            elif len(args) == 1:
+                if args[0] in ("wake", "lease", "probe"):
+                    cmd = args[0]
+                else:
+                    duration = parse_duration(args[0])
+                    if duration is not None:
+                        cmd = "wake"
+                        pos_seconds = duration
+                    else:
+                        print(f"unknown command or invalid duration: {args[0]!r}", file=sys.stderr)
+                        print(f"usage: {sys.argv[0]} [probe|wake|lease] [<minutes>] [--dry-run] [--no-lease]", file=sys.stderr)
+                        sys.exit(2)
+            elif len(args) == 2:
+                if args[0] in ("wake", "lease"):
+                    cmd = args[0]
+                    pos_seconds = parse_duration(args[1])
+                    if pos_seconds is None:
+                        print(f"invalid duration: {args[1]!r} (must be a positive number of minutes)", file=sys.stderr)
+                        sys.exit(2)
+                else:
+                    print(f"unknown command: {args[0]!r}", file=sys.stderr)
+                    print(f"usage: {sys.argv[0]} [probe|wake|lease] [<minutes>] [--dry-run] [--no-lease]", file=sys.stderr)
                     sys.exit(2)
-                lease_seconds = args[i + 1]
-                args = args[:i] + args[i + 2:]
-            cmd = args[0] if args else "wake"
+            else:
+                print("too many arguments", file=sys.stderr)
+                print(f"usage: {sys.argv[0]} [probe|wake|lease] [<minutes>] [--dry-run] [--no-lease]", file=sys.stderr)
+                sys.exit(2)
+
+            if no_lease:
+                lease_seconds = None
+            elif explicit_seconds is not None:
+                lease_seconds = explicit_seconds
+            elif pos_seconds is not None:
+                lease_seconds = pos_seconds
+            else:
+                lease_seconds = DEFAULT_LEASE_SECONDS
+
             if cmd == "probe":
                 sys.exit(probe())
             elif cmd == "lease":
-                if lease_seconds is not None:
-                    sys.exit(lease(lease_seconds))
-                if len(args) > 1:
-                    sys.exit(lease(args[1]))
-                print("lease requires a duration in seconds", file=sys.stderr)
-                sys.exit(2)
+                if lease_seconds is None:
+                    print("lease requires a duration in minutes", file=sys.stderr)
+                    sys.exit(2)
+                sys.exit(lease(lease_seconds))
             elif cmd == "wake":
                 rc = wake(dry)
                 # Refresh the lease only after a real wake: dry-run prints the
@@ -167,7 +242,7 @@ _: {
                     rc = lease(lease_seconds)
                 sys.exit(rc)
             else:
-                print(f"usage: {sys.argv[0]} [probe|wake|lease] [--dry-run] [--lease <seconds>]", file=sys.stderr)
+                print(f"usage: {sys.argv[0]} [probe|wake|lease] [<minutes>] [--dry-run] [--no-lease]", file=sys.stderr)
                 sys.exit(2)
       '';
   in {
@@ -244,10 +319,31 @@ _: {
           '';
         };
 
+        defaultDurationMinutes = lib.mkOption {
+          type = lib.types.nullOr lib.types.ints.positive;
+          default = 60;
+          description = ''
+            Default keep-awake lease duration (in minutes) requested when
+            `wake-charon` runs without an explicit duration. Also triggers
+            charon's `monitor-power-keep-awake-off` to force the display off.
+            Set to null to require an explicit duration.
+          '';
+        };
+
+        defaultDurationSeconds = lib.mkOption {
+          type = lib.types.nullOr lib.types.ints.positive;
+          default =
+            if cfg.keepAwake.defaultDurationMinutes != null
+            then cfg.keepAwake.defaultDurationMinutes * 60
+            else null;
+          defaultText = lib.literalExpression "if cfg.keepAwake.defaultDurationMinutes != null then cfg.keepAwake.defaultDurationMinutes * 60 else null";
+          description = "Alias for defaultDurationMinutes in seconds.";
+        };
+
         maxDurationSeconds = lib.mkOption {
           type = lib.types.ints.positive;
           default = 14400;
-          description = "Client-side lease cap; must not exceed charon's services.wakeproxy.keepAwake.maxDurationSeconds.";
+          description = "Client-side lease cap in seconds (14400s = 240m); must not exceed charon's services.wakeproxy.keepAwake.maxDurationSeconds.";
         };
       };
     };

@@ -12,7 +12,14 @@
       hash = "sha256-vVuVsNhqQRwLKGrejoBPTB0YI3ksPq8/i8oqeWL1mnI=";
     };
   in {
-    options.my.zellij.enable = lib.mkEnableOption "zellij terminal multiplexer with fish integration";
+    options.my.zellij = {
+      enable = lib.mkEnableOption "zellij terminal multiplexer with fish integration";
+      exitShellOnExit = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Exit parent shell when zellij exits";
+      };
+    };
 
     config = lib.mkIf cfg.enable {
       programs.zellij = {
@@ -22,8 +29,11 @@
         # new pane started a nested zellij, and because herdr exports
         # ZELLIJ_AUTO_EXIT=true, quitting that zellij killed the pane. The
         # multiplex-aware autostart below replaces it.
+        #
+        # Note: programs.zellij.exitShellOnExit is left unset/false so HM does
+        # not warn that shell integrations are disabled. ZELLIJ_AUTO_EXIT is
+        # passed directly to sessionVariables below via my.zellij.exitShellOnExit.
         enableFishIntegration = false;
-        exitShellOnExit = true;
         attachExistingSession = false;
         settings = {
           show_startup_tips = false;
@@ -55,7 +65,7 @@
       # enableFishIntegration is off, so spell out what it would have set.
       home.sessionVariables = {
         ZELLIJ_AUTO_ATTACH = lib.boolToString config.programs.zellij.attachExistingSession;
-        ZELLIJ_AUTO_EXIT = lib.boolToString config.programs.zellij.exitShellOnExit;
+        ZELLIJ_AUTO_EXIT = lib.boolToString cfg.exitShellOnExit;
       };
 
       programs.fish.interactiveShellInit = lib.mkIf (config.programs.fish.enable or false) ''

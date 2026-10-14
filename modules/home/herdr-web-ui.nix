@@ -173,7 +173,10 @@
       # any herdr-owner profile (agent on makemake, p on charon).
       systemd.user.paths.herdr-web-ui-env = {
         Install.WantedBy = ["default.target"];
-        pathConfig.PathChanged = "${config.xdg.configHome}/herdr/plugins/config/devswha.herdr-web-ui/.env";
+        Path = {
+          PathChanged = "${config.xdg.configHome}/herdr/plugins/config/devswha.herdr-web-ui/.env";
+          Unit = "herdr-web-ui-env-restart.service";
+        };
       };
       systemd.user.services.herdr-web-ui-env-restart = {
         Unit.Description = "Restart the herdr-web-ui bridge after its env file changed";

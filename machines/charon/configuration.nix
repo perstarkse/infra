@@ -2,45 +2,8 @@
   ctx,
   config,
   pkgs,
-  lib,
   ...
-}: let
-  secondUser = "a";
-
-  # `agent`'s account name, shared with the agent-ssh-access module.
-  agentUser = config.my.agent-ssh-access.user;
-
-  # GDM's switch-user entry point, used to hand the box over without ending the
-  # running session. gdm-50.1 common/gdm-common.c: gdm_goto_login_session →
-  # create_transient_display → this method (daemon/gdm-local-display-factory.xml).
-  switchUserToGreeter = pkgs.writeShellApplication {
-    name = "switch-user-greeter";
-    text = ''
-      exec ${lib.getExe' pkgs.glib "gdbus"} call --system \
-        --dest org.gnome.DisplayManager \
-        --object-path /org/gnome/DisplayManager/LocalDisplayFactory \
-        --method org.gnome.DisplayManager.LocalDisplayFactory.CreateTransientDisplay
-    '';
-  };
-
-  # Battlemage + xe is stable on this kernel branch; newer 6.12.x regressed GPU init.
-  # Pinned via the locked `nixpkgs-612` input instead of builtins.getFlake so
-  # evals work offline and the pin stays in flake.lock.
-  pinnedKernelPkgs = import ctx.inputs.nixpkgs612 {
-    localSystem = {inherit (pkgs.stdenv.hostPlatform) system;};
-    config = {
-      allowUnfree = true;
-    };
-  };
-  # MCP server config shared by p's and agent's pi profiles (decision C6:
-  # the agent gets use access to every MCP server). sops-backed values read
-  # the same /run/secrets-for-users paths via each principal's own
-  # allowReadAccess grant; onshape's OAuth tokens live in ~/.pi/agent per
-  # HOME by construction; digikey's token store is per principal — shared
-  # stores race on refresh-token rotation, so only the store path differs.
-  # Verified against digikey-mcp source: the store is created 0600 by the
-  # principal that runs the consent flow.
-in {
+}: {
   # Workstation-only: agent forwarding lets the deploy/build host reuse the
   # interactive agent over SSH; servers must never enable it.
   clan.core.networking.forwardAgent = true;
@@ -52,8 +15,16 @@ in {
     "electron-39.8.10"
   ];
 
-  imports = with ctx.flake.nixosModules;
+  imports =
     [
+      ./hardware.nix
+      ./desktop.nix
+      ./virtualisation.nix
+      ./users/p.nix
+      ./users/a.nix
+      ./users/agent.nix
+    ]
+    ++ (with ctx.flake.nixosModules; [
       home-module
       sound
       options
@@ -90,522 +61,16 @@ in {
       politikerstod-remote-worker
       vpn-browser
       tether
-    ]
+    ])
     ++ (with ctx.inputs.varsHelper.nixosModules; [default])
     ++ (with ctx.inputs.privateInfra.nixosModules; [hello-service]);
-
-  # Agent's own space on charon: the same toolchain block makemake carries,
-  # so agent-owned sessions exist on both machines and p's userspace is only
-  # entered by choice. No secrets here (same rule as makemake): agy/pi
-  # authenticate on first interactive run per machine.
-  home-manager.users.${config.my.agent-ssh-access.user} = {
-    imports = with ctx.flake.homeModules;
-      [
-        options
-        sops
-        ssh
-        herdr
-        node
-        git
-        agentGit
-        direnv
-        zoxide
-      ]
-      ++ (with ctx.inputs.agentTooling.homeModules; [
-        pi-agent
-        antigravity
-        shared-skills
-        pi-web
-      ]);
-
-    my.agentTooling = {
-      pi-agent = {
-        enable = true;
-        permissionSystem.enable = false;
-        # Agent MCP parity: same surface as p's pi (decision: use access to all MCP
-        # servers). The digikey token store is agent's own — p's sits under
-        # /home/p (700, zero agent ACLs), the files must never be shared.
-        mcpServers = ctx.flake.lib.mkPiMcpServers {
-          inherit config pkgs;
-          inherit (ctx) inputs;
-          tokenStore = "/home/agent/.local/state/digikey-mcp/tokens.json";
-        };
-      };
-      antigravity.enable = true;
-      shared-skills.enable = true;
-    };
-
-    # Both home modules gate their whole config behind the enable flag
-    # (mkIf): importing alone configures nothing.
-    my.git.enable = true;
-    my.ssh.enable = true;
-    my.direnv.enable = true;
-    my.zoxide.enable = true;
-
-    my.node.enable = true;
-
-    home.packages = with pkgs; [
-      ripgrep
-    ];
-
-    # Agent git identity: the shared git module sets
-    # committer Per Stark <per@stark.pub> (committer is ALWAYS p, both
-    # principals); agent authorship + signing + the github push stanza ride
-    # the shared agentGit home module (same block drives makemake's agent).
-    my.agentGit.enable = true;
-
-    # Outbound mesh as `agent`: the fleet key lands at ~/.ssh/id_ed25519 via
-    # my.secrets below, so IdentityFile needs no per-machine override.
-    # known_hosts is pinned declaratively (same fleet set the hermes module
-    # installs on makemake): BatchMode never prompts, so a missing entry is
-    # a hard failure rather than an interactive question nobody answers.
-    home.file.".ssh/conf.d/herdr-mesh" = {
-      text = ''
-        Host makemake 10.0.0.10
-          HostName 10.0.0.10
-          User agent
-          IdentityFile ~/.ssh/id_ed25519
-          IdentitiesOnly yes
-          BatchMode yes
-      '';
-    };
-
-    home.file.".ssh/known_hosts" = {
-      text = ''
-        10.0.0.10 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMLhhyxdh0dr+tfcyBgv9K0s5nK9mfwOENBnFVteZOB9
-        10.0.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPugZkqgjBKletbzaNipPLSrq5+ToQFBLyCojQLD8pt
-      '';
-    };
-
-    my.herdr = {
-      enable = true;
-      package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
-      sleepInhibit.enable = true;
-    };
-
-    # C4: same shared tree, viewed from agent's home. See the p-profile
-    # comment: config.lib is unreachable here, so the out-of-store symlink is
-    # inlined. HM moves the pre-existing workdir-created empty projects/ dir
-    # to projects.backup on first activation.
-    home.file."projects".source =
-      pkgs.runCommandLocal "projects-out-of-store" {}
-      "ln -s /mnt/sdb/repos $out";
-  };
-
-  home-manager.users.${config.my.mainUser.name} = {
-    imports = with ctx.flake.homeModules;
-      [
-        options
-        sops
-        herdr-web-ui
-        noctalia
-        helix
-        rofi
-        git
-        direnv
-        zoxide
-        fish
-        sccache
-        kitty
-        ncspot
-        nix-scaffold
-        zellij
-        starship
-        qutebrowser
-        bitwarden-client
-        blinkstick
-        mail
-        ssh
-        xdg-mimeapps
-        xdg-userdirs
-        firefox
-        chromium
-        hermes-inspect
-        niri
-        node
-        voxtype
-        wtp
-        local-ai
-        swayidle
-        wow-launcher
-        tether
-        herdr
-      ]
-      ++ (with ctx.inputs.varsHelper.homeModules; [default])
-      ++ (with ctx.inputs.privateInfra.homeModules; [
-        mail-clients
-        rbw
-      ])
-      ++ (with ctx.inputs.agentTooling.homeModules; [
-        pi-agent
-        pi-web
-        shared-skills
-        antigravity
-      ]);
-
-    my.herdr = {
-      enable = true;
-      package = ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default;
-      sleepInhibit.enable = true;
-    };
-
-    my.herdr-web-ui.enable = true;
-
-    # C4: ~/projects is the post-rename front door to the shared tree.
-    # mkOutOfStoreSymlink would be the idiom, but `config` here is the NixOS
-    # module's config — the HM profile's config.lib is unreachable from a
-    # home-manager.users attrset — so inline the same construction (a store
-    # symlink pointing at the absolute path; HM links the home name to it).
-    # ~/repos (a manual symlink made 2025-06) stays as the compat link
-    # through the cooling period. REMOVE-BY 2026-11-12: delete this comment
-    # block and any surviving ~/repos symlink once nothing references it
-    # (pi session cwds, direnv allow-files, shell muscle memory).
-    home.file."projects".source =
-      pkgs.runCommandLocal "projects-out-of-store" {}
-      "ln -s /mnt/sdb/repos $out";
-
-    # herdr mesh: charon's herdr reaches makemake's as `agent` over SSH. The
-    # IdentityFile is the fleet key, exposed to `p` by my.secrets below — `p`'s
-    # own ~/.ssh/id_ed25519 is Home Manager-generated, so its public half is not
-    # a secret and cannot be authorized on makemake.
-    home.file.".ssh/conf.d/herdr-mesh" = {
-      text = ''
-        Host makemake 10.0.0.10
-          HostName 10.0.0.10
-          User agent
-          IdentityFile ~/.ssh/herdr-mesh_id_ed25519
-          IdentitiesOnly yes
-          BatchMode yes
-      '';
-    };
-
-    home.packages = [
-      pkgs.agent-browser
-      pkgs.gh
-    ];
-
-    my = {
-      programs = {
-        rbw = {
-          pinentrySource = "gui";
-        };
-        mail = {
-          enable = true;
-          clients = ["aerc" "thunderbird"];
-        };
-      };
-
-      qutebrowser = {
-        enable = true;
-      };
-
-      bitwarden-client.enable = true;
-      blinkstick.enable = true;
-      chromium.enable = true;
-      direnv.enable = true;
-      firefox.enable = true;
-      fish.enable = true;
-      git.enable = true;
-      hermes-inspect.enable = true;
-      local-ai.enable = true;
-      ncspot.enable = true;
-      nix-scaffold.enable = true;
-      node.enable = true;
-      sccache = {
-        enable = true;
-        cacheDir = "/mnt/sdb/cache/sccache-daemon";
-        cacheSize = "150G";
-      };
-      ssh.enable = true;
-      starship.enable = true;
-      voxtype.enable = true;
-      xdg-mimeapps.enable = true;
-      xdg-userdirs.enable = true;
-      zellij.enable = true;
-      zoxide.enable = true;
-      wow-launcher.enable = true;
-      tether.enable = true;
-
-      rofi = {
-        enable = true;
-        withRbw = true;
-      };
-
-      helix = {
-        enable = true;
-        languages = ["nix" "typst" "markdown" "rust" "jinja" "json" "spellchecking" "fish"];
-      };
-
-      noctalia = {
-        enable = true;
-        airExhaust.enable = true;
-      };
-
-      agentTooling = {
-        pi-agent = {
-          enable = true;
-          ponytail.enable = true;
-          permissionSystem.enable = false;
-          governance = {
-            enable = true;
-            # Nightly zero-token digest of cross-project traces + permission
-            # friction; report lands in ~/.local/state/agent-governance/.
-            digest.enable = true;
-          };
-          # Machine-specific CWD-boundary allow: all agent work lives under
-          # /mnt/sdb/repos (25 project session dirs, ~56k governance entries);
-          # cross-project reads are constant and every sibling repo is the
-          # same trust level. ~/repos and ~/projects are symlinks to this
-          # mount and are matched via canonical path resolution; ~/repos is
-          # the pre-rename compat link, drop once cooling period ends (REMOVE-BY 2026-11-12,
-          # after 2026-10-12). Full map (replaces the module default).
-          permissions.external_directory = {
-            "*" = "ask";
-            "/mnt/sdb/repos/*" = "allow";
-            "~/repos/*" = "allow";
-            "~/projects/*" = "allow";
-            "~/.cargo/registry/*" = "allow";
-            "~/.cargo/git/*" = "allow";
-            "~/.cache/nix/*" = "allow";
-            "~/.local/share/nix/*" = "allow";
-            "/nix/store/*" = "allow";
-            "/tmp/*" = "allow";
-          };
-          shellAlias = "PI_FFF_MODE=override command pi";
-          defaultProvider = "commandcode";
-          defaultModel = "meta/muse-spark-1.3-contributor";
-          extraPackages = [];
-          models = {};
-          subagentOverrides = lib.genAttrs ["scout" "context-builder" "planner" "researcher" "reviewer" "delegate"] (_: {
-            model = "commandcode/meta/muse-spark-1.3-contributor";
-            thinking = "high";
-            fallbackModels = [];
-            defaultContext = "fresh";
-            systemPromptMode = "append";
-            systemPrompt = "You are a fresh subagent with zero inherited context. Your only knowledge comes from the task message and the tools you use. Gather all necessary context yourself. Do not assume prior knowledge.";
-          });
-          mcpServers = ctx.flake.lib.mkPiMcpServers {
-            inherit config pkgs;
-            inherit (ctx) inputs;
-            tokenStore = "/home/p/.local/state/digikey-mcp/tokens.json";
-          };
-        };
-        # RETIRED 2026-10-13: pi-web was wakeproxy's upstream; the public door
-        # now proxies makemake's herdr-web-ui instead (io: upstreamHost
-        # 10.0.0.10:7317). The pi-web module import stays above because
-        # antigravity can only eval alongside it; the service is off and
-        # /home/p/.pi-web state is inert.
-        shared-skills = {
-          enable = true;
-        };
-        antigravity = {
-          enable = true;
-          # allowedCommands: the shared module default already covers
-          # git/nix/cargo/just plus read-only inspection tools; override here
-          # only to add machine-specific extras.
-        };
-      };
-    };
-
-    programs = {
-      voxtype = {
-        enable = true;
-        model.name = "large-v3-turbo";
-        service.enable = true;
-        package = ctx.inputs.voxtype.packages.${pkgs.stdenv.hostPlatform.system}.vulkan;
-      };
-    };
-
-    my.wtp = {
-      enable = true;
-      enableFishIntegration = true;
-      enableFishCdWrapper = true;
-    };
-
-    my.swayidle = {
-      enable = true;
-      idleSeconds = 300; # 5 min no input -> mark session idle
-      lockOnSuspend = false;
-    };
-  };
-
-  # Second account: GNOME on the same seat. The list is deliberately short —
-  # the modules the main account needs for a tiled, terminal-driven desktop
-  # (niri config, noctalia, rofi, qutebrowser, local-ai, agent tooling) either do
-  # nothing in a GNOME session or fight it. Not importing the niri home module
-  # is also what keeps its niri config and the 4s niri IPC wait out of her
-  # activation, since that module gates on the system-wide my.gui.session
-  # rather than anything per user. No `sops`/`mail-clients` either: those carry
-  # an age keyFile at /home/<user>/.config/sops/age/keys.txt and she has no
-  # fleet secrets to decrypt.
-  home-manager.users.${secondUser} = {lib, ...}: {
-    imports = with ctx.flake.homeModules; [
-      fish
-      starship
-      kitty
-      xdg-userdirs
-      xdg-mimeapps
-      firefox
-      chromium
-      mail
-      bitwarden-client
-      ssh
-    ];
-
-    my = {
-      programs.mail = {
-        enable = true;
-        clients = ["thunderbird"];
-      };
-      bitwarden-client.enable = true;
-      chromium.enable = true;
-      firefox.enable = true;
-      fish.enable = true;
-      starship.enable = true;
-      ssh.enable = true;
-      xdg-mimeapps.enable = true;
-      xdg-userdirs.enable = true;
-    };
-
-    # The main account's lock is a Noctalia keybinding, not an idle trigger.
-    # GNOME's automatic-lock defaults have moved between releases, so both keys
-    # are set rather than inherited: without this her session stays unlocked
-    # whenever she steps away from a seat the other account is using.
-    # idle-delay stays at the schema default (300s) and lock-delay at 0.
-    # Swedish session: GNOME input source plus LANG. System glibc already
-    # ships sv_SE (in supportedLocales via the shared en_US/sv_SE extras),
-    # so only the session default changes; the main account keeps en_US.
-    home.language.base = "sv_SE.UTF-8";
-
-    # Daily user-flatpak updates: Flathub ships its own CVE fixes outside
-    # the NixOS rebuild cycle, so this must not wait for a deploy.
-    systemd.user.services.flatpak-user-update = {
-      Unit.Description = "Update user Flatpaks";
-      Service = {
-        Type = "oneshot";
-        ExecStart = "/run/current-system/sw/bin/flatpak update --noninteractive --assumeyes";
-      };
-    };
-    systemd.user.timers.flatpak-user-update = {
-      Unit.Description = "Daily user Flatpak updates";
-      Timer = {
-        OnCalendar = "daily";
-        Persistent = true;
-      };
-      Install.WantedBy = ["timers.target"];
-    };
-
-    dconf.settings = {
-      "org/gnome/desktop/input-sources" = {
-        sources = [(lib.hm.gvariant.mkTuple ["xkb" "se"])];
-      };
-      "org/gnome/desktop/screensaver" = {
-        idle-activation-enabled = true;
-        lock-enabled = true;
-      };
-    };
-  };
-
-  # Git SSH trust anchor for verifying agent-signed commits.
-  # Root-owned 0444 so agent cannot rewrite the principals that vouch for its
-  # own signatures — same reasoning as the root-owned authorized_keys in
-  # modules/system/agent-ssh-access.nix. Carries SIGNING keys only (never the
-  # auth key), one explicit principal line per party.
-  #
-  # No path unit and no RemainAfterExit: a oneshot without RemainAfterExit is
-  # re-queued by every switch-to-configuration (verified on charon 2026-10-12:
-  # agent-path-acl started Oct 11 17:37 and Oct 12 07:09 on a machine booted
-  # Oct 4), and rotation only ever happens through a deploy, whose activation
-  # runs after /run/secrets is populated — so the idempotent installer picks
-  # up rotated keys on the very deploy that carries them.
-  systemd.services.install-agent-allowed-signers = {
-    description = "Install git SSH allowed_signers (signing keys only)";
-    after = ["local-fs.target"];
-    wantedBy = ["multi-user.target"];
-    serviceConfig = {
-      Type = "oneshot";
-    };
-    script = let
-      signPub = config.my.secrets.getPath "agent-git-sign" "public_key";
-      # Single source of truth: p's key as declared for authorized_keys.
-      pKey = builtins.head config.my.mainUser.extraSshKeys;
-    in ''
-      set -euo pipefail
-      if [ ! -s "${signPub}" ]; then
-        # Fresh clone before `clan vars generate`: not an error, the next
-        # deploy after generation installs the file.
-        echo "agent git signing public key not present yet; skipping allowed_signers install" >&2
-        exit 0
-      fi
-      printf 'agent@stark.pub %s\nper@stark.pub ${pKey}\n' "$(cat "${signPub}")" \
-        | install -m 0444 -o root -g root /dev/stdin /etc/ssh/allowed_signers
-    '';
-  };
-
-  # p-private home: agent's home becomes 750 + u:p:r-X so p reads everything downhill
-  # (NixOS re-applies homeMode on every activation — verified in
-  # update-users-groups.pl:238 — so the mode itself needs no oneshot).
-  users.users.${agentUser}.homeMode = "750";
-
-  # p's downhill read on agent's home. Recursive + default: a
-  # top-level-only grant stops at the first 0700 subdir agent creates.
-  # 46k inodes — safe in the activation path (seconds). p-readable-by-design:
-  # agent holds nothing p must not see; the boundary is /home/p, not this.
-  systemd.services.grant-p-agent-home-read = {
-    description = "Grant p downhill r-X on ${agentUser}'s home";
-    after = ["local-fs.target"];
-    wantedBy = ["multi-user.target"];
-    serviceConfig = {
-      Type = "oneshot";
-      TimeoutStartSec = "10min";
-    };
-    script = let
-      setfacl = lib.getExe' pkgs.acl "setfacl";
-    in ''
-      set -euo pipefail
-      if [ -d "/home/${agentUser}" ]; then
-        ${setfacl} -R -m u:p:r-X /home/${agentUser}
-        ${setfacl} -R -d -m u:p:r-X /home/${agentUser}
-        # Scrub the grant inside ~/.ssh: ssh-keygen REFUSES a private key
-        # whose mode shows group readability — the u:p entry sets the mask
-        # to r-x and the mode to 0440 ("UNPROTECTED PRIVATE KEY FILE",
-        # verified live on charon 2026-10-12: agent commit signing died on
-        # it). p has no need to read agent's keys: p already holds the
-        # fleet key. The scrub runs after every grant so the re-applied
-        # recursion can never leave the keys broken across deploys.
-        ${setfacl} -R -b /home/${agentUser}/.ssh 2>/dev/null || true
-      fi
-    '';
-  };
-
-  # Strip the legacy agent grants on /home/p — traverse on the home
-  # and .config chain, rw on p's herdr socket. Idempotent every switch: the
-  # config change alone would leave the on-disk ACLs in place forever.
-  # No chmod: /home/p's 710 was the ACL mask artifact; removing the entry
-  # recomputes the mask, and update-users-groups.pl re-applies homeMode 700
-  # every activation anyway. The socket grant never returns: herdr recreates
-  # the socket without ACLs and agent-path-acl no longer grants it.
-  systemd.services.revoke-agent-legacy-access = {
-    description = "Revoke agent ACLs on /home/p (p-private home)";
-    after = ["local-fs.target"];
-    wantedBy = ["multi-user.target"];
-    serviceConfig = {
-      Type = "oneshot";
-    };
-    script = let
-      setfacl = lib.getExe' pkgs.acl "setfacl";
-    in ''
-      set -euo pipefail
-      for path in /home/p /home/p/.config /home/p/.config/herdr /home/p/.config/herdr/herdr.sock; do
-        ${setfacl} -x u:agent "$path" 2>/dev/null || true
-      done
-    '';
-  };
 
   my = {
     # herdr-web-ui's bridge binds this host's LAN address (needs an inbound
     # firewall rule: see modules/system/herdr-web-ui.nix), not loopback.
     listenNetworkAddress = "10.0.0.15";
+
+    gui.enable = true;
 
     stylix.enable = true;
 
@@ -635,37 +100,6 @@ in {
         };
       };
     };
-
-    # Non-sudo fleet SSH for the personal agent. Unprivileged `agent` account,
-    # `restrict`ed key, no wheel/docker/libvirtd, logs only.
-    #
-    # Shared-space topology: /home/p is p-private (700, ZERO
-    # agent ACLs — the old traverse-only grant leaked world-readable dotfiles
-    # to any known path; revoked by revoke-agent-legacy-access below). The
-    # agent reaches the shared tree via /mnt/sdb/repos directly or its own
-    # ~/projects symlink, never by traversing /home/p. writablePaths grants
-    # rwX for agent AND p (files either creates must stay writable by the
-    # other); the old herdr socket grant is gone — cross-driving p's server
-    # goes over explicit `herdr --machine`, never ambient socket rw.
-    agent-ssh-access = {
-      enable = true;
-      # Real home, not /var/empty: makemake's agent SSHes in as `agent`
-      # (herdr mesh, Phase E), and with no home every remote command starts
-      # with "Could not chdir to home directory" noise. Same closure as
-      # makemake's: the module's per-user AuthorizedKeysFile Match block
-      # ignores a self-written ~/.ssh/authorized_keys regardless.
-      home = "/home/agent";
-      createHome = true;
-      # C5: the shared project tree. Single-level ACLs land at activation;
-      # the agent-path-acl-repair timer walks pre-existing content
-      # (8.7M inodes — deliberately never in the activation path).
-      writablePaths = ["/mnt/sdb/repos"];
-    };
-
-    # p-private home: agent's home is 750 + u:p:r-X so p reads everything downhill
-    # (NixOS re-applies homeMode on every activation — verified in
-    # update-users-groups.pl:238 — so the mode itself needs no oneshot).
-    # homeMode is set at top level next to the shared-space services.
 
     docker.enable = true;
     fonts.enable = true;
@@ -776,11 +210,11 @@ in {
         {
           # Agent MCP parity: agent's pi reads the same env via its own reader grant (the
           # !command pattern is unchanged — only the ACL differs).
-          readers = [config.my.mainUser.name agentUser];
+          readers = [config.my.mainUser.name config.my.agent-ssh-access.user];
           path = config.my.secrets.getPath "accounted-mcp-key" "env";
         }
         {
-          readers = [config.my.mainUser.name agentUser];
+          readers = [config.my.mainUser.name config.my.agent-ssh-access.user];
           path = config.my.secrets.getPath "context7" "env";
         }
         {
@@ -789,7 +223,7 @@ in {
           # required for the per-principal OAuth store separation (separate consent
           # flows per principal, never shared stores).
           # z-ai-env above stays p-only: provider LLM keys are not MCP creds.
-          readers = [config.my.mainUser.name agentUser];
+          readers = [config.my.mainUser.name config.my.agent-ssh-access.user];
           path = config.my.secrets.getPath "digikey" "env";
         }
         {
@@ -851,96 +285,6 @@ in {
     mainUser.extraSshKeys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6uq8nXD+QBMhXqRNywwCa/dl2VVvG/2nvkw9HEPFzn p@charon"
     ];
-
-    libvirt = {
-      enable = true;
-      spiceUSBRedirection = true;
-
-      shutdownOnSuspend = {
-        enable = true;
-        vms = ["win11"];
-      };
-
-      # Dir-backed pool so NixVirt creates win11-new.qcow2 on activation if missing.
-      pools = [
-        {
-          name = "vm-disks";
-          uuid = "b1a7e4d2-9f33-4c71-8e2a-6d5b0c9f1a47";
-          path = "/mnt/sdb/disks";
-          volumes = [
-            {
-              name = "win11-new.qcow2";
-              capacity = {
-                count = 80;
-                unit = "GiB";
-              };
-              format = "qcow2";
-            }
-          ];
-        }
-      ];
-
-      domains = [
-        {
-          name = "win11";
-          uuid = "8c4d2bf3-3e6e-4c9b-a012-4b7c1e6f8d02";
-          template = "windows";
-          memory = {
-            count = 8;
-            unit = "GiB";
-          };
-          storageVol = "/mnt/sdb/disks/win11-new.qcow2";
-          installVol = "/mnt/sdb/iso/win11.iso";
-          networkName = "vm-nat";
-          macAddress = "52:54:00:8e:11:02";
-          nvramPath = "/var/lib/libvirt/qemu/nvram/win11-new_VARS.fd";
-          virtioNet = true;
-          virtioDrive = true;
-          virtioVideo = true;
-          installVirtio = true;
-        }
-      ];
-
-      networks = [
-        {
-          name = "vm-nat";
-          uuid = "80c19792-39ed-5c58-01b2-56ccfbac0b6b";
-          mode = "nat";
-          subnet = "192.168.101.0/24";
-          gateway = "192.168.101.1";
-          dhcpStart = "192.168.101.10";
-          dhcpEnd = "192.168.101.254";
-          firewallPorts = {
-            tcp = [22 80 443];
-            udp = [53];
-          };
-        }
-        {
-          name = "vm-isolated";
-          uuid = "90d2a8a3-4afe-6d69-12c3-67dd0cbd1c7c";
-          mode = "isolated";
-          subnet = "192.168.123.0/24";
-          gateway = "192.168.123.1";
-          dhcpStart = "192.168.123.10";
-          dhcpEnd = "192.168.123.254";
-          firewallPorts = {
-            tcp = [];
-            udp = [];
-          };
-        }
-      ];
-    };
-
-    # One greeter session name, per-user desktop behind it: GDM's
-    # defaultSession is applied to *every* account (see session-dispatch.nix).
-    sessionDispatch = {
-      enable = true;
-      users.${secondUser} = "gnome";
-    };
-
-    gui = {
-      enable = true;
-    };
 
     atuin.enable = true;
 
@@ -1023,164 +367,40 @@ in {
     bluetooth-resume = {
       enable = true;
     };
-  };
 
-  # PI WEB user services should survive logout/reboot.
-  users.users.p.linger = true;
-
-  # Flatpak escape hatch for the second account: she gets GNOME Software
-  # (the "app store") with Flathub, user-scope installs so no wheel/sudo is
-  # needed. The system base stays declarative; her day-to-day apps go here.
-  # enabling flatpak also pulls gnome-software via the gnome module.
-  services.flatpak.enable = true;
-
-  # Flathub remote, system scope so every account (including non-wheel ones
-  # installing --user) resolves it. No declarative option exists upstream,
-  # so one idempotent oneshot.
-  systemd.services.flatpak-add-flathub = {
-    description = "Add Flathub remote (system)";
-    wantedBy = ["multi-user.target"];
-    wants = ["network-online.target"];
-    after = ["network-online.target"];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${pkgs.flatpak}/bin/flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo";
-    };
-  };
-
-  # Swedish layout at the greeter too: GDM inherits the system XKB setting,
-  # so Swedish characters work in the password field before any session (and
-  # its dconf below) loads. The niri session sets its own layout and is
-  # unaffected; only the console keymap follows along.
-  services.xserver.xkb.layout = "se";
-
-  # GDM replaced greetd here: greetd runs one greeter session at a time, so
-  # handing the machine to the second account meant logging out and losing the
-  # running session. GDM can start an extra greeter on a spare VT and keep both
-  # sessions alive (logind hands the single DRM master to whichever one is on
-  # the active VT). Consequence: her GNOME session lives on its own VT and
-  # this niri session stays on the first one.
-  services.displayManager = {
-    gdm.enable = true;
-    # Replaces greetd's initial_session autologin.
-    autoLogin = {
+    tether = {
       enable = true;
-      user = config.my.mainUser.name;
+      # WiFi pairing + clipboard + files + messages/notifications over BT.
+      openFirewall = true;
+      # bluetoothd --experimental so BlueZ exposes org.bluez.Bearer.LE1 before the
+      # iPhone is paired: without it a bond has no LE half and ANCS notification
+      # mirroring can never work (tether --bt-setup reports the step).
+      experimentalBluetoothd = true;
+    };
+
+    journalUpload.enable = true;
+  };
+
+  # Accept keep-awake lease requests from io's wake-proxy.
+  services.wakeproxy.keepAwake = {
+    maxDurationSeconds = 14400;
+    sshTarget = {
+      enable = true;
+      authorizedKeysFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "public_key";
     };
   };
 
-  # Second desktop. Its own mkDefault services (GNOME Online Accounts,
-  # evolution-data-server, power-profiles-daemon, tracker indexer) are all
-  # defaults, so none of them collide with the networkd setup in shared.nix.
-  services.desktopManager.gnome.enable = true;
-
-  # The account, its groups and its password come from the `user-a`
-  # clan users service instance (flake/parts/clan.nix). Only the uid is set
-  # here, so the account is a fixed 1001 like the main account's 1000.
-  users.users.${secondUser}.uid = 1001;
-
-  # CreateTransientDisplay is auth_admin for every caller class
-  # (gdm-50.1 data/org.gnome.displaymanager.policy), which would mean a polkit
-  # agent plus a password prompt from inside a bare niri session. The main
-  # account is admin on its own machine and the action only starts a greeter —
-  # the second user still authenticates to log in. `active` keeps it to a
-  # session that actually holds the seat.
-  security.polkit.extraConfig = ''
-    polkit.addRule(function (action, subject) {
-      if (action.id !== "org.gnome.displaymanager.displayfactory.manage-user-displays") {
-        return undefined;
-      }
-      if (subject.local && subject.active && subject.user === "${config.my.mainUser.name}") {
-        return "yes";
-      }
-      return undefined;
-    });
-  '';
-
-  # Battlemage + xe is currently stable on 6.12.74 here; newer 6.12.x regressed GPU init.
-  boot.kernelPackages = pinnedKernelPkgs.linuxPackages;
-
-  boot.kernelParams = [
-    "usbcore.autosuspend=-1"
-  ];
-
-  zramSwap = {
-    enable = true;
-    priority = 100;
-  };
-
-  swapDevices = [
-    {
-      device = "/mnt/sdb/swap/swapfile";
-      size = 64 * 1024; # 64G overflow on enterprise SATA (INTEL SSDSC2KB038TZ) below zram
-      priority = 10;
-    }
-  ];
-
-  # sda (/mnt/sdb) enters standby on its own (~42x this boot, 3-4s per wake)
-  # and on every suspend (STANDBY IMMEDIATE even times out after 5s). The
-  # swapfile (2+GB used, priority 10 above zram) lives there, so the first
-  # post-resume page faults stall with the display already shown — the
-  # few-seconds resume freeze. Disable the internal standby timer (-S 0) and
-  # APM spindown (-B 255); the resume hook re-applies it since the drive
-  # resets to defaults on power cycle.
-  # LIMIT: drive standby is disabled outright rather than retuned via ALPM, so
-  # idle power draw is higher than it strictly needs to be. Revisit if draw
-  # starts to matter and the resume stall can be fixed another way.
-  systemd.services.sda-disable-standby = {
-    description = "Disable sda internal standby (swap lives on /mnt/sdb)";
-    wantedBy = ["multi-user.target"];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${pkgs.hdparm}/sbin/hdparm -S 0 -B 255 /dev/disk/by-id/ata-INTEL_SSDSC2KB038TZ_PHYI329101K03P8EGN";
-    };
-  };
-  powerManagement.resumeCommands = "${pkgs.hdparm}/sbin/hdparm -S 0 -B 255 /dev/disk/by-id/ata-INTEL_SSDSC2KB038TZ_PHYI329101K03P8EGN || true";
-
-  boot.loader.systemd-boot.configurationLimit = 5;
-
-  services.journald.extraConfig = ''
-    SystemMaxUse=1G
-    SystemMaxFileSize=100M
-    MaxRetentionSec=14day
-    RuntimeMaxUse=250M
-  '';
-
-  nix.settings.auto-optimise-store = true;
-
-  # Native SATA offload (no bind mounts) — keep NVMe for /nix/store + rust-analyzer salsa DB
-  # Docker high churn -> enterprise SATA endurance; huggingface/pip sequential -> SATA
-  virtualisation.docker.daemon.settings."data-root" = "/mnt/sdb/cache/docker";
-
-  environment.sessionVariables = {
-    HF_HOME = "/mnt/sdb/cache/home-p/huggingface";
-    PIP_CACHE_DIR = "/mnt/sdb/cache/home-p/pip";
-  };
-
-  systemd.tmpfiles.rules = [
-    "d /mnt/sdb/cache 0755 root root -"
-    "d /mnt/sdb/cache/docker 0711 root root -"
-    "d /mnt/sdb/cache/home-p 0755 p users -"
-    "d /mnt/sdb/cache/home-p/huggingface 0755 p users -"
-    "d /mnt/sdb/cache/home-p/pip 0755 p users -"
-    "d /mnt/sdb/swap 0755 root root -"
-  ];
-
-  nix.gc.options = lib.mkForce "--delete-older-than 7d";
-
-  # Decode and persist machine-check exceptions (MCEs) so hardware errors like the
-  # uncorrectable EX watchdog errors before the Aug 19 hard reset are not lost.
-  # Records go to /var/lib/rasdaemon/ras-mc_event.db; query with ras-mc-ctl.
-  hardware.rasdaemon.enable = true;
+  services.avahi.enable = true;
+  # Tether's WiFi discovery (Bonjour) rides on avahi; resolved's mDNS responder
+  # must stay off so the two don't fight over the .local domain. resolved keeps
+  # handling unicast DNS.
+  services.resolved.settings.Resolve.MulticastDNS = false;
 
   environment.systemPackages = with pkgs; [
     # On PATH system-wide so `ssh agent@charon 'herdr agent list'` resolves it:
     # a non-login ssh command gets sshd's default PATH, which does not include
     # the Nix profile or Home Manager's.
     ctx.inputs.herdr.packages.${pkgs.stdenv.hostPlatform.system}.default
-    switchUserToGreeter
     # herdr's antigravity-cli integration guards on `command -v python3` and
     # silently reports no session without it, while `herdr integration status`
     # only diffs the installed file and still says "current".
@@ -1204,136 +424,8 @@ in {
           --unset QT_QPA_PLATFORMTHEME
       '';
     })
-    virt-manager
     gamescope
     bun
     google-cloud-sdk
   ];
-
-  # pi-agent-browser-native probes the managed-session policy lock owner's
-  # process start time via ps at the hardcoded paths /bin/ps then /usr/bin/ps
-  # (dist/extensions/agent-browser/lib/process-identity.js). NixOS has neither
-  # directory, so pi's agent_browser tool fails with "Managed-session policy
-  # coordination is unavailable or busy". Symlink /bin/ps onto procps so the
-  # deterministic lock path works without relying on PATH.
-  # PATH for `agent` SSH sessions: sshd's default PATH has no
-  # /run/current-system/sw. The herdr socket needs no SetEnv: `agent`
-  # resolves its own server's socket by default.
-  services.openssh.extraConfig = lib.mkAfter ''
-    Match User ${agentUser}
-        SetEnv PATH=/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin
-  '';
-
-  system.activationScripts.agent-browser-ps = ''
-    mkdir -p /bin
-    ln -sfn ${pkgs.procps}/bin/ps /bin/ps
-  '';
-
-  # Accept keep-awake lease requests from io's wake-proxy.
-  services.wakeproxy.keepAwake = {
-    maxDurationSeconds = 14400;
-    sshTarget = {
-      enable = true;
-      authorizedKeysFile = config.my.secrets.getPath "wake-proxy-keep-awake-ssh" "public_key";
-    };
-  };
-
-  services.avahi.enable = true;
-  # Tether's WiFi discovery (Bonjour) rides on avahi; resolved's mDNS responder
-  # must stay off so the two don't fight over the .local domain. resolved keeps
-  # handling unicast DNS.
-  services.resolved.settings.Resolve.MulticastDNS = false;
-
-  my.tether = {
-    enable = true;
-    # WiFi pairing + clipboard + files + messages/notifications over BT.
-    openFirewall = true;
-    # bluetoothd --experimental so BlueZ exposes org.bluez.Bearer.LE1 before the
-    # iPhone is paired: without it a bond has no LE half and ANCS notification
-    # mirroring can never work (tether --bt-setup reports the step).
-    experimentalBluetoothd = true;
-  };
-
-  systemd.network.links."40-enp4s0" = {
-    matchConfig.OriginalName = "enp4s0";
-    linkConfig.WakeOnLan = "magic";
-  };
-
-  networking = {
-    firewall.allowPing = true;
-    # Allow localsend receive port
-    # Allow 3000/1 and 5000/1 for dev server and tooling
-    firewall.allowedTCPPorts = [53317 3001 5000 5001];
-    # PI WEB firewall hole for wakeproxy upstream (io only) — RETIRED
-    # 2026-10-13 with the pi-web service: io's wakeproxy now proxies
-    # makemake's herdr-web-ui, so nothing may listen on 8504 here.
-  };
-
-  hardware.bluetooth = {
-    enable = true;
-    powerOnBoot = true;
-    settings = {
-      General = {
-        Experimental = true;
-        KernelExperimental = true;
-        FastConnectable = true;
-      };
-      Policy = {
-        AutoEnable = true;
-      };
-    };
-  };
-
-  security = {
-    polkit.enable = true;
-
-    wrappers.intel_gpu_top = {
-      owner = "root";
-      group = "root";
-      capabilities = "cap_sys_admin+ep";
-      source = "${pkgs.intel-gpu-tools}/bin/intel_gpu_top";
-    };
-
-    pam.loginLimits = [
-      {
-        domain = "*";
-        item = "nofile";
-        type = "-";
-        value = "524288";
-      }
-    ];
-  };
-
-  hardware.cpu.amd.updateMicrocode = true;
-
-  services.power-profiles-daemon.enable = true;
-  services.upower.enable = true;
-
-  programs.virt-manager.enable = true;
-
-  systemd.services.nix-daemon.serviceConfig = {
-    Nice = lib.mkForce 15;
-    IOSchedulingClass = lib.mkForce "idle";
-    IOSchedulingPriority = lib.mkForce 7;
-    LimitNOFILE = "infinity";
-  };
-
-  # Cap the in-journal coredump backtrace size: a crashing QtWebEngine renderer
-  # produced a >4M COREDUMP_STACK_TRACE entry that exceeds
-  # systemd-journal-upload's per-entry buffer, making the uploader fail forever
-  # on the same unskippable entry (NRestarts climbing). 512M keeps core dumps
-  # but bounds the journal field so uploads can progress.
-  systemd.coredump.settings.Coredump.ProcessSizeMax = "512M";
-  users.users.p = {
-    extraGroups = ["dialout" "plugdev"];
-  };
-  users.groups.plugdev = {};
-
-  services.udev.extraRules = lib.mkAfter ''
-    SUBSYSTEM=="usb", ATTR{idVendor}=="0d28", MODE="0664", GROUP="plugdev", TAG+="uaccess"
-    KERNEL=="hidraw*", ATTRS{idVendor}=="0d28", MODE="0666", TAG+="uaccess"
-    SUBSYSTEM=="tty", ATTRS{idVendor}=="0d28", MODE="0666", TAG+="uaccess"
-  '';
-
-  my.journalUpload.enable = true;
 }

@@ -19,7 +19,7 @@ _: {
 
     sessionCommands = {
       niri = "${lib.getExe' config.programs.niri.package "niri-session"}";
-      gnome = "${lib.getExe pkgs.gnome-session}";
+      gnome = "${lib.getExe' pkgs.gnome-session "gnome-session"}";
     };
 
     # Case arms for the listed users; everyone else falls back to my.gui.session.

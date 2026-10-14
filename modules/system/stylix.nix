@@ -3,6 +3,7 @@
     pkgs,
     lib,
     config,
+    options,
     ...
   }: let
     cfg = config.my.stylix;
@@ -26,41 +27,51 @@
       default = {};
     };
 
-    config = lib.mkIf cfg.enable {
-      stylix = {
-        enable = true;
-        autoEnable = true;
-        polarity = "dark";
-        enableReleaseChecks = false;
-        base16Scheme = "${pkgs.base16-schemes}/share/themes/catppuccin-frappe.yaml";
-        image = ../../wallpaper.jpg;
-        fonts = {
-          sizes = {
-            terminal = 8;
-            applications = 9;
-            popups = 9;
-            desktop = 9;
+    config = lib.mkIf cfg.enable (lib.mkMerge [
+      {
+        stylix = {
+          enable = true;
+          autoEnable = true;
+          polarity = "dark";
+          enableReleaseChecks = false;
+          targets.qt.platform = lib.mkForce "qtct";
+          base16Scheme = "${pkgs.base16-schemes}/share/themes/catppuccin-frappe.yaml";
+          image = ../../wallpaper.jpg;
+          fonts = {
+            sizes = {
+              terminal = 8;
+              applications = 9;
+              popups = 9;
+              desktop = 9;
+            };
+            monospace = {
+              package = pkgs.nerd-fonts.fira-code;
+              name = "FiraCode Nerd Font";
+            };
+            sansSerif = {
+              package = pkgs.dejavu_fonts;
+              name = "DejaVu Sans";
+            };
+            serif = {
+              package = pkgs.dejavu_fonts;
+              name = "DejaVu Serif";
+            };
           };
-          monospace = {
-            package = pkgs.nerd-fonts.fira-code;
-            name = "FiraCode Nerd Font";
-          };
-          sansSerif = {
-            package = pkgs.dejavu_fonts;
-            name = "DejaVu Sans";
-          };
-          serif = {
-            package = pkgs.dejavu_fonts;
-            name = "DejaVu Serif";
+          cursor = {
+            package = pkgs.bibata-cursors;
+            name = "Bibata-Modern-Classic";
+            size = 18;
           };
         };
-        cursor = {
-          package = pkgs.bibata-cursors;
-          name = "Bibata-Modern-Classic";
-          size = 18;
-        };
-      };
-    };
+      }
+      (lib.optionalAttrs (options ? home-manager) {
+        home-manager.sharedModules = [
+          {
+            stylix.enableReleaseChecks = false;
+          }
+        ];
+      })
+    ]);
     # services.libinput = {
     #   mouse.accelProfile = "flat";
     # };

@@ -190,6 +190,10 @@ _: {
           directories still need traversePaths.
         '';
       };
+
+      gitSigning = {
+        enable = lib.mkEnableOption "installation of /etc/ssh/allowed_signers for verifying agent-signed git commits";
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -329,6 +333,36 @@ _: {
           # root:root 0444. The agent can read its own restrictions and cannot
           # rewrite them.
           printf '%s\n' "$key" | install -m 0444 -o root -g root /dev/stdin ${cfg.authorizedKeysFile}
+        '';
+      };
+
+      # Git SSH trust anchor for verifying agent-signed commits.
+      # Root-owned 0444 so agent cannot rewrite the principals that vouch for its
+      # own signatures — same reasoning as the root-owned authorized_keys above.
+      # Carries SIGNING keys only (never the auth key).
+      systemd.services.install-agent-allowed-signers = lib.mkIf cfg.gitSigning.enable {
+        description = "Install git SSH allowed_signers (signing keys only)";
+        after = ["local-fs.target"];
+        wantedBy = ["multi-user.target"];
+        serviceConfig = {
+          Type = "oneshot";
+        };
+        script = let
+          signPub = config.my.secrets.getPath "agent-git-sign" "public_key";
+          pKeyLine =
+            if config.my.mainUser.enable && (config.my.mainUser.extraSshKeys != [])
+            then "\nper@stark.pub ${builtins.head config.my.mainUser.extraSshKeys}"
+            else "";
+        in ''
+          set -euo pipefail
+          if [ ! -s "${signPub}" ]; then
+            # Fresh clone before `clan vars generate`: not an error, the next
+            # deploy after generation installs the file.
+            echo "agent git signing public key not present yet; skipping allowed_signers install" >&2
+            exit 0
+          fi
+          printf 'agent@stark.pub %s${pKeyLine}\n' "$(cat "${signPub}")" \
+            | install -m 0444 -o root -g root /dev/stdin /etc/ssh/allowed_signers
         '';
       };
 
