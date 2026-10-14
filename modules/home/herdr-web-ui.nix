@@ -157,6 +157,49 @@
         };
         Install.WantedBy = ["default.target"];
       };
+
+      # Restart the bridge when its env file changes. The bridge reads its
+      # environment ONCE at process start and SURVIVES herdr restarts (the
+      # [[startup]] hook sees a live port and leaves it alone), so a token
+      # that lands after the bridge — first deploy (exposeUserSecrets runs in
+      # the system manager, racing the user manager's herdr start) or a
+      # rotation — would stay unarmed forever: verified live on makemake
+      # 2026-10-14, bridge from Oct 13 with "via":"open" while the Oct 14
+      # .env sat unread next to it, and every API route but /api/health hung.
+      # PathChanged fires on creation too, so the first deploy is covered;
+      # identical-content redeploys are cmp-protected no-ops and stay quiet.
+      # The start command self-guards ("already running for this checkout and
+      # port"), so a redundant trigger is harmless. HOME-relative: works in
+      # any herdr-owner profile (agent on makemake, p on charon).
+      systemd.user.paths.herdr-web-ui-env = {
+        Install.WantedBy = ["default.target"];
+        pathConfig.PathChanged = "${config.xdg.configHome}/herdr/plugins/config/devswha.herdr-web-ui/.env";
+      };
+      systemd.user.services.herdr-web-ui-env-restart = {
+        Unit.Description = "Restart the herdr-web-ui bridge after its env file changed";
+        Service = {
+          Type = "oneshot";
+          TimeoutStartSec = "5min";
+          Environment = ["PATH=${pluginPath}"];
+          ExecStart = pkgs.writeShellScript "herdr-web-ui-env-restart" ''
+            set -eu
+            # Patterns chosen so they cannot match this script's own cmdline.
+            pkill -f 'herdr-web-ui-.*server/managed\.ts' 2>/dev/null || true
+            pkill -f 'herdr-web-ui/updates/.*server/supervisor\.ts' 2>/dev/null || true
+            pkill -f 'bun server/index\.ts' 2>/dev/null || true
+            sleep 1
+            checkout=$(ls -d "$HOME"/.config/herdr/plugins/github/devswha.herdr-web-ui-* 2>/dev/null | head -1)
+            if [ -z "$checkout" ]; then
+              echo "herdr-web-ui: no plugin checkout yet; nothing to restart" >&2
+              exit 0
+            fi
+            cd "$checkout"
+            log="''${XDG_STATE_HOME:-$HOME/.local/state}/herdr/plugins/devswha.herdr-web-ui/server.log"
+            mkdir -p "$(dirname "$log")"
+            setsid nohup ${bun}/bin/bun scripts/plugin.ts start >> "$log" 2>&1 < /dev/null &
+          '';
+        };
+      };
     };
   };
 }

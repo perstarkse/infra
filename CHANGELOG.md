@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **herdr-web-ui bridge now restarts when its env file changes** (`modules/home/herdr-web-ui.nix`): the bridge reads its environment once at process start and survives herdr restarts (the startup hook sees a live port and leaves it alone), so the wakeproxy-cutover token that landed after the bridge stayed unread — verified live on makemake 2026-10-14: bridge from Oct 13 reported `"via":"open"` while the Oct 14 `.env` sat next to it, every API route except `/api/health` hung (zero response headers on `/api/machines*` even locally), and the public UI showed a reconnect loop. Live fix: killed the stale bridge tree and restarted it via the plugin's startup hook — `auth.required: true`, unauthenticated `/api/machines` → 401, bearer-token request → 200 in 3.5ms. The durable fix is a user `PathChanged` unit on the plugin's `.env` (HOME-relative, works for agent on makemake and p on charon) that kills and re-runs the startup hook; creation fires too, so first deploys are covered, and identical-content redeploys are cmp-protected no-ops. Blast radius: makemake + charon herdr-web-ui profiles. Verified: all five toplevels eval; `agent verify mid` 9/9 exit 0 (`.agent/runs/2026-10-14T074620+0200-mid`); `agent guard check` clean.
+
 ### Added
 
 - **herdr-web-ui is now the authenticated public agent UI; pi-web retired**: io's wakeproxy (`wake.stark.pub`, argon2 password) proxies makemake's herdr-web-ui (`10.0.0.10:7317`, `healthPath = "/api/health"` — open by design so the plugin's own gate stays discoverable) instead of charon's retired pi-web. Because makemake is always on, wakeproxy never auto-wakes: the URL is an authenticated door to the UI, not a wake trigger. The WOL half still targets charon — the manual wake button (POST /_wake/start) wakes it directly and its keep-awake lease holds it awake. Charon's pi-web service is off, its 8504 firewall hole removed; the pi-web module import stays because antigravity can only eval alongside it.
