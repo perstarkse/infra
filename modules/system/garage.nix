@@ -8,10 +8,14 @@ _: {
   }: let
     cfg = config.my.garage;
     lanSources = ["10.0.0.0/8" "127.0.0.0/8"];
-    mkPortRules = port:
+    s3Sources =
+      lanSources
+      ++ lib.optional config.virtualisation.docker.enable "172.16.0.0/12"
+      ++ cfg.extraAllowedSources;
+    mkPortRules = port: sources:
       (mkRestrictedPortRules {
         inherit port;
-        allowedSources = lanSources;
+        allowedSources = sources;
       }).iptables;
   in {
     options.my.garage = {
@@ -75,6 +79,12 @@ _: {
         type = lib.types.nullOr lib.types.str;
         default = null;
         description = "Zone identifier for this node (used for data placement)";
+      };
+
+      extraAllowedSources = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Additional CIDRs permitted to access Garage S3.";
       };
     };
 
@@ -173,8 +183,8 @@ _: {
       # plain-firewall hosts like makemake.
       networking.firewall = lib.mkIf config.networking.firewall.enable {
         extraCommands = lib.mkAfter (lib.concatStringsSep "\n" [
-          (mkPortRules cfg.s3Port)
-          (mkPortRules cfg.rpcPort)
+          (mkPortRules cfg.s3Port s3Sources)
+          (mkPortRules cfg.rpcPort lanSources)
         ]);
       };
 
