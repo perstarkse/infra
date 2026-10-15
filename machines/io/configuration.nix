@@ -464,6 +464,11 @@ in {
           mac = "2c:fe:e2:f0:a3:56";
         }
         {
+          name = "pi";
+          ip = "200";
+          mac = "b8:27:eb:62:7b:6a";
+        }
+        {
           name = "makemake";
           ip = "10";
           mac = "00:d0:b4:02:bb:3c";
